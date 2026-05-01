@@ -1,0 +1,33 @@
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { ConfigModule } from '@nestjs/config';
+import { DatabaseModule } from './core/database/database.module';
+import { IdModule } from './core/id/id.module';
+import { ProposalsModule } from './modules/proposals/proposals.module';
+import { BranchesModule } from './modules/branches/branches.module';
+import { RolesModule } from './modules/roles/roles.module';
+import { UsersModule } from './modules/users/users.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { LoanTypesModule } from './modules/loan-types/loan-types.module';
+import { ParticipantsModule } from './modules/participants/participants.module';
+import { DocumentsModule } from './modules/documents/documents.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    DatabaseModule,
+    IdModule,
+    ProposalsModule,
+    BranchesModule,
+    RolesModule,
+    UsersModule,
+    AuthModule,
+    LoanTypesModule,
+    ParticipantsModule,
+    DocumentsModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
