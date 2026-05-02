@@ -12,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { LoanTypesModule } from './modules/loan-types/loan-types.module';
 import { ParticipantsModule } from './modules/participants/participants.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { EmployeesModule } from './modules/employees/employees.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
     LoanTypesModule,
     ParticipantsModule,
     DocumentsModule,
+    EmployeesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
