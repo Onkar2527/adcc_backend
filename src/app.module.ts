@@ -13,6 +13,8 @@ import { LoanTypesModule } from './modules/loan-types/loan-types.module';
 import { ParticipantsModule } from './modules/participants/participants.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { EmployeesModule } from './modules/employees/employees.module';
+import { PasswordPolicyModule } from './modules/password-policy/password-policy.module';
+import { UnitsModule } from './modules/units/units.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { EmployeesModule } from './modules/employees/employees.module';
     ParticipantsModule,
     DocumentsModule,
     EmployeesModule,
+    PasswordPolicyModule,
+    UnitsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

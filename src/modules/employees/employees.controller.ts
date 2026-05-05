@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
-import { CreateEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
+import { CreateEmployeeDto, UpdateEmployeeDto, SetPasswordDto, UpdateAuthorityDto } from './dto/employee.dto';
 
 @Controller('employees')
 export class EmployeesController {
@@ -36,5 +36,16 @@ export class EmployeesController {
     const employee = await this.employeesService.findOne(id);
     const newStatus = employee.is_active === 1 ? 0 : 1;
     return this.employeesService.update(id, { is_active: newStatus });
+  }
+
+  @Patch(':id/password')
+  setPassword(@Param('id', ParseIntPipe) id: number, @Body() setPasswordDto: SetPasswordDto) {
+    return this.employeesService.setPassword(id, setPasswordDto.password);
+  }
+
+  @Patch(':id/authority')
+  setAuthority(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
+    console.log('Authority Update Body:', body);
+    return this.employeesService.updateAuthority(id, body.unit_ids);
   }
 }

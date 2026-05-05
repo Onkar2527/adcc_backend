@@ -50,9 +50,9 @@ export class EmployeesService {
       INSERT INTO employee_master (
         emp_code, user_type_id, name, email, mobile, 
         designation, gender, password, is_active, 
-        password_policy, admin_id, created_at
+        password_policy, audit_unit_authority, admin_id, created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
       RETURNING id, emp_code, name, email, is_active
     `;
     
@@ -67,6 +67,7 @@ export class EmployeesService {
       passwordHash,
       data.is_active ?? 1,
       1, // password_policy = 1 initially
+      data.unit_ids ? data.unit_ids.join(',') : (data.audit_unit_authority ?? ''),
       data.admin_id ?? 1,
     ];
     
@@ -98,7 +99,13 @@ export class EmployeesService {
     addUpdate('designation', data.designation);
     addUpdate('gender', data.gender);
     addUpdate('is_active', data.is_active);
-    addUpdate('audit_unit_authority', data.audit_unit_authority);
+    
+    if (data.unit_ids !== undefined) {
+      addUpdate('audit_unit_authority', data.unit_ids.join(','));
+    } else {
+      addUpdate('audit_unit_authority', data.audit_unit_authority);
+    }
+
     addUpdate('admin_id', data.admin_id ?? 1);
 
     if (data.password) {
@@ -137,5 +144,29 @@ export class EmployeesService {
     `;
     await this.db.query(query, [id]);
     return { deleted: true };
+  }
+
+  async setPassword(id: number, password: string) {
+    const hash = await bcrypt.hash(password, 10);
+    const query = `
+      UPDATE employee_master 
+      SET password = $1, password_policy = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `;
+    await this.db.query(query, [hash, id]);
+    return { success: true };
+  }
+
+  async updateAuthority(id: number, unitIds: number[]) {
+    this.logger.log(`Updating authority for employee ${id} with units: ${JSON.stringify(unitIds)}`);
+    // Legacy logic: store as comma separated string
+    const authorityStr = (unitIds || []).join(',');
+    const query = `
+      UPDATE employee_master 
+      SET audit_unit_authority = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `;
+    await this.db.query(query, [authorityStr, id]);
+    return { success: true };
   }
 }
