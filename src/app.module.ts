@@ -15,6 +15,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { PasswordPolicyModule } from './modules/password-policy/password-policy.module';
 import { UnitsModule } from './modules/units/units.module';
+import { AuditSectionsModule } from './modules/audit-section/audit-sections.module';
 
 @Module({
   imports: [
@@ -32,8 +33,9 @@ import { UnitsModule } from './modules/units/units.module';
     EmployeesModule,
     PasswordPolicyModule,
     UnitsModule,
+    AuditSectionsModule
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
