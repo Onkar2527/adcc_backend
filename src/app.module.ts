@@ -18,6 +18,7 @@ import { UnitsModule } from './modules/units/units.module';
 import { AuditSectionsModule } from './modules/audit-section-master/audit-sections.module';
 import { AuditUnitsModule } from './modules/audit-unit-master/audit-units.module';
 import { AuditSchemesModule } from './modules/audit-scheme-master/audit-schemes.module';
+import { AuditQuestionsModule } from './modules/audit-question-master/audit-questions.module';
 
 @Module({
   imports: [
@@ -37,7 +38,8 @@ import { AuditSchemesModule } from './modules/audit-scheme-master/audit-schemes.
     UnitsModule,
     AuditSectionsModule,
     AuditUnitsModule,
-    AuditSchemesModule
+    AuditSchemesModule,
+    AuditQuestionsModule
   ],
   controllers: [AppController],
   providers: [AppService],
