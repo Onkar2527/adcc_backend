@@ -12,11 +12,12 @@ import { AuthModule } from './modules/auth/auth.module';
 import { LoanTypesModule } from './modules/loan-types/loan-types.module';
 import { ParticipantsModule } from './modules/participants/participants.module';
 import { DocumentsModule } from './modules/documents/documents.module';
-import { EmployeesModule } from './modules/employees/employees.module';
+import { EmployeesModule } from './modules/employee-master/employees.module';
 import { PasswordPolicyModule } from './modules/password-policy/password-policy.module';
 import { UnitsModule } from './modules/units/units.module';
-import { AuditSectionsModule } from './modules/audit-section/audit-sections.module';
-import { AuditUnitsModule } from './modules/audit-units/audit-units.module';
+import { AuditSectionsModule } from './modules/audit-section-master/audit-sections.module';
+import { AuditUnitsModule } from './modules/audit-unit-master/audit-units.module';
+import { AuditSchemesModule } from './modules/audit-scheme-master/audit-schemes.module';
 
 @Module({
   imports: [
@@ -36,8 +37,9 @@ import { AuditUnitsModule } from './modules/audit-units/audit-units.module';
     UnitsModule,
     AuditSectionsModule,
     AuditUnitsModule,
+    AuditSchemesModule
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
