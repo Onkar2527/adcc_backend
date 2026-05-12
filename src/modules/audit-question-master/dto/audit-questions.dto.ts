@@ -84,6 +84,7 @@ export class UpdateQuestionHeaderDto {
 }
 
 export class CreateQuestionDto {
+
     @IsInt()
     set_id!: number;
 
@@ -103,8 +104,33 @@ export class CreateQuestionDto {
     @IsInt()
     applicable_id!: number;
 
+    // Business Risk Category
     @IsInt()
     risk_category_id!: number;
+
+    @IsInt()
+    area_of_audit_id!: number;
+
+    @IsInt()
+    control_risk_id!: number;
+
+    @IsInt()
+    key_aspect_id!: number;
+
+    @IsInt()
+    residual_risk_id!: number;
+
+    @IsOptional()
+    @IsInt()
+    show_instances?: number;
+
+    @IsOptional()
+    @IsInt()
+    audit_ev_upload?: number;
+
+    @IsOptional()
+    @IsInt()
+    compliance_ev_upload?: number;
 
     @IsOptional()
     @IsInt()
@@ -116,6 +142,7 @@ export class CreateQuestionDto {
 }
 
 export class UpdateQuestionDto {
+
     @IsOptional()
     @IsInt()
     set_id?: number;
@@ -146,7 +173,56 @@ export class UpdateQuestionDto {
 
     @IsOptional()
     @IsInt()
+    area_of_audit_id?: number;
+
+    @IsOptional()
+    @IsInt()
+    control_risk_id?: number;
+
+    @IsOptional()
+    @IsInt()
+    key_aspect_id?: number;
+
+    @IsOptional()
+    @IsInt()
+    residual_risk_id?: number;
+
+    @IsOptional()
+    @IsInt()
+    show_instances?: number;
+
+    @IsOptional()
+    @IsInt()
+    audit_ev_upload?: number;
+
+    @IsOptional()
+    @IsInt()
+    compliance_ev_upload?: number;
+
+    @IsOptional()
+    @IsInt()
     is_active?: number;
+
+    @IsOptional()
+    @IsInt()
+    admin_id?: number;
+}
+
+export class CreateQuestionRiskMappingDto {
+    @IsInt()
+    question_id!: number;
+
+    @IsNotEmpty()
+    @IsString()
+    risk_type!: string;
+
+    @IsNotEmpty()
+    @IsString()
+    business_risk!: string;
+
+    @IsNotEmpty()
+    @IsString()
+    control_risk!: string;
 
     @IsOptional()
     @IsInt()

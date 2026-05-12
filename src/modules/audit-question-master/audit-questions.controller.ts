@@ -15,7 +15,8 @@ import { AuditQuestionMasterService } from './audit-questions.service';
 import {
     CreateQuestionSetDto,
     UpdateQuestionSetDto, CreateQuestionHeaderDto, UpdateQuestionHeaderDto,
-    CreateQuestionDto, UpdateQuestionDto
+    CreateQuestionDto, UpdateQuestionDto,
+    CreateQuestionRiskMappingDto
 } from './dto/audit-questions.dto';
 
 interface AuthRequest extends Request {
@@ -215,5 +216,53 @@ export class AuditQuestionMasterController {
         id: number,
     ) {
         return this.service.removeQuestion(id);
+    }
+
+    @Get('questions-set/:setId')
+    findQuestionsBySet(
+        @Param('setId', ParseIntPipe)
+        setId: number,
+    ) {
+        return this.service.findQuestionsBySet(
+            setId,
+        );
+    }
+
+    // Question Risk Mapping
+
+    @Get('question-risk-mapping/:questionId')
+    findRiskMappings(
+        @Param('questionId', ParseIntPipe)
+        questionId: number,
+    ) {
+        return this.service.findRiskMappings(
+            questionId,
+        );
+    }
+
+    @Post('question-risk-mapping')
+    createRiskMapping(
+        @Body()
+        dto: CreateQuestionRiskMappingDto,
+
+        @Req() req: AuthRequest,
+    ) {
+        const admin_id =
+            req.user?.id || 1;
+
+        return this.service.createRiskMapping({
+            ...dto,
+            admin_id,
+        });
+    }
+
+    @Delete('question-risk-mapping/:id')
+    removeRiskMapping(
+        @Param('id', ParseIntPipe)
+        id: number,
+    ) {
+        return this.service.removeRiskMapping(
+            id,
+        );
     }
 }

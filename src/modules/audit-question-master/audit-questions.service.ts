@@ -8,7 +8,8 @@ import { DatabaseService } from '../../core/database/database.service';
 
 import {
     CreateQuestionSetDto,
-    UpdateQuestionSetDto, CreateQuestionHeaderDto, UpdateQuestionHeaderDto, CreateQuestionDto, UpdateQuestionDto
+    UpdateQuestionSetDto, CreateQuestionHeaderDto, UpdateQuestionHeaderDto, CreateQuestionDto, UpdateQuestionDto,
+    CreateQuestionRiskMappingDto
 } from './dto/audit-questions.dto';
 
 interface QuestionSetRow {
@@ -577,6 +578,29 @@ export class AuditQuestionMasterService {
     // Question Master
 
     async getQuestionLookups() {
+        const businessRiskCategories =
+            await this.queryRows(
+                `
+        SELECT
+            id::int AS value,
+            risk_category AS label
+        FROM risk_category_master
+        WHERE deleted_at IS NULL
+        ORDER BY risk_category
+        `
+            );
+
+        const auditAreas =
+            await this.queryRows(
+                `
+        SELECT
+            id::int AS value,
+            name AS label
+        FROM audit_area_master
+        WHERE deleted_at IS NULL
+        ORDER BY name
+        `
+            );
         return {
             setTypes: [
                 {
@@ -599,6 +623,134 @@ export class AuditQuestionMasterService {
                     value: 2,
                 },
             ],
+
+            controlRiskCategories: [
+                {
+                    label: 'INTERNAL CONTROL RISK',
+                    value: 1,
+                },
+
+                {
+                    label: 'COMPLIANCE RISK',
+                    value: 2,
+                },
+
+                {
+                    label: 'IT RISK',
+                    value: 3,
+                },
+            ],
+
+            keyAspectMappings: {
+                1: [
+                    {
+                        label:
+                            'Internal Control by HO',
+                        value: 1,
+                    },
+
+                    {
+                        label:
+                            'Internal Control by BM',
+                        value: 2,
+                    },
+
+                    {
+                        label:
+                            'Internal Control by Branch',
+                        value: 3,
+                    },
+
+                    {
+                        label:
+                            'Compliance of Internal Guidelines',
+                        value: 4,
+                    },
+
+                    {
+                        label:
+                            'Compliance with Bank Policy',
+                        value: 5,
+                    },
+                ],
+
+                2: [
+                    {
+                        label:
+                            'Statutory Compliance',
+                        value: 6,
+                    },
+
+                    {
+                        label:
+                            'Regulatory Compliance',
+                        value: 7,
+                    },
+                ],
+
+                3: [
+                    {
+                        label:
+                            'Logical Access Control',
+                        value: 8,
+                    },
+
+                    {
+                        label:
+                            'Physical Access Control',
+                        value: 9,
+                    },
+
+                    {
+                        label:
+                            'Business Continuity Plan',
+                        value: 10,
+                    },
+
+                    {
+                        label:
+                            'Configuration Controls',
+                        value: 11,
+                    },
+
+                    {
+                        label:
+                            'Cyber Security Controls',
+                        value: 12,
+                    },
+
+                    {
+                        label:
+                            'Networking Controls',
+                        value: 13,
+                    },
+                ],
+            },
+
+            residualRisks: [
+                {
+                    label: 'HIGH RISK',
+                    value: 1,
+                },
+
+                {
+                    label: 'MEDIUM RISK',
+                    value: 2,
+                },
+
+                {
+                    label: 'LOW RISK',
+                    value: 3,
+                },
+
+                {
+                    label: 'NO RISK',
+                    value: 4,
+                },
+            ],
+
+            businessRiskCategories,
+            auditAreas,
 
             questionInputMethods: [
                 {
@@ -631,6 +783,11 @@ export class AuditQuestionMasterService {
             ],
 
             applicableTo: [
+                {
+                    label: 'ALL',
+                    value: 0,
+                },
+
                 {
                     label: 'GENERAL',
                     value: 1,
@@ -677,9 +834,6 @@ export class AuditQuestionMasterService {
         };
     }
 
-    // =========================
-    // QUESTION MASTER
-    // =========================
 
     async findQuestionsByHeader(
         headerId: number,
@@ -722,21 +876,10 @@ export class AuditQuestionMasterService {
         ELSE '-'
       END AS option_name,
 
-      CASE
-        WHEN qm.risk_category_id = 1
-          THEN 'HIGH RISK'
+      rcm.risk_category
+        AS risk_category_name,
 
-        WHEN qm.risk_category_id = 2
-          THEN 'MEDIUM RISK'
-
-        WHEN qm.risk_category_id = 3
-          THEN 'LOW RISK'
-
-        WHEN qm.risk_category_id = 4
-          THEN 'NO RISK'
-
-        ELSE '-'
-      END AS risk_category_name
+      aam.name AS audit_area_name
 
     FROM question_master qm
 
@@ -745,6 +888,12 @@ export class AuditQuestionMasterService {
 
     LEFT JOIN question_set_master qsm
       ON qsm.id = qm.set_id
+
+    LEFT JOIN risk_category_master rcm
+      ON rcm.id = qm.risk_category_id
+
+    LEFT JOIN audit_area_master aam
+      ON aam.id = qm.area_of_audit_id
 
     WHERE qm.header_id = $1
     AND qm.deleted_at IS NULL
@@ -778,49 +927,97 @@ export class AuditQuestionMasterService {
     async createQuestion(
         data: CreateQuestionDto,
     ) {
+
         await this.validateQuestion(data);
 
         const row = await this.queryOne(
             `
-    INSERT INTO question_master (
-      set_id,
-      header_id,
-      question,
-      question_type_id,
-      option_id,
-      applicable_id,
-      risk_category_id,
-      is_active,
-      admin_id
-    )
-    VALUES (
-      $1,
-      $2,
-      $3,
-      $4,
-      $5,
-      $6,
-      $7,
-      $8,
-      $9
-    )
+        INSERT INTO question_master (
 
-    RETURNING *
-    `,
+            set_id,
+            header_id,
+            question,
+
+            risk_category_id,
+
+            question_type_id,
+
+            area_of_audit_id,
+
+            control_risk_id,
+
+            key_aspect_id,
+
+            residual_risk_id,
+
+            show_instances,
+
+            option_id,
+
+            applicable_id,
+
+            audit_ev_upload,
+
+            compliance_ev_upload,
+
+            is_active,
+
+            admin_id
+
+        )
+
+        VALUES (
+
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9,
+            $10,
+            $11,
+            $12,
+            $13,
+            $14,
+            $15,
+            $16
+
+        )
+
+        RETURNING *
+        `,
             [
+
                 data.set_id,
 
                 data.header_id,
 
                 data.question,
 
+                data.risk_category_id,
+
                 data.question_type_id,
+
+                data.area_of_audit_id,
+
+                data.control_risk_id,
+
+                data.key_aspect_id,
+
+                data.residual_risk_id,
+
+                data.show_instances ?? 0,
 
                 data.option_id,
 
                 data.applicable_id,
 
-                data.risk_category_id,
+                data.audit_ev_upload ?? 0,
+
+                data.compliance_ev_upload ?? 0,
 
                 data.is_active ?? 1,
 
@@ -1035,6 +1232,216 @@ export class AuditQuestionMasterService {
         ) {
             throw new BadRequestException(
                 'Question header not found',
+            );
+        }
+    }
+
+    async findQuestionsBySet(
+        setId: number,
+    ) {
+        return this.queryRows(
+            `
+        SELECT
+
+          qm.*,
+
+          qhm.name AS header_name,
+
+          qsm.name AS set_name,
+
+          rcm.risk_category
+            AS risk_category_name,
+
+          CASE
+            WHEN qm.question_type_id = 1
+              THEN 'QUALITATIVE'
+
+            WHEN qm.question_type_id = 2
+              THEN 'QUANTITATIVE'
+
+            ELSE '-'
+          END AS question_type_name,
+
+          CASE
+            WHEN qm.option_id = 1
+              THEN 'MULTIPLE OPTION'
+
+            WHEN qm.option_id = 2
+              THEN 'YES / NO'
+
+            WHEN qm.option_id = 3
+              THEN 'TEXTAREA'
+
+            WHEN qm.option_id = 4
+              THEN 'ANNEXURE'
+
+            WHEN qm.option_id = 5
+              THEN 'SUBSET'
+
+            ELSE '-'
+          END AS option_name,
+
+          aam.name AS audit_area_name
+
+        FROM question_master qm
+
+        LEFT JOIN question_header_master qhm
+          ON qhm.id = qm.header_id
+
+        LEFT JOIN question_set_master qsm
+          ON qsm.id = qm.set_id
+
+        LEFT JOIN risk_category_master rcm
+          ON rcm.id = qm.risk_category_id
+
+        LEFT JOIN audit_area_master aam
+          ON aam.id = qm.area_of_audit_id
+
+        WHERE qm.set_id = $1
+        AND qm.deleted_at IS NULL
+
+        ORDER BY qm.id DESC
+        `,
+            [setId],
+        );
+    }
+
+    // Question Risk Mapping
+
+    async findRiskMappings(
+        questionId: number,
+    ) {
+        return this.queryRows(
+            `
+    SELECT
+      qrm.*,
+
+      qm.question
+
+    FROM question_risk_mapping qrm
+
+    LEFT JOIN question_master qm
+      ON qm.id = qrm.question_id
+
+    WHERE qrm.question_id = $1
+    AND qrm.deleted_at IS NULL
+
+    ORDER BY qrm.id DESC
+    `,
+            [questionId],
+        );
+    }
+
+    async createRiskMapping(
+        data: CreateQuestionRiskMappingDto,
+    ) {
+        await this.validateRiskMapping(
+            data,
+        );
+
+        const row = await this.queryOne(
+            `
+    INSERT INTO question_risk_mapping (
+      question_id,
+      risk_type,
+      business_risk,
+      control_risk,
+      admin_id
+    )
+    VALUES (
+      $1,
+      $2,
+      $3,
+      $4,
+      $5
+    )
+
+    RETURNING *
+    `,
+            [
+                data.question_id,
+
+                data.risk_type,
+
+                data.business_risk,
+
+                data.control_risk,
+
+                data.admin_id ?? 1,
+            ],
+        );
+
+        if (!row) {
+            throw new BadRequestException(
+                'Unable to create risk mapping',
+            );
+        }
+
+        return row;
+    }
+
+    async removeRiskMapping(
+        id: number,
+    ) {
+        const existing =
+            await this.queryOne(
+                `
+      SELECT id
+      FROM question_risk_mapping
+      WHERE id = $1
+      AND deleted_at IS NULL
+      `,
+                [id],
+            );
+
+        if (!existing) {
+            throw new NotFoundException(
+                'Risk mapping not found',
+            );
+        }
+
+        const row = await this.queryOne(
+            `
+    UPDATE question_risk_mapping
+
+    SET
+      deleted_at = CURRENT_TIMESTAMP,
+
+      updated_at = CURRENT_TIMESTAMP
+
+    WHERE id = $1
+
+    RETURNING *
+    `,
+            [id],
+        );
+
+        if (!row) {
+            throw new BadRequestException(
+                'Unable to delete risk mapping',
+            );
+        }
+
+        return row;
+    }
+
+    private async validateRiskMapping(
+        data: CreateQuestionRiskMappingDto,
+    ) {
+        const question =
+            await this.queryOne(
+                `
+      SELECT id
+      FROM question_master
+      WHERE id = $1
+      AND deleted_at IS NULL
+      `,
+                [data.question_id],
+            );
+
+        if (!question) {
+            throw new BadRequestException(
+                'Question not found',
             );
         }
     }
