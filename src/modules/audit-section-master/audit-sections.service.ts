@@ -36,7 +36,7 @@ export class AuditSectionService {
               `,
                 [data.name, data.admin_id]
             );
-        } catch (err) {
+        } catch (err: any) {
             if (err.code === '23505') {
                 throw new BadRequestException('Audit section already exists')
             }

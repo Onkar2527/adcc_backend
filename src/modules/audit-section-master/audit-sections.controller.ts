@@ -2,6 +2,13 @@ import { Controller, Get, Put, Post, Param, Body, Req, Delete } from "@nestjs/co
 import { AuditSectionService } from "./audit-sections.service";
 import { CreateAuditSectionDto } from "./dto/create-audit-sections.dto";
 
+interface AuthRequest extends Request {
+    user?: {
+        id: number;
+        email?: string;
+    };
+}
+
 @Controller('audit-sections')
 export class AuditSectionsController {
     constructor(private readonly service: AuditSectionService) { }
@@ -12,7 +19,7 @@ export class AuditSectionsController {
     }
 
     @Post()
-    create(@Body() dto: CreateAuditSectionDto, @Req() req) {
+    create(@Body() dto: CreateAuditSectionDto, @Req() req: AuthRequest) {
         const admin_id = req.user?.id || 1;
         return this.service.create({ ...dto, admin_id });
     }
