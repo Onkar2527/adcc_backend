@@ -16,6 +16,7 @@ import { EmployeesModule } from './modules/employees/employees.module';
 import { PasswordPolicyModule } from './modules/password-policy/password-policy.module';
 import { UnitsModule } from './modules/units/units.module';
 import { AuditSectionsModule } from './modules/audit-section/audit-sections.module';
+import { MenuMasterModule } from './modules/menu-master/menu-master.module';
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { AuditSectionsModule } from './modules/audit-section/audit-sections.modu
     EmployeesModule,
     PasswordPolicyModule,
     UnitsModule,
-    AuditSectionsModule
+    AuditSectionsModule,
+    MenuMasterModule
   ],
   controllers: [AppController],
   providers: [AppService],
