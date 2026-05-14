@@ -4,14 +4,14 @@ import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
-  private pool: Pool;
+  private pool!: Pool;
   private readonly logger = new Logger(DatabaseService.name);
 
-  constructor(private configService: ConfigService) {}
+  constructor(private configService: ConfigService) { }
 
   onModuleInit() {
     const isSsl = this.configService.get<string>('DB_SSL') === 'true';
-    
+
     this.pool = new Pool({
       host: this.configService.get<string>('DB_HOST', 'localhost'),
       port: this.configService.get<number>('DB_PORT', 5432),
@@ -20,11 +20,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       database: this.configService.get<string>('DB_NAME', 'postgres'),
       ssl: isSsl ? { rejectUnauthorized: false } : false,
       max: 20, // Increase max pool size for better concurrency
-      idleTimeoutMillis: 30000, 
-      connectionTimeoutMillis: 2000, 
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
     });
 
-    this.pool.on('error', (err) => {
+    this.pool.on('error', (err: any) => {
       this.logger.error('Unexpected error on idle client', err);
       process.exit(-1);
     });

@@ -23,7 +23,7 @@ ORDER BY m.id DESC
       `);
     }
 
-    async create(data: {section_type_id: number, name: string,linked_table_id: number,is_active: number, admin_id: number }) {
+    async create(data: { section_type_id: number, name: string, linked_table_id: number, is_active: number, admin_id: number }) {
         const existing = await this.db.query(
             `SELECT id 
              FROM menu_master 
@@ -33,7 +33,7 @@ ORDER BY m.id DESC
             [data.name]
         );
 
-        if (existing.length) {
+        if (existing.rows.length) {
             throw new BadRequestException('Menu master already exists');
         }
 
@@ -61,7 +61,7 @@ ORDER BY m.id DESC
             [name, id]
         );
 
-        if (existing.length) {
+        if (existing.rows.length) {
             throw new BadRequestException('Menu master already exists');
         }
 

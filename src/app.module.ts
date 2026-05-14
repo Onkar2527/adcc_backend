@@ -22,6 +22,8 @@ import { AuditSchemesModule } from './modules/audit-scheme-master/audit-schemes.
 import { AuditQuestionsModule } from './modules/audit-question-master/audit-questions.module';
 import { BorderAreaMasterModule } from './modules/border-area-master/border-arear-master.module';
 import { ManageAssementMasterModule } from './modules/manage-assement-master/manage-assement-master.module';
+import { AuditCategoriesModule } from './modules/audit-category-master/audit-categories.module';
+import { AuditAnnexureModule } from './modules/audit-annexure-master/audit-annexure.module';
 
 @Module({
   imports: [
@@ -45,7 +47,9 @@ import { ManageAssementMasterModule } from './modules/manage-assement-master/man
     AuditSchemesModule,
     AuditQuestionsModule,
     BorderAreaMasterModule,
-    ManageAssementMasterModule
+    ManageAssementMasterModule,
+    AuditCategoriesModule,
+    AuditAnnexureModule
   ],
   controllers: [AppController],
   providers: [AppService],

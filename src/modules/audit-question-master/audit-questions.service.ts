@@ -601,6 +601,29 @@ export class AuditQuestionMasterService {
         ORDER BY name
         `
             );
+
+        const annexures =
+            await this.db.query(`
+            SELECT
+            id,
+            name
+            FROM annexure_master
+            WHERE deleted_at IS NULL
+            AND is_active = 1
+            ORDER BY name
+        `);
+
+        const subsets =
+            await this.db.query(`
+            SELECT
+            id,
+            name
+            FROM question_set_master
+            WHERE set_type_id = 2
+            AND deleted_at IS NULL
+            AND is_active = 1
+            ORDER BY name
+        `);
         return {
             setTypes: [
                 {
@@ -751,6 +774,17 @@ export class AuditQuestionMasterService {
 
             businessRiskCategories,
             auditAreas,
+            annexures:
+                annexures.rows.map((x) => ({
+                    label: x.name,
+                    value: Number(x.id),
+                })),
+
+            subsets:
+                subsets.rows.map((x) => ({
+                    label: x.name,
+                    value: Number(x.id),
+                })),
 
             questionInputMethods: [
                 {
@@ -937,6 +971,8 @@ export class AuditQuestionMasterService {
             set_id,
             header_id,
             question,
+            annexure_id,
+            subset_multi_id,
 
             risk_category_id,
 
@@ -983,7 +1019,9 @@ export class AuditQuestionMasterService {
             $13,
             $14,
             $15,
-            $16
+            $16,
+            $17,
+            $18
 
         )
 
@@ -996,6 +1034,10 @@ export class AuditQuestionMasterService {
                 data.header_id,
 
                 data.question,
+
+                data.annexure_id,
+
+                data.subset_multi_id,
 
                 data.risk_category_id,
 
@@ -1095,6 +1137,51 @@ export class AuditQuestionMasterService {
         admin_id
       ),
 
+      annexure_id = COALESCE(
+        $11,
+        annexure_id
+      ),
+
+      subset_multi_id = COALESCE(
+        $12,
+        subset_multi_id
+      ),
+
+      area_of_audit_id = COALESCE(
+        $13,
+        area_of_audit_id
+        ),
+
+        control_risk_id = COALESCE(
+        $14,
+        control_risk_id
+        ),
+
+        key_aspect_id = COALESCE(
+        $15,
+        key_aspect_id
+        ),
+
+        residual_risk_id = COALESCE(
+        $16,
+        residual_risk_id
+        ),
+
+        show_instances = COALESCE(
+        $17,
+        show_instances
+        ),
+
+        audit_ev_upload = COALESCE(
+        $18,
+        audit_ev_upload
+        ),
+
+        compliance_ev_upload = COALESCE(
+        $19,
+        compliance_ev_upload
+        ),
+
       updated_at = CURRENT_TIMESTAMP
 
     WHERE id = $1
@@ -1121,7 +1208,25 @@ export class AuditQuestionMasterService {
                 data.is_active,
 
                 data.admin_id,
-            ],
+
+                data.annexure_id,
+
+                data.subset_multi_id,
+
+                data.area_of_audit_id,
+
+                data.control_risk_id,
+
+                data.key_aspect_id,
+
+                data.residual_risk_id,
+
+                data.show_instances,
+
+                data.audit_ev_upload,
+
+                data.compliance_ev_upload,
+            ]
         );
 
         if (!row) {

@@ -24,7 +24,7 @@ export class AuditSectionService {
             [data.name]
         );
 
-        if (existing.length) {
+        if (existing.rows.length) {
             throw new BadRequestException('Audit section alreay exists');
         }
 
@@ -52,7 +52,7 @@ export class AuditSectionService {
             [name, id]
         );
 
-        if (existing.length) {
+        if (existing.rows.length) {
             throw new BadRequestException('Audit section already exists');
         }
 

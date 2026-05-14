@@ -104,6 +104,14 @@ export class CreateQuestionDto {
     @IsInt()
     applicable_id!: number;
 
+    @IsOptional()
+    @IsInt()
+    annexure_id?: number;
+
+    @IsOptional()
+    @IsString()
+    subset_multi_id?: string;
+
     // Business Risk Category
     @IsInt()
     risk_category_id!: number;
@@ -154,6 +162,15 @@ export class UpdateQuestionDto {
     @IsOptional()
     @IsString()
     question?: string;
+
+
+    @IsOptional()
+    @IsInt()
+    annexure_id?: number;
+
+    @IsOptional()
+    @IsString()
+    subset_multi_id?: string;
 
     @IsOptional()
     @IsInt()
