@@ -21,6 +21,7 @@ import { AuditUnitsModule } from './modules/audit-unit-master/audit-units.module
 import { AuditSchemesModule } from './modules/audit-scheme-master/audit-schemes.module';
 import { AuditQuestionsModule } from './modules/audit-question-master/audit-questions.module';
 import { AuditCategoriesModule } from './modules/audit-category-master/audit-categories.module';
+import { AuditAnnexureModule } from './modules/audit-annexure-master/audit-annexure.module';
 
 @Module({
   imports: [
@@ -43,7 +44,8 @@ import { AuditCategoriesModule } from './modules/audit-category-master/audit-cat
     AuditUnitsModule,
     AuditSchemesModule,
     AuditQuestionsModule,
-    AuditCategoriesModule
+    AuditCategoriesModule,
+    AuditAnnexureModule
   ],
   controllers: [AppController],
   providers: [AppService],
