@@ -20,6 +20,8 @@ import { MenuMasterModule } from './modules/menu-master/menu-master.module';
 import { AuditUnitsModule } from './modules/audit-unit-master/audit-units.module';
 import { AuditSchemesModule } from './modules/audit-scheme-master/audit-schemes.module';
 import { AuditQuestionsModule } from './modules/audit-question-master/audit-questions.module';
+import { BorderAreaMasterModule } from './modules/border-area-master/border-arear-master.module';
+import { ManageAssementMasterModule } from './modules/manage-assement-master/manage-assement-master.module';
 
 @Module({
   imports: [
@@ -41,7 +43,9 @@ import { AuditQuestionsModule } from './modules/audit-question-master/audit-ques
     MenuMasterModule,
     AuditUnitsModule,
     AuditSchemesModule,
-    AuditQuestionsModule
+    AuditQuestionsModule,
+    BorderAreaMasterModule,
+    ManageAssementMasterModule
   ],
   controllers: [AppController],
   providers: [AppService],
