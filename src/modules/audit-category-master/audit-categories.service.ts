@@ -56,9 +56,11 @@ export class AuditCategoryMasterService {
 
   async getLookups() {
 
-    const menus =
-      await this.queryRows(
-        `
+    try {
+
+      const menus =
+        await this.queryRows(
+          `
                 SELECT
                     id::int AS value,
                     name AS label,
@@ -69,16 +71,20 @@ export class AuditCategoryMasterService {
                     AND is_active = 1
                 ORDER BY name
                 `
-      );
+        );
 
-    return {
-      menus,
-    };
+      return {
+        menus,
+      };
+    } catch (error) {
+      throw new BadRequestException('Failed to load lookups')
+    }
   }
 
   async findAll() {
-    return this.queryRows(
-      `
+    try {
+      return this.queryRows(
+        `
             SELECT
 
                 cm.*,
@@ -94,7 +100,10 @@ export class AuditCategoryMasterService {
 
             ORDER BY cm.id DESC
             `
-    );
+      );
+    } catch (error) {
+      throw new BadRequestException('Failed to fetch categories')
+    }
   }
 
   async findOne(id: number) {
@@ -165,37 +174,38 @@ export class AuditCategoryMasterService {
   async create(
     data: CreateCategoryDto,
   ) {
+    try {
 
-    if (data.menu_id === 1) {
-      throw new BadRequestException(
-        'This menu is restricted',
+      if (data.menu_id === 1) {
+        throw new BadRequestException(
+          'This menu is restricted',
+        );
+      }
+
+      await this.validateDuplicate(
+        data.name,
+        data.menu_id,
       );
-    }
 
-    await this.validateDuplicate(
-      data.name,
-      data.menu_id,
-    );
-
-    const menu =
-      await this.queryOne(
-        `
+      const menu =
+        await this.queryOne(
+          `
                 SELECT linked_table_id
                 FROM menu_master
                 WHERE id = $1
                 `,
-        [data.menu_id],
-      );
+          [data.menu_id],
+        );
 
-    if (!menu) {
-      throw new BadRequestException(
-        'Invalid menu',
-      );
-    }
+      if (!menu) {
+        throw new BadRequestException(
+          'Invalid menu',
+        );
+      }
 
-    const row =
-      await this.queryOne(
-        `
+      const row =
+        await this.queryOne(
+          `
                 INSERT INTO category_master (
 
                     menu_id,
@@ -222,63 +232,73 @@ export class AuditCategoryMasterService {
 
                 RETURNING *
                 `,
-        [
+          [
 
-          data.menu_id,
+            data.menu_id,
 
-          data.name.trim()
-            .toUpperCase(),
+            data.name.trim()
+              .toUpperCase(),
 
-          menu.linked_table_id,
+            menu.linked_table_id,
 
-          data.question_set_ids ?? '',
+            data.question_set_ids ?? '',
 
-          data.is_cc_acc_category ?? 0,
+            data.is_cc_acc_category ?? 0,
 
-          data.is_active ?? 1,
+            data.is_active ?? 1,
 
-          data.admin_id ?? 1,
-        ],
-      );
+            data.admin_id ?? 1,
+          ],
+        );
 
-    return row;
+      return row;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async update(
     id: number,
     data: UpdateCategoryDto,
   ) {
+    try {
 
-    const existing =
-      await this.findOne(id);
+      const existing =
+        await this.findOne(id);
 
-    const menuId =
-      data.menu_id ??
-      existing.menu_id;
+      const menuId =
+        data.menu_id ??
+        existing.menu_id;
 
-    const name =
-      data.name ??
-      existing.name;
+      const name =
+        data.name ??
+        existing.name;
 
-    await this.validateDuplicate(
-      name,
-      menuId,
-      id,
-    );
+      await this.validateDuplicate(
+        name,
+        menuId,
+        id,
+      );
 
-    const menu =
-      await this.queryOne(
-        `
+      const menu =
+        await this.queryOne(
+          `
                 SELECT linked_table_id
                 FROM menu_master
                 WHERE id = $1
                 `,
-        [menuId],
-      );
+          [menuId],
+        );
 
-    const row =
-      await this.queryOne(
-        `
+      if (!menu) {
+        throw new BadRequestException(
+          'Invalid menu',
+        );
+      }
+
+      const row =
+        await this.queryOne(
+          `
                 UPDATE category_master
 
                 SET
@@ -302,40 +322,44 @@ export class AuditCategoryMasterService {
 
                 RETURNING *
                 `,
-        [
+          [
 
-          menuId,
+            menuId,
 
-          name.trim()
-            .toUpperCase(),
+            name.trim()
+              .toUpperCase(),
 
-          menu.linked_table_id,
+            menu.linked_table_id,
 
-          data.question_set_ids ??
-          existing.question_set_ids,
+            data.question_set_ids ??
+            existing.question_set_ids,
 
-          data.is_cc_acc_category ??
-          existing.is_cc_acc_category,
+            data.is_cc_acc_category ??
+            existing.is_cc_acc_category,
 
-          data.is_active ??
-          existing.is_active,
+            data.is_active ??
+            existing.is_active,
 
-          id,
-        ],
-      );
+            id,
+          ],
+        );
 
-    return row;
+      return row;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async toggleStatus(
     id: number,
   ) {
+    try {
 
-    const row =
-      await this.findOne(id);
+      const row =
+        await this.findOne(id);
 
-    return this.queryOne(
-      `
+      return this.queryOne(
+        `
             UPDATE category_master
 
             SET
@@ -354,16 +378,20 @@ export class AuditCategoryMasterService {
 
             RETURNING *
             `,
-      [id],
-    );
+        [id],
+      );
+    } catch (error) {
+      throw error;
+    }
   }
 
   async remove(id: number) {
+    try {
 
-    await this.findOne(id);
+      await this.findOne(id);
 
-    return this.queryOne(
-      `
+      return this.queryOne(
+        `
             UPDATE category_master
 
             SET
@@ -374,8 +402,11 @@ export class AuditCategoryMasterService {
 
             RETURNING *
             `,
-      [id],
-    );
+        [id],
+      );
+    } catch (error) {
+      throw error;
+    }
   }
 
   // Question Set Mapping
