@@ -21,28 +21,56 @@ export class ManageAssementMasterService {
             `
     SELECT 
     asm.id,
-      asm.audit_unit_id,
-      aum.audit_unit_code,
-      aum.name,
-      asm.assesment_period_from,
-      asm.assesment_period_to,
-      asm.audit_status_id,
-      asm.audit_start_date,
-      asm.audit_end_date,
-      asm.audit_due_date,
-      asm.compliance_start_date,
-      asm.compliance_end_date,
-      asm.compliance_due_date,
-      asm.compliance_review_reject_limit,
-      asm.is_limit_blocked
-    FROM audit_assesment_master asm
-    LEFT JOIN audit_unit_master aum 
-      ON aum.id = asm.audit_unit_id
-    WHERE asm.deleted_at IS NULL
-   AND DATE(asm.assesment_period_from) >=  $1
-AND DATE(asm.assesment_period_to) <=  $2
-    AND asm.audit_unit_id = $3
-    ORDER BY asm.id DESC
+    asm.audit_unit_id,
+    aum.audit_unit_code,
+    aum.name,
+    asm.assesment_period_from,
+    asm.assesment_period_to,
+    asm.audit_status_id,
+    asm.audit_start_date,
+    asm.audit_end_date,
+    asm.audit_due_date,
+    asm.compliance_start_date,
+    asm.compliance_end_date,
+    asm.compliance_due_date,
+    asm.compliance_review_reject_limit,
+    asm.is_limit_blocked,
+
+    em.name AS branch_head_name,
+    em1.name AS branch_subhead_name,
+
+    em.id AS branch_head_code,
+    em1.id AS branch_subhead_code,
+
+    em2.name AS auditor_name,
+    em2.id AS auditor_code
+
+FROM audit_assesment_master asm
+
+LEFT JOIN audit_unit_master aum 
+    ON aum.id = asm.audit_unit_id 
+
+LEFT JOIN employee_master em 
+    ON em.id = aum.branch_head_id
+
+LEFT JOIN employee_master em1 
+    ON em1.id = aum.branch_subhead_id  
+
+LEFT JOIN LATERAL (
+    SELECT id, name
+    FROM employee_master em2
+    WHERE asm.audit_unit_id::text = ANY(
+        string_to_array(em2.audit_unit_authority, ',')
+    )
+    LIMIT 1
+) em2 ON true
+
+WHERE asm.deleted_at IS NULL
+  AND DATE(asm.assesment_period_from) >= $1
+  AND DATE(asm.assesment_period_to) <= $2
+  AND asm.audit_unit_id = $3
+
+ORDER BY asm.id DESC;
     `,
             [assesment_period_from, assesment_period_to, audit_unit_id]
         );
