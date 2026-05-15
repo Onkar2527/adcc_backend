@@ -20,6 +20,8 @@ import { MenuMasterModule } from './modules/menu-master/menu-master.module';
 import { AuditUnitsModule } from './modules/audit-unit-master/audit-units.module';
 import { AuditSchemesModule } from './modules/audit-scheme-master/audit-schemes.module';
 import { AuditQuestionsModule } from './modules/audit-question-master/audit-questions.module';
+import { BorderAreaMasterModule } from './modules/border-area-master/border-arear-master.module';
+import { ManageAssementMasterModule } from './modules/manage-assement-master/manage-assement-master.module';
 import { AuditCategoriesModule } from './modules/audit-category-master/audit-categories.module';
 import { AuditAnnexureModule } from './modules/audit-annexure-master/audit-annexure.module';
 import { RiskCategoryModule } from './modules/risk-masters/risk-category/risk-category.module';
@@ -46,6 +48,8 @@ import { RiskControlModule } from './modules/risk-masters/risk-control/risk-cont
     AuditUnitsModule,
     AuditSchemesModule,
     AuditQuestionsModule,
+    BorderAreaMasterModule,
+    ManageAssementMasterModule,
     AuditCategoriesModule,
     AuditAnnexureModule,
     RiskCategoryModule,
