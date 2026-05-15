@@ -26,6 +26,7 @@ import { AuditCategoriesModule } from './modules/audit-category-master/audit-cat
 import { AuditAnnexureModule } from './modules/audit-annexure-master/audit-annexure.module';
 import { RiskCategoryModule } from './modules/risk-masters/risk-category/risk-category.module';
 import { RiskControlModule } from './modules/risk-masters/risk-control/risk-control.module';
+import { PeriodwiseQuestionsMasterModule } from './modules/periodwise-questions-master/periodwise-questions-master.module';
 
 @Module({
   imports: [
@@ -53,7 +54,8 @@ import { RiskControlModule } from './modules/risk-masters/risk-control/risk-cont
     AuditCategoriesModule,
     AuditAnnexureModule,
     RiskCategoryModule,
-    RiskControlModule
+    RiskControlModule,
+    PeriodwiseQuestionsMasterModule
   ],
   controllers: [AppController],
   providers: [AppService],
