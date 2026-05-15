@@ -22,6 +22,8 @@ import { AuditSchemesModule } from './modules/audit-scheme-master/audit-schemes.
 import { AuditQuestionsModule } from './modules/audit-question-master/audit-questions.module';
 import { AuditCategoriesModule } from './modules/audit-category-master/audit-categories.module';
 import { AuditAnnexureModule } from './modules/audit-annexure-master/audit-annexure.module';
+import { RiskCategoryModule } from './modules/risk-masters/risk-category/risk-category.module';
+import { RiskControlModule } from './modules/risk-masters/risk-control/risk-control.module';
 
 @Module({
   imports: [
@@ -45,7 +47,9 @@ import { AuditAnnexureModule } from './modules/audit-annexure-master/audit-annex
     AuditSchemesModule,
     AuditQuestionsModule,
     AuditCategoriesModule,
-    AuditAnnexureModule
+    AuditAnnexureModule,
+    RiskCategoryModule,
+    RiskControlModule
   ],
   controllers: [AppController],
   providers: [AppService],
