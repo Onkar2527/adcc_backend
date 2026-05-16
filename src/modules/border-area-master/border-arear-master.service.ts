@@ -22,7 +22,7 @@ export class BorderAreaMasterService {
       `);
     }
 
-    async create(data: {name: string, appetite_percent: string, occurance_percent: string, magnitude: string, frequency: string, average_qualitative_count: string, average_quantitative_count: string, admin_id: number }) {
+    async create(data: { name: string, appetite_percent: string, occurance_percent: string, magnitude: string, frequency: string, average_qualitative_count: string, average_quantitative_count: string, admin_id: number }) {
         const existing = await this.db.query(
             `SELECT id 
              FROM audit_area_master 
@@ -32,7 +32,7 @@ export class BorderAreaMasterService {
             [data.name]
         );
 
-        if (existing.length) {
+        if (existing.rows.length) {
             throw new BadRequestException('Audit area master already exists');
         }
 
@@ -52,7 +52,7 @@ export class BorderAreaMasterService {
         }
     }
 
-    async update(id: number, name: string , appetite_percent: string, occurance_percent: string, magnitude: string, frequency: string, average_qualitative_count: string, average_quantitative_count: string) {
+    async update(id: number, name: string, appetite_percent: string, occurance_percent: string, magnitude: string, frequency: string, average_qualitative_count: string, average_quantitative_count: string) {
         const existing = await this.db.query(
             `SELECT id FROM audit_area_master 
        WHERE LOWER(name) = LOWER($1) 
@@ -60,7 +60,7 @@ export class BorderAreaMasterService {
             [name, id]
         );
 
-        if (existing.length) {
+        if (existing.rows.length) {
             throw new BadRequestException('Audit area master already exists');
         }
 
@@ -71,11 +71,11 @@ export class BorderAreaMasterService {
              WHERE id = $8
              RETURNING *
              `,
-            [name,appetite_percent, occurance_percent, magnitude, frequency, average_qualitative_count, average_quantitative_count, id]
+            [name, appetite_percent, occurance_percent, magnitude, frequency, average_qualitative_count, average_quantitative_count, id]
         );
     }
 
-   
+
     async softDelete(id: number) {
         return this.db.query(
             `

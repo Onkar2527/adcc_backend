@@ -26,6 +26,9 @@ import { AuditCategoriesModule } from './modules/audit-category-master/audit-cat
 import { AuditAnnexureModule } from './modules/audit-annexure-master/audit-annexure.module';
 import { RiskCategoryModule } from './modules/risk-masters/risk-category/risk-category.module';
 import { RiskControlModule } from './modules/risk-masters/risk-control/risk-control.module';
+import { RiskCompositeModule } from './modules/risk-masters/risk-composite/risk-composite.module';
+import { RiskMatrixModule } from './modules/risk-masters/risk-matrix/risk-matrix.module';
+import { BranchRatingModule } from './modules/risk-masters/risk-branch-rating/risk-branch-rating.module';
 
 @Module({
   imports: [
@@ -53,7 +56,10 @@ import { RiskControlModule } from './modules/risk-masters/risk-control/risk-cont
     AuditCategoriesModule,
     AuditAnnexureModule,
     RiskCategoryModule,
-    RiskControlModule
+    RiskControlModule,
+    RiskCompositeModule,
+    RiskMatrixModule,
+    BranchRatingModule
   ],
   controllers: [AppController],
   providers: [AppService],
