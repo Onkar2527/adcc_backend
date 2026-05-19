@@ -46,7 +46,110 @@ ORDER BY mlcm.id DESC;
       `);
     }
 
-    async create(data: { year_id: number, section_type_id: number, user_type_id: number, audit_unit_id: number,start_month_year: string, end_month_year: string, admin_id: number }) {
+    async findQuestionData(id: number) {
+        return this.db.query(`
+          SELECT
+
+    mm.id AS menu_id,
+    mm.name AS menu_name,
+
+    cm.id AS category_id,
+    cm.name AS category_name,
+
+    qsm.id AS question_set_id,
+    qsm.name AS question_set_name,
+
+    qhm.id AS header_id,
+    qhm.name AS header_name,
+
+    q.questions
+
+FROM multi_level_control_master mlcm
+
+
+
+LEFT JOIN menu_master mm
+    ON mm.id::text = ANY(
+        string_to_array(
+            mlcm.menu_ids,
+            ','
+        )
+    )
+
+
+
+LEFT JOIN category_master cm
+    ON cm.id::text = ANY(
+        string_to_array(
+            mlcm.cat_ids,
+            ','
+        )
+    )
+   AND cm.menu_id = mm.id
+
+
+
+LEFT JOIN question_set_master qsm
+    ON qsm.id::text = ANY(
+        string_to_array(
+            cm.question_set_ids,
+            ','
+        )
+    )
+
+
+
+LEFT JOIN question_header_master qhm
+    ON qhm.question_set_id = qsm.id
+
+
+
+LEFT JOIN (
+
+    SELECT
+
+        qm.header_id,
+        qm.set_id,
+
+        json_agg(
+
+            json_build_object(
+
+                'question_id', qm.id,
+                'question', qm.question
+
+            )
+
+            ORDER BY qm.id
+
+        ) AS questions
+
+    FROM question_master qm
+
+    GROUP BY
+
+        qm.header_id,
+        qm.set_id
+
+) q
+
+    ON q.header_id = qhm.id
+   AND q.set_id = qsm.id
+
+WHERE mlcm.id = $1
+AND mlcm.deleted_at IS NULL
+
+ORDER BY
+
+    mm.id,
+    cm.id,
+    qsm.id,
+    qhm.id;
+      `, [id]);
+
+    }
+
+    async create(data: { year_id: number, section_type_id: number, user_type_id: number, audit_unit_id: number, start_month_year: string, end_month_year: string, admin_id: number }) {
         const existing = await this.db.query(
             `SELECT id 
              FROM multi_level_control_master 
@@ -99,8 +202,8 @@ ORDER BY mlcm.id DESC;
         );
     }
 
-    
-    async updateAdvaneSchemes(id: number, data: { advances_scheme_ids: string,  }) {
+
+    async updateAdvaneSchemes(id: number, data: { advances_scheme_ids: string, }) {
 
         return this.db.query(
             `
@@ -113,7 +216,55 @@ ORDER BY mlcm.id DESC;
         );
     }
 
- 
+    async updateDepositSchemes(id: number, data: { deposits_scheme_ids: string, }) {
+
+        return this.db.query(
+            `
+             UPDATE multi_level_control_master
+             SET deposits_scheme_ids = $1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2
+             RETURNING *
+             `,
+            [data.deposits_scheme_ids, id]
+        );
+    }
+
+    async updateMenu(id: number, data: { menu_ids: string, }) {
+
+        return this.db.query(
+            `
+             UPDATE multi_level_control_master
+             SET menu_ids = $1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2
+             RETURNING *
+             `,
+            [data.menu_ids, id]
+        );
+    }
+    async updateCategory(id: number, data: { cat_ids: string, }) {
+
+        return this.db.query(
+            `
+             UPDATE multi_level_control_master
+             SET cat_ids = $1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2
+             RETURNING *
+             `,
+            [data.cat_ids, id]
+        );
+    }
+    async updateQuestionAndHeaders(id: number, data: { header_ids: string, question_ids: string }) {
+
+        return this.db.query(
+            `
+             UPDATE multi_level_control_master
+             SET header_ids = $1, question_ids = $2, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $3
+             RETURNING *
+             `,
+            [data.header_ids, data.question_ids, id]
+        );
+    }
 
     async softDelete(id: number) {
         return this.db.query(
