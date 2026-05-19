@@ -31,6 +31,7 @@ import { RiskMatrixModule } from './modules/risk-masters/risk-matrix/risk-matrix
 import { BranchRatingModule } from './modules/risk-masters/risk-branch-rating/risk-branch-rating.module';
 import { PeriodwiseQuestionsMasterModule } from './modules/periodwise-questions-master/periodwise-questions-master.module';
 import { DepositAccountsModule } from './modules/manage-accounts/deposit-accounts/deposit-accounts.module';
+import { AdvanceAccountsModule } from './modules/manage-accounts/advance-accounts/advance-accounts.module';
 
 
 @Module({
@@ -64,7 +65,8 @@ import { DepositAccountsModule } from './modules/manage-accounts/deposit-account
     RiskMatrixModule,
     BranchRatingModule,
     PeriodwiseQuestionsMasterModule,
-    DepositAccountsModule
+    DepositAccountsModule,
+    AdvanceAccountsModule
   ],
   controllers: [AppController],
   providers: [AppService],

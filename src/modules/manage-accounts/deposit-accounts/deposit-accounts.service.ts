@@ -640,26 +640,112 @@ export class DepositAccountsService {
         }
     }
 
+    // Dump Upload
+
     private formatCsvDate(
-        value: string,
+        value: any,
     ): string | null {
 
+        if (!value) {
+            return null;
+        }
+
+        // Handle JS Date object
+        if (value instanceof Date) {
+
+            if (
+                isNaN(value.getTime())
+            ) {
+                return null;
+            }
+
+            const year =
+                value.getFullYear();
+
+            const month =
+                String(
+                    value.getMonth() + 1,
+                ).padStart(2, '0');
+
+            const day =
+                String(
+                    value.getDate(),
+                ).padStart(2, '0');
+
+            return `${year}-${month}-${day}`;
+        }
+
+        const str =
+            String(value).trim();
+
+        if (!str) {
+            return null;
+        }
+
+        // Handle dd/mm/yyyy
+        if (str.includes('/')) {
+
+            const parts =
+                str.split('/');
+
+            if (
+                parts.length !== 3
+            ) {
+                return null;
+            }
+
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+
+        // Generic parsing
+        const d =
+            new Date(str);
+
         if (
-            !value
-            || value === '31/12/1899'
+            isNaN(d.getTime())
         ) {
-
             return null;
         }
 
-        const parts =
-            value.split('/');
+        const year =
+            d.getFullYear();
 
-        if (parts.length !== 3) {
-            return null;
-        }
+        const month =
+            String(
+                d.getMonth() + 1,
+            ).padStart(2, '0');
 
-        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        const day =
+            String(
+                d.getDate(),
+            ).padStart(2, '0');
+
+        return `${year}-${month}-${day}`;
+    }
+
+
+    private toUpper(
+        value: any,
+    ): string {
+
+        return String(value || '')
+            .trim()
+            .toUpperCase();
+    }
+
+    private toDecimal(
+        value: any,
+    ): string {
+
+        const num = parseFloat(
+            String(value || '')
+                .replace(/,/g, '')
+                .trim(),
+        );
+
+        return isNaN(num)
+            ? '0.00'
+            : num.toFixed(2);
     }
 
 
@@ -672,50 +758,40 @@ export class DepositAccountsService {
 
                 const results: any[] = [];
 
+                let rowIndex = 0;
+
                 file.file
 
-                    .pipe(csv())
+                    .pipe(
+                        csv({
+                            headers: false,
+                        }),
+                    )
 
                     .on(
                         'data',
-                        (data: { [x: string]: any; }) => {
+                        (data: any) => {
 
-                            const normalized: any = {};
+                            const row =
+                                Object.values(data);
 
-                            Object.keys(data)
-                                .forEach((key) => {
+                            // Skip header
+                            if (rowIndex++ === 0) {
+                                return;
+                            }
 
-                                    normalized[
-                                        key
-                                            .trim()
-                                            .toLowerCase()
-                                            .replace(/\s+/g, '_')
-                                    ] =
-                                        String(
-                                            data[key] || '',
-                                        ).trim();
-                                });
-
-                            results.push(
-                                normalized,
-                            );
+                            results.push(row);
                         },
                     )
 
                     .on(
                         'end',
-                        () => {
-
-                            resolve(results);
-                        },
+                        () => resolve(results),
                     )
 
                     .on(
                         'error',
-                        (err: any) => {
-
-                            reject(err);
-                        },
+                        reject,
                     );
             },
         );
@@ -826,7 +902,6 @@ export class DepositAccountsService {
             WHERE deleted_at IS NULL
             `,
             );
-        console.log(schemes);
 
         const schemeMap =
             new Map();
@@ -874,10 +949,6 @@ export class DepositAccountsService {
         // COUNTERS
         // =========================================
 
-        let inserted = 0;
-
-        let duplicates = 0;
-
         let failed = 0;
 
         const errors: any[] = [];
@@ -896,8 +967,71 @@ export class DepositAccountsService {
             i++
         ) {
 
-            const row =
+            const c_data =
                 filteredRows[i];
+
+            if (c_data.length !== 15) {
+
+                failed++;
+
+                errors.push({
+
+                    row: i + 1,
+
+                    error:
+                        'Column count mismatch',
+                });
+
+                continue;
+            }
+
+            const row = {
+
+                branch_code:
+                    String(c_data[0] || '').trim(),
+
+                scheme_code:
+                    String(c_data[1] || '').trim(),
+
+                account_no:
+                    String(c_data[2] || '').trim(),
+
+                account_holder_name:
+                    this.toUpper(c_data[3]),
+
+                ucic:
+                    this.toUpper(c_data[4]),
+
+                customer_type:
+                    this.toUpper(c_data[5]),
+
+                intrest_rate:
+                    this.toDecimal(c_data[6]),
+
+                principal_amount:
+                    this.toDecimal(c_data[7]),
+
+                account_opening_date:
+                    this.formatCsvDate(c_data[8]),
+
+                balance:
+                    this.toDecimal(c_data[9]),
+
+                balance_date:
+                    this.formatCsvDate(c_data[10]),
+
+                maturity_date:
+                    this.formatCsvDate(c_data[11]),
+
+                maturity_amount:
+                    this.toDecimal(c_data[12]),
+
+                close_date:
+                    this.formatCsvDate(c_data[13]),
+
+                account_status:
+                    this.toUpper(c_data[14]),
+            };
 
             try {
 
@@ -929,9 +1063,7 @@ export class DepositAccountsService {
                 // =====================================
 
                 const openingDate =
-                    this.formatCsvDate(
-                        row.account_opening_date,
-                    );
+                    row.account_opening_date;
 
                 const periodFrom =
                     new Date(
@@ -1005,19 +1137,6 @@ export class DepositAccountsService {
                             row.scheme_code,
                         )
                     );
-                console.log({
-                    csv: row.scheme_code,
-                    normalized:
-                        this.normalizeCode(
-                            row.scheme_code,
-                        ),
-                    exists:
-                        schemeMap.has(
-                            this.normalizeCode(
-                                row.scheme_code,
-                            ),
-                        ),
-                });
 
                 if (!schemeId) {
 
@@ -1078,36 +1197,31 @@ export class DepositAccountsService {
 
                     row.principal_amount,
 
-                    this.formatCsvDate(
-                        row.account_opening_date,
-                    ),
+                    row.account_opening_date,
 
                     row.balance,
 
-                    this.formatCsvDate(
-                        row.balance_date,
-                    ),
+                    row.balance_date,
 
-                    this.formatCsvDate(
-                        row.maturity_date,
-                    ),
+                    row.maturity_date,
 
                     row.maturity_amount,
 
-                    this.formatCsvDate(
-                        row.close_date,
-                    ),
+                    row.close_date,
 
                     row.account_status,
 
-                    new Date(),
+                    new Date()
+                        .toISOString()
+                        .slice(0, 19)
+                        .replace('T', ' '),
 
                     this.formatCsvDate(
-                        row.upload_period_from,
+                        payload.period_from,
                     ),
 
                     this.formatCsvDate(
-                        row.upload_period_to,
+                        payload.period_to,
                     ),
 
                     `UP${Date.now()}`,
@@ -1150,7 +1264,7 @@ export class DepositAccountsService {
 
                 filteredRows.map(
                     (
-                        row: any,
+                        c_data: any[],
                         index: number,
                     ) => ({
 
@@ -1158,21 +1272,21 @@ export class DepositAccountsService {
                             index + 1,
 
                         branch_code:
-                            row.branch_code,
+                            c_data[0],
 
                         scheme_code:
-                            row.scheme_code,
+                            c_data[1],
 
                         account_no:
-                            row.account_no,
+                            c_data[2],
 
                         account_holder_name:
-                            row.account_holder_name,
+                            c_data[3],
 
                         status:
 
                             duplicateAccounts.includes(
-                                row.account_no,
+                                String(c_data[4]).trim(),
                             )
 
                                 ? 'DUPLICATE ACCOUNT NUMBER'
@@ -1230,28 +1344,39 @@ export class DepositAccountsService {
 
         let paramIndex = 1;
 
-        for (
-            const row
-            of rows
-        ) {
+        for (const row of rows) {
 
-            const rowPlaceholders: string[] = [];
+            values.push(...row);
 
-            for (
-                const value
-                of row
-            ) {
+            placeholders.push(`(
 
-                values.push(value);
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
 
-                rowPlaceholders.push(
-                    `$${paramIndex++}`,
-                );
-            }
+        NOW(),
 
-            placeholders.push(
-                `(${rowPlaceholders.join(',')}, NOW(), NOW())`,
-            );
+        NOW()
+    )`);
         }
 
         await this.db.query(
