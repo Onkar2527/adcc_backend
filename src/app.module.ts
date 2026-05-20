@@ -30,6 +30,7 @@ import { RiskCompositeModule } from './modules/risk-masters/risk-composite/risk-
 import { RiskMatrixModule } from './modules/risk-masters/risk-matrix/risk-matrix.module';
 import { BranchRatingModule } from './modules/risk-masters/risk-branch-rating/risk-branch-rating.module';
 import { PeriodwiseQuestionsMasterModule } from './modules/periodwise-questions-master/periodwise-questions-master.module';
+import { AuditorDataModule } from './modules/auditor-data/auditor-data.component.module';
 
 
 @Module({
@@ -62,7 +63,8 @@ import { PeriodwiseQuestionsMasterModule } from './modules/periodwise-questions-
     RiskCompositeModule,
     RiskMatrixModule,
     BranchRatingModule,
-    PeriodwiseQuestionsMasterModule
+    PeriodwiseQuestionsMasterModule,
+    AuditorDataModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -42,7 +42,7 @@ export class UsersService {
   }
 
   async findByUsername(username: string) {
-    const query = `SELECT * FROM users WHERE username = $1 AND is_active = true`;
+    const query = `SELECT * FROM employee_master WHERE emp_code = $1 AND is_active = 1 AND deleted_at IS NULL`;
     const result = await this.db.query(query, [username]);
     return result.rows[0];
   }
