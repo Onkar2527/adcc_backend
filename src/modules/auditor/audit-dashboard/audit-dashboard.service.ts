@@ -1,0 +1,859 @@
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
+
+import { DatabaseService }
+    from '../../../core/database/database.service';
+
+import {
+    AuditDashboardDto,
+    OpenAssessmentDto,
+} from './dto/audit-dashboard.dto';
+
+@Injectable()
+export class AuditDashboardService {
+
+    constructor(
+        private readonly db:
+            DatabaseService,
+    ) { }
+
+    /* ===================================================== */
+    /* DASHBOARD */
+    /* ===================================================== */
+
+    async findAll(
+        dto: AuditDashboardDto,
+    ) {
+
+        try {
+
+            const auditUnits =
+                await this.getAuthorizedAuditUnits(
+                    dto.employee_id,
+                );
+
+            if (
+                !auditUnits.length
+            ) {
+
+                return [];
+            }
+
+            const auditUnitIds =
+                auditUnits.map(
+                    (x: any) => x.id,
+                );
+
+            const summaryData =
+                await this.getAssessmentSummary(
+                    auditUnitIds,
+                );
+
+            const notStartedData =
+                await this.getNotStartedAudits(
+                    auditUnits,
+                );
+
+            const summaryMap =
+                new Map(
+
+                    summaryData.map(
+                        (x: any) => [
+                            x.audit_unit_id,
+                            x,
+                        ],
+                    ),
+                );
+
+            return auditUnits.map(
+                (unit: any) => {
+
+                    const summary =
+                        summaryMap.get(
+                            unit.id,
+                        );
+
+                    const notStarted =
+                        notStartedData[
+                        unit.id
+                        ] || [];
+
+                    return {
+
+                        audit_unit_id:
+                            unit.id,
+
+                        audit_unit_code:
+                            unit.audit_unit_code,
+
+                        audit_unit_name:
+                            unit.name,
+
+                        frequency:
+                            unit.frequency,
+
+                        last_audit_date:
+                            unit.last_audit_date,
+
+                        total_audit:
+                            summary
+                                ?.total_audit || 0,
+
+                        audit_pending:
+                            summary
+                                ?.audit_pending || 0,
+
+                        review_pending:
+                            summary
+                                ?.review_pending || 0,
+
+                        compliance_pending:
+                            summary
+                                ?.compliance_pending || 0,
+
+                        audit_completed:
+                            summary
+                                ?.audit_completed || 0,
+
+                        latest_assessment_id:
+                            summary
+                                ?.latest_assessment_id || null,
+
+                        latest_status_id:
+                            summary
+                                ?.latest_status_id || null,
+
+                        latest_status:
+                            summary
+                                ?.latest_status || 'NOT STARTED',
+
+                        not_started_count:
+                            notStarted.length,
+                    };
+                },
+            );
+
+        } catch (error) {
+
+            console.log(error);
+
+            throw new BadRequestException(
+                'Failed to fetch dashboard',
+            );
+        }
+    }
+
+    /* ===================================================== */
+    /* AUTHORIZED AUDIT UNITS */
+    /* ===================================================== */
+
+    async getAuthorizedAuditUnits(
+        employeeId: number,
+    ) {
+
+        const query = `
+
+        SELECT DISTINCT
+
+                au.id,
+
+                au.audit_unit_code,
+
+                au.name,
+
+                au.frequency,
+
+                au.last_audit_date
+
+            FROM audit_unit_master au
+
+            INNER JOIN audit_assesment_master am
+
+                ON am.audit_unit_id = au.id
+
+                AND am.deleted_at IS NULL
+
+                AND am.year_id = (
+
+                    SELECT id
+
+                    FROM year_master
+
+                    ORDER BY id DESC
+
+                    LIMIT 1
+
+                )
+
+            WHERE au.is_active = 1
+
+            AND au.deleted_at IS NULL
+
+            AND au.id::text = ANY(
+
+                string_to_array(
+
+                    (
+
+                        SELECT audit_unit_authority
+
+                        FROM employee_master
+
+                        WHERE id = $1
+
+                    ),
+
+                    ','
+
+                )
+
+            )
+
+            ORDER BY au.audit_unit_code;
+
+        `;
+
+        const result =
+            await this.db.query(
+                query,
+                [employeeId],
+            );
+
+        return result.rows;
+    }
+
+    /* ===================================================== */
+    /* ASSESSMENT SUMMARY */
+    /* ===================================================== */
+
+    async getAssessmentSummary(
+        auditUnitIds: number[],
+    ) {
+
+        if (
+            !auditUnitIds.length
+        ) {
+
+            return [];
+        }
+
+        const query = `
+
+            SELECT
+
+                am.audit_unit_id,
+
+                COUNT(am.id)
+                    AS total_audit,
+
+                COALESCE(
+
+                    SUM(
+
+                        CASE
+
+                            WHEN am.audit_status_id IN (1,3)
+
+                            THEN 1
+
+                            ELSE 0
+
+                        END
+
+                    ),
+
+                    0
+
+                ) AS audit_pending,
+
+                COALESCE(
+
+                    SUM(
+
+                        CASE
+
+                            WHEN am.audit_status_id IN (2,5)
+
+                            THEN 1
+
+                            ELSE 0
+
+                        END
+
+                    ),
+
+                    0
+
+                ) AS review_pending,
+
+                COALESCE(
+
+                    SUM(
+
+                        CASE
+
+                            WHEN am.audit_status_id IN (4,6)
+
+                            THEN 1
+
+                            ELSE 0
+
+                        END
+
+                    ),
+
+                    0
+
+                ) AS compliance_pending,
+
+                COALESCE(
+
+                    SUM(
+
+                        CASE
+
+                            WHEN am.audit_status_id = 7
+
+                            THEN 1
+
+                            ELSE 0
+
+                        END
+
+                    ),
+
+                    0
+
+                ) AS audit_completed,
+
+                latest_assessment.id
+                    AS latest_assessment_id,
+
+                latest_assessment.audit_status_id
+                    AS latest_status_id,
+
+                CASE
+
+                    WHEN latest_assessment.audit_status_id IN (1,3)
+
+                    THEN 'AUDIT PENDING'
+
+                    WHEN latest_assessment.audit_status_id IN (2,5)
+
+                    THEN 'REVIEW PENDING'
+
+                    WHEN latest_assessment.audit_status_id IN (4,6)
+
+                    THEN 'COMPLIANCE PENDING'
+
+                    WHEN latest_assessment.audit_status_id = 7
+
+                    THEN 'ASSESMENT COMPLETED'
+
+                    ELSE 'NOT STARTED'
+
+                END AS latest_status
+
+            FROM audit_assesment_master am
+
+            LEFT JOIN LATERAL (
+
+                SELECT
+
+                    aam.id,
+
+                    aam.audit_status_id
+
+                FROM audit_assesment_master aam
+
+                WHERE aam.audit_unit_id =
+                    am.audit_unit_id
+
+                AND aam.deleted_at IS NULL
+
+                ORDER BY aam.id DESC
+
+                LIMIT 1
+
+            ) latest_assessment ON true
+
+            WHERE am.deleted_at IS NULL
+
+            AND am.audit_unit_id = ANY($1)
+
+            GROUP BY
+
+                am.audit_unit_id,
+
+                latest_assessment.id,
+
+                latest_assessment.audit_status_id;
+
+          `;
+
+        const result =
+            await this.db.query(
+                query,
+                [auditUnitIds],
+            );
+
+        return result.rows;
+    }
+
+    /* ===================================================== */
+    /* NOT STARTED AUDITS */
+    /* ===================================================== */
+
+    async getNotStartedAudits(
+        auditUnits: any[],
+    ) {
+
+        const response: any = {};
+
+        const currentDate =
+            new Date();
+
+        for (
+            const branchDetails
+            of auditUnits
+        ) {
+
+            response[
+                branchDetails.id
+            ] = [];
+
+            if (
+                !branchDetails
+                    .last_audit_date
+            ) {
+
+                continue;
+            }
+
+            const lastAuditDate =
+                new Date(
+                    branchDetails
+                        .last_audit_date,
+                );
+
+            if (
+                lastAuditDate >=
+                currentDate
+            ) {
+
+                continue;
+            }
+
+            const nextAssessmentDate =
+                new Date(
+                    lastAuditDate,
+                );
+
+            nextAssessmentDate
+                .setMonth(
+
+                    nextAssessmentDate
+                        .getMonth()
+
+                    +
+
+                    Number(
+                        branchDetails
+                            .frequency,
+                    ),
+                );
+
+            const nextAssessmentEndDate =
+                new Date(
+                    nextAssessmentDate,
+                );
+
+            nextAssessmentEndDate
+                .setDate(
+
+                    nextAssessmentEndDate
+                        .getDate() - 1,
+                );
+
+            const selectQuery = `
+
+            SELECT
+                audit_unit_id
+
+            FROM audit_assesment_master
+
+            WHERE audit_unit_id = $1
+
+            AND assesment_period_to = $2
+
+            LIMIT 1;
+
+            `;
+
+            const assessmentResult =
+                await this.db.query(
+
+                    selectQuery,
+
+                    [
+
+                        branchDetails.id,
+
+                        this.formatDate(
+                            nextAssessmentEndDate,
+                        ),
+                    ],
+                );
+
+            if (
+                assessmentResult
+                    .rows.length
+            ) {
+
+                continue;
+            }
+
+            const currentDateDiff =
+                this.monthDiff(
+
+                    lastAuditDate,
+
+                    currentDate,
+                );
+
+            const assessmentCount =
+                Math.max(
+
+                    Math.floor(
+
+                        currentDateDiff
+
+                        /
+
+                        Number(
+                            branchDetails
+                                .frequency,
+                        ),
+                    ),
+
+                    1,
+                );
+
+            for (
+                let i = 0;
+                i < assessmentCount;
+                i++
+            ) {
+
+                const assessmentStartDate =
+                    new Date(
+                        lastAuditDate,
+                    );
+
+                assessmentStartDate
+                    .setMonth(
+
+                        assessmentStartDate
+                            .getMonth()
+
+                        +
+
+                        (
+                            i
+                            *
+                            Number(
+                                branchDetails
+                                    .frequency,
+                            )
+                        ),
+                    );
+
+                assessmentStartDate
+                    .setDate(
+
+                        assessmentStartDate
+                            .getDate() + 1,
+                    );
+
+                const assessmentEndDate =
+                    new Date(
+                        assessmentStartDate,
+                    );
+
+                assessmentEndDate
+                    .setMonth(
+
+                        assessmentEndDate
+                            .getMonth()
+
+                        +
+
+                        Number(
+                            branchDetails
+                                .frequency,
+                        ),
+                    );
+
+                assessmentEndDate
+                    .setDate(
+
+                        assessmentEndDate
+                            .getDate() - 1,
+                    );
+
+                response[
+                    branchDetails.id
+                ].push({
+
+                    id:
+                        branchDetails.id,
+
+                    assesment_period:
+
+                        `${this.formatDate(
+                            assessmentStartDate,
+                        )} to ${this.formatDate(
+                            assessmentEndDate,
+                        )}`,
+                });
+            }
+        }
+
+        return response;
+    }
+
+    /* ===================================================== */
+    /* NOT STARTED BY UNIT */
+    /* ===================================================== */
+
+    async getNotStartedByUnit(
+        auditUnitId: number,
+    ) {
+
+        const query = `
+
+SELECT
+
+    id,
+
+    audit_unit_code,
+
+    name,
+
+    frequency,
+
+    last_audit_date
+
+FROM audit_unit_master
+
+WHERE id = $1
+
+LIMIT 1;
+
+        `;
+
+        const result =
+            await this.db.query(
+                query,
+                [auditUnitId],
+            );
+
+        if (
+            !result.rows.length
+        ) {
+
+            throw new NotFoundException(
+                'Audit unit not found',
+            );
+        }
+
+        const response =
+            await this.getNotStartedAudits(
+                result.rows,
+            );
+
+        return response[
+            auditUnitId
+        ] || [];
+    }
+
+    /* ===================================================== */
+    /* ASSESSMENT DETAILS */
+    /* ===================================================== */
+
+    async getAssessmentDetails(
+        auditUnitId: number,
+    ) {
+
+        const query = `
+
+        SELECT
+
+            am.id,
+
+            am.audit_status_id,
+
+            am.assesment_period_from,
+
+            am.assesment_period_to,
+
+            am.audit_start_date,
+
+            am.audit_end_date,
+
+            am.audit_due_date,
+
+            ym.year,
+
+            au.name
+                AS audit_unit_name,
+
+            au.audit_unit_code
+
+        FROM audit_assesment_master am
+
+        LEFT JOIN audit_unit_master au
+            ON au.id = am.audit_unit_id
+
+        LEFT JOIN year_master ym
+            ON ym.id = am.year_id
+
+        WHERE am.audit_unit_id = $1
+
+        AND am.deleted_at IS NULL
+
+        ORDER BY am.id DESC
+
+        LIMIT 1;
+
+        `;
+
+        const result =
+            await this.db.query(
+                query,
+                [auditUnitId],
+            );
+
+        if (
+            !result.rows.length
+        ) {
+
+            throw new NotFoundException(
+                'Assessment not found',
+            );
+        }
+
+        return result.rows[0];
+    }
+
+    /* ===================================================== */
+    /* OPEN ASSESSMENT */
+    /* ===================================================== */
+
+    async openAssessment(
+        dto: OpenAssessmentDto,
+    ) {
+
+        const query = `
+
+SELECT
+
+    id,
+
+    audit_status_id
+
+FROM audit_assesment_master
+
+WHERE audit_unit_id = $1
+
+AND deleted_at IS NULL
+
+ORDER BY id DESC
+
+LIMIT 1;
+
+        `;
+
+        const result =
+            await this.db.query(
+
+                query,
+
+                [
+                    dto.audit_unit_id,
+                ],
+            );
+
+        if (
+            result.rows.length
+        ) {
+
+            return {
+
+                assessment_id:
+                    result.rows[0].id,
+
+                audit_status_id:
+                    result.rows[0]
+                        .audit_status_id,
+
+                action:
+                    'continue',
+            };
+        }
+
+        return {
+
+            assessment_id: null,
+
+            action: 'create',
+        };
+    }
+
+    /* ===================================================== */
+    /* MONTH DIFF */
+    /* ===================================================== */
+
+    monthDiff(
+        d1: Date,
+        d2: Date,
+    ) {
+
+        let months;
+
+        months =
+            (
+                d2.getFullYear()
+                -
+                d1.getFullYear()
+            )
+            *
+            12;
+
+        months -=
+            d1.getMonth();
+
+        months +=
+            d2.getMonth();
+
+        return months <= 0
+            ? 0
+            : months;
+    }
+
+    /* ===================================================== */
+    /* FORMAT DATE */
+    /* ===================================================== */
+
+    formatDate(
+        date: Date,
+    ) {
+
+        return date
+            .toISOString()
+            .split('T')[0];
+    }
+}

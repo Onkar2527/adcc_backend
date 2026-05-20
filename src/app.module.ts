@@ -30,7 +30,7 @@ import { RiskCompositeModule } from './modules/risk-masters/risk-composite/risk-
 import { RiskMatrixModule } from './modules/risk-masters/risk-matrix/risk-matrix.module';
 import { BranchRatingModule } from './modules/risk-masters/risk-branch-rating/risk-branch-rating.module';
 import { PeriodwiseQuestionsMasterModule } from './modules/periodwise-questions-master/periodwise-questions-master.module';
-import { AuditorDataModule } from './modules/auditor-data/auditor-data.component.module';
+import { AuditDashboardModule } from './modules/auditor/audit-dashboard/audit-dashboard.module';
 import { DepositAccountsModule } from './modules/manage-accounts/deposit-accounts/deposit-accounts.module';
 import { AdvanceAccountsModule } from './modules/manage-accounts/advance-accounts/advance-accounts.module';
 
@@ -66,7 +66,7 @@ import { AdvanceAccountsModule } from './modules/manage-accounts/advance-account
     RiskMatrixModule,
     BranchRatingModule,
     PeriodwiseQuestionsMasterModule,
-    AuditorDataModule,
+    AuditDashboardModule,
     DepositAccountsModule,
     AdvanceAccountsModule
   ],
