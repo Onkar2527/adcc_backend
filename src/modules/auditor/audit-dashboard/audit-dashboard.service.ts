@@ -20,10 +20,6 @@ export class AuditDashboardService {
             DatabaseService,
     ) { }
 
-    /* ===================================================== */
-    /* DASHBOARD */
-    /* ===================================================== */
-
     async findAll(
         dto: AuditDashboardDto,
     ) {
@@ -146,9 +142,6 @@ export class AuditDashboardService {
         }
     }
 
-    /* ===================================================== */
-    /* AUTHORIZED AUDIT UNITS */
-    /* ===================================================== */
 
     async getAuthorizedAuditUnits(
         employeeId: number,
@@ -225,10 +218,7 @@ export class AuditDashboardService {
         return result.rows;
     }
 
-    /* ===================================================== */
-    /* ASSESSMENT SUMMARY */
-    /* ===================================================== */
-
+    
     async getAssessmentSummary(
         auditUnitIds: number[],
     ) {
@@ -242,157 +232,69 @@ export class AuditDashboardService {
 
         const query = `
 
-            SELECT
+         WITH latest_assessment AS (
+    SELECT DISTINCT ON (aam.audit_unit_id)
+        aam.audit_unit_id,
+        aam.id,
+        aam.audit_status_id
+    FROM audit_assesment_master aam
+    WHERE aam.deleted_at IS NULL
+    ORDER BY aam.audit_unit_id, aam.id DESC
+)
 
-                am.audit_unit_id,
+SELECT
+    am.audit_unit_id,
 
-                COUNT(am.id)
-                    AS total_audit,
+    COUNT(am.id) AS total_audit,
 
-                COALESCE(
+    COUNT(*) FILTER (
+        WHERE am.audit_status_id IN (1, 3)
+    ) AS audit_pending,
 
-                    SUM(
+    COUNT(*) FILTER (
+        WHERE am.audit_status_id IN (2, 5)
+    ) AS review_pending,
 
-                        CASE
+    COUNT(*) FILTER (
+        WHERE am.audit_status_id IN (4, 6)
+    ) AS compliance_pending,
 
-                            WHEN am.audit_status_id IN (1,3)
+    COUNT(*) FILTER (
+        WHERE am.audit_status_id = 7
+    ) AS audit_completed,
 
-                            THEN 1
+    la.id AS latest_assessment_id,
 
-                            ELSE 0
+    la.audit_status_id AS latest_status_id,
 
-                        END
+    CASE
+        WHEN la.audit_status_id IN (1, 3)
+            THEN 'AUDIT PENDING'
 
-                    ),
+        WHEN la.audit_status_id IN (2, 5)
+            THEN 'REVIEW PENDING'
 
-                    0
+        WHEN la.audit_status_id IN (4, 6)
+            THEN 'COMPLIANCE PENDING'
 
-                ) AS audit_pending,
+        WHEN la.audit_status_id = 7
+            THEN 'ASSESMENT COMPLETED'
 
-                COALESCE(
+        ELSE 'NOT STARTED'
+    END AS latest_status
 
-                    SUM(
+FROM audit_assesment_master am
 
-                        CASE
+LEFT JOIN latest_assessment la
+    ON la.audit_unit_id = am.audit_unit_id
 
-                            WHEN am.audit_status_id IN (2,5)
+WHERE am.deleted_at IS NULL
+    AND am.audit_unit_id = ANY($1)
 
-                            THEN 1
-
-                            ELSE 0
-
-                        END
-
-                    ),
-
-                    0
-
-                ) AS review_pending,
-
-                COALESCE(
-
-                    SUM(
-
-                        CASE
-
-                            WHEN am.audit_status_id IN (4,6)
-
-                            THEN 1
-
-                            ELSE 0
-
-                        END
-
-                    ),
-
-                    0
-
-                ) AS compliance_pending,
-
-                COALESCE(
-
-                    SUM(
-
-                        CASE
-
-                            WHEN am.audit_status_id = 7
-
-                            THEN 1
-
-                            ELSE 0
-
-                        END
-
-                    ),
-
-                    0
-
-                ) AS audit_completed,
-
-                latest_assessment.id
-                    AS latest_assessment_id,
-
-                latest_assessment.audit_status_id
-                    AS latest_status_id,
-
-                CASE
-
-                    WHEN latest_assessment.audit_status_id IN (1,3)
-
-                    THEN 'AUDIT PENDING'
-
-                    WHEN latest_assessment.audit_status_id IN (2,5)
-
-                    THEN 'REVIEW PENDING'
-
-                    WHEN latest_assessment.audit_status_id IN (4,6)
-
-                    THEN 'COMPLIANCE PENDING'
-
-                    WHEN latest_assessment.audit_status_id = 7
-
-                    THEN 'ASSESMENT COMPLETED'
-
-                    ELSE 'NOT STARTED'
-
-                END AS latest_status
-
-            FROM audit_assesment_master am
-
-            LEFT JOIN LATERAL (
-
-                SELECT
-
-                    aam.id,
-
-                    aam.audit_status_id
-
-                FROM audit_assesment_master aam
-
-                WHERE aam.audit_unit_id =
-                    am.audit_unit_id
-
-                AND aam.deleted_at IS NULL
-
-                ORDER BY aam.id DESC
-
-                LIMIT 1
-
-            ) latest_assessment ON true
-
-            WHERE am.deleted_at IS NULL
-
-            AND am.audit_unit_id = ANY($1)
-
-            GROUP BY
-
-                am.audit_unit_id,
-
-                latest_assessment.id,
-
-                latest_assessment.audit_status_id;
-
-          `;
+GROUP BY
+    am.audit_unit_id,
+    la.id,
+    la.audit_status_id;`;
 
         const result =
             await this.db.query(
@@ -403,9 +305,7 @@ export class AuditDashboardService {
         return result.rows;
     }
 
-    /* ===================================================== */
-    /* NOT STARTED AUDITS */
-    /* ===================================================== */
+    
 
     async getNotStartedAudits(
         auditUnits: any[],
@@ -625,9 +525,7 @@ export class AuditDashboardService {
         return response;
     }
 
-    /* ===================================================== */
-    /* NOT STARTED BY UNIT */
-    /* ===================================================== */
+   
 
     async getNotStartedByUnit(
         auditUnitId: number,
@@ -680,10 +578,7 @@ LIMIT 1;
         ] || [];
     }
 
-    /* ===================================================== */
-    /* ASSESSMENT DETAILS */
-    /* ===================================================== */
-
+   
     async getAssessmentDetails(
         auditUnitId: number,
     ) {
@@ -749,10 +644,7 @@ LIMIT 1;
         return result.rows[0];
     }
 
-    /* ===================================================== */
-    /* OPEN ASSESSMENT */
-    /* ===================================================== */
-
+   
     async openAssessment(
         dto: OpenAssessmentDto,
     ) {
@@ -813,9 +705,7 @@ LIMIT 1;
         };
     }
 
-    /* ===================================================== */
-    /* MONTH DIFF */
-    /* ===================================================== */
+   
 
     monthDiff(
         d1: Date,
