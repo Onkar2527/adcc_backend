@@ -526,57 +526,89 @@ ORDER BY id ASC;
     };
   }
 
-  async getMenu(
-    assessmentId: number,
-    employeeId: number,
+ async getMenu(
+  assessmentId: number,
+  employeeId: number,
+) {
+
+  const overview =
+    await this.getOverview(
+      assessmentId,
+      employeeId,
+    );
+
+  if (
+    !overview.can_continue
   ) {
 
-    const overview =
-      await this.getOverview(
-        assessmentId,
-        employeeId,
-      );
+    return {
+      overview,
+      menus: [],
+    };
+  }
 
-    if (
-      !overview.can_continue
-    ) {
+  const query = `
 
-      return {
-        overview,
-        menus: [],
-      };
-    }
-
-    const query = `
 SELECT
+
     mm.id AS menu_id,
     mm.name AS menu_name,
+
     cm.id AS category_id,
     cm.name AS category_name,
     cm.linked_table_id,
-    COUNT(DISTINCT qm.id) AS question_count,
-    COUNT(DISTINCT ans.id) AS answered_count
+
+    qsm.id AS question_set_id,
+    qsm.name AS question_set_name,
+
+    qhm.id AS header_id,
+    qhm.name AS header_name,
+
+    COUNT(DISTINCT qm.id)
+        AS question_count,
+
+    COUNT(DISTINCT ans.id)
+        AS answered_count,
+
+    q.questions
+
 FROM menu_master mm
+
 LEFT JOIN category_master cm
     ON cm.menu_id = mm.id
     AND cm.is_active = 1
     AND cm.deleted_at IS NULL
     AND (
         $2 = ''
-        OR cm.id::text = ANY(string_to_array($2, ','))
+        OR cm.id::text = ANY(
+            string_to_array($2, ',')
+        )
     )
+
 LEFT JOIN question_set_master qsm
-    ON qsm.id::text = ANY(string_to_array(COALESCE(cm.question_set_ids, ''), ','))
+    ON qsm.id::text = ANY(
+        string_to_array(
+            COALESCE(
+                cm.question_set_ids,
+                ''
+            ),
+            ','
+        )
+    )
     AND qsm.is_active = 1
     AND qsm.deleted_at IS NULL
+
 LEFT JOIN question_header_master qhm
     ON qhm.question_set_id = qsm.id
     AND qhm.is_active = 1
     AND qhm.deleted_at IS NULL
     AND (
         $3 = ''
-        OR qhm.id::text = ANY(string_to_array($3, ','))
+        OR qhm.id::text = ANY(
+            string_to_array($3, ',')
+        )
     )
+
 LEFT JOIN question_master qm
     ON qm.header_id = qhm.id
     AND qm.set_id = qsm.id
@@ -584,103 +616,305 @@ LEFT JOIN question_master qm
     AND qm.deleted_at IS NULL
     AND (
         $4 = ''
-        OR qm.id::text = ANY(string_to_array($4, ','))
+        OR qm.id::text = ANY(
+            string_to_array($4, ',')
+        )
     )
+
 LEFT JOIN answers_data ans
     ON ans.assesment_id = $5
     AND ans.category_id = cm.id
     AND ans.question_id = qm.id
     AND ans.deleted_at IS NULL
-WHERE mm.is_active = 1
+
+LEFT JOIN
+(
+
+    SELECT
+
+        qm.header_id,
+        qm.set_id,
+
+        jsonb_agg(
+
+            jsonb_build_object(
+
+                'question_id', qm.id,
+                'question', qm.question,
+                'question_type_id', qm.question_type_id,
+                'option_id', qm.option_id,
+
+                'parameters',
+
+                CASE
+                    WHEN qm.parameters IS NULL
+                         OR qm.parameters = ''
+                    THEN '[]'::jsonb
+                    ELSE qm.parameters::jsonb
+                END,
+
+                'risk_category_id', qm.risk_category_id,
+                'annexure_id', qm.annexure_id,
+                'area_of_audit_id', qm.area_of_audit_id,
+                'applicable_id', qm.applicable_id,
+                'control_risk_id', qm.control_risk_id,
+                'key_aspect_id', qm.key_aspect_id,
+                'residual_risk_id', qm.residual_risk_id,
+                'show_instances', qm.show_instances,
+                'audit_ev_upload', qm.audit_ev_upload,
+                'compliance_ev_upload', qm.compliance_ev_upload,
+
+                'annexure',
+
+                jsonb_build_object(
+
+                    'annexure_id', am.id,
+                    'annexure_name', am.name,
+
+                    'columns',
+
+                    COALESCE(
+                        ac.columns_json,
+                        '[]'::jsonb
+                    )
+
+                )
+
+            )
+
+        ) AS questions
+
+    FROM question_master qm
+
+    LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+
+    LEFT JOIN
+    (
+
+        SELECT
+
+            ac.annexure_id,
+
+            jsonb_agg(
+
+                jsonb_build_object(
+
+                    'column_name', ac.name,
+                    'column_type_id', ac.column_type_id,
+                    'column_options', ac.column_options
+
+                )
+
+            ) AS columns_json
+
+        FROM annexure_columns ac
+
+        WHERE ac.deleted_at IS NULL
+
+        GROUP BY ac.annexure_id
+
+    ) ac
+        ON ac.annexure_id = am.id
+
+    WHERE
+        qm.deleted_at IS NULL
+        AND qm.is_active = 1
+
+    GROUP BY
+        qm.header_id,
+        qm.set_id
+
+) q
+    ON q.header_id = qhm.id
+   AND q.set_id = qsm.id
+
+WHERE
+    mm.is_active = 1
     AND mm.deleted_at IS NULL
     AND (
         $1 = ''
-        OR mm.id::text = ANY(string_to_array($1, ','))
+        OR mm.id::text = ANY(
+            string_to_array($1, ',')
+        )
     )
+
 GROUP BY
+
     mm.id,
     mm.name,
+
     cm.id,
     cm.name,
-    cm.linked_table_id
+    cm.linked_table_id,
+
+    qsm.id,
+    qsm.name,
+
+    qhm.id,
+    qhm.name,
+    q.questions
+  
 ORDER BY
+
     mm.id,
-    cm.id;
-    `;
+    cm.id,
+    qsm.id,
+    qhm.id
 
-    const result =
-      await this.db.query(
-        query,
-        [
-          overview.menu_ids || '',
-          overview.cat_ids || '',
-          overview.header_ids || '',
-          overview.question_ids || '',
-          assessmentId,
-        ],
-      );
+`;
 
-    const menuMap =
-      new Map<number, any>();
+  const result =
+    await this.db.query(
+      query,
+      [
+        overview.menu_ids || '',
+        overview.cat_ids || '',
+        overview.header_ids || '',
+        overview.question_ids || '',
+        assessmentId,
+      ],
+    );
 
-    for (
-      const row
-      of result.rows
+  const menuMap =
+    new Map<number, any>();
+
+  for (
+    const row
+    of result.rows
+  ) {
+
+    if (
+      !menuMap.has(
+        row.menu_id,
+      )
     ) {
 
+      menuMap.set(
+        row.menu_id,
+        {
+          id:
+            row.menu_id,
+
+          name:
+            row.menu_name,
+
+          categories:
+            [],
+        },
+      );
+    }
+
+    const menu =
+      menuMap.get(
+        row.menu_id,
+      );
+
+    let category =
+      menu.categories.find(
+        (c: any) =>
+          c.id ===
+          row.category_id,
+      );
+
+    if (
+      !category &&
+      row.category_id
+    ) {
+
+      category = {
+
+        id:
+          row.category_id,
+
+        name:
+          row.category_name,
+
+        linked_table_id:
+          row.linked_table_id,
+
+        question_count:
+          Number(
+            row.question_count || 0,
+          ),
+
+        answered_count:
+          Number(
+            row.answered_count || 0,
+          ),
+
+        question_sets:
+          [],
+      };
+
+      menu.categories.push(
+        category,
+      );
+    }
+
+    if (
+      row.question_set_id
+    ) {
+
+      let questionSet =
+        category.question_sets.find(
+          (q: any) =>
+            q.id ===
+            row.question_set_id,
+        );
+
       if (
-        !menuMap.has(
-          row.menu_id,
-        )
+        !questionSet
       ) {
 
-        menuMap.set(
-          row.menu_id,
-          {
-            id:
-              row.menu_id,
-            name:
-              row.menu_name,
-            categories:
-              [],
-          },
+        questionSet = {
+
+          id:
+            row.question_set_id,
+
+          name:
+            row.question_set_name,
+
+          headers:
+            [],
+        };
+
+        category.question_sets.push(
+          questionSet,
         );
       }
 
       if (
-        row.category_id
+        row.header_id
       ) {
 
-        menuMap
-          .get(row.menu_id)
-          .categories
-          .push({
-            id:
-              row.category_id,
-            name:
-              row.category_name,
-            linked_table_id:
-              row.linked_table_id,
-            question_count:
-              Number(
-                row.question_count || 0,
-              ),
-            answered_count:
-              Number(
-                row.answered_count || 0,
-              ),
-          });
+        questionSet.headers.push({
+
+          id:
+            row.header_id,
+
+          name:
+            row.header_name,
+
+          questions:
+            row.questions || [],
+
+        });
       }
     }
-
-    return {
-      overview,
-      menus:
-        Array.from(
-          menuMap.values(),
-        ),
-    };
   }
+
+  return {
+
+    overview,
+
+    menus:
+      Array.from(
+        menuMap.values(),
+      ),
+
+  };
+}
 
   private async findAssessment(
     assessmentId: number,
