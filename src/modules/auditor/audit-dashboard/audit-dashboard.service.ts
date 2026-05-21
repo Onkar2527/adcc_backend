@@ -21,168 +21,171 @@ export class AuditDashboardService {
     ) { }
 
     async findAll(
-        dto: AuditDashboardDto,
-    ) {
+    dto: AuditDashboardDto,
+) {
 
-        try {
+    try {
 
-            const auditUnits =
-                await this.getAuthorizedAuditUnits(
-                    dto.employee_id,
-                );
-
-            if (
-                !auditUnits.length
-            ) {
-
-                return [];
-            }
-
-            const auditUnitIds =
-                auditUnits.map(
-                    (x: any) => x.id,
-                );
-
-            const summaryData =
-                await this.getAssessmentSummary(
-                    auditUnitIds,
-                );
-
-            const notStartedData =
-                await this.getNotStartedAudits(
-                    auditUnits,
-                );
-
-            const summaryMap =
-                new Map(
-
-                    summaryData.map(
-                        (x: any) => [
-                            x.audit_unit_id,
-                            x,
-                        ],
-                    ),
-                );
-
-            return auditUnits.map(
-                (unit: any) => {
-
-                    const summary =
-                        summaryMap.get(
-                            unit.id,
-                        );
-
-                    const notStarted =
-                        notStartedData[
-                        unit.id
-                        ] || [];
-
-                    return {
-
-                        audit_unit_id:
-                            unit.id,
-
-                        audit_unit_code:
-                            unit.audit_unit_code,
-
-                        audit_unit_name:
-                            unit.name,
-
-                        frequency:
-                            unit.frequency,
-
-                        last_audit_date:
-                            unit.last_audit_date,
-
-                        total_audit:
-                            summary
-                                ?.total_audit || 0,
-
-                        audit_pending:
-                            summary
-                                ?.audit_pending || 0,
-
-                        review_pending:
-                            summary
-                                ?.review_pending || 0,
-
-                        compliance_pending:
-                            summary
-                                ?.compliance_pending || 0,
-
-                        audit_completed:
-                            summary
-                                ?.audit_completed || 0,
-
-                        latest_assessment_id:
-                            summary
-                                ?.latest_assessment_id || null,
-
-                        latest_status_id:
-                            summary
-                                ?.latest_status_id || null,
-
-                        latest_status:
-                            summary
-                                ?.latest_status || 'NOT STARTED',
-
-                        not_started_count:
-                            notStarted.length,
-                    };
-                },
+        const auditUnits =
+            await this.getAuthorizedAuditUnits(
+                dto.employee_id,
             );
 
-        } catch (error) {
-
-            console.log(error);
-
-            throw new BadRequestException(
-                'Failed to fetch dashboard',
-            );
+        if (!auditUnits.length) {
+            return [];
         }
+
+        const auditUnitIds =
+            auditUnits.map(
+                (x: any) => x.id,
+            );
+
+        const [
+            summaryData,
+            notStartedData,
+        ] = await Promise.all([
+
+            this.getAssessmentSummary(
+                auditUnitIds,
+            ),
+
+            this.getNotStartedAudits(
+                auditUnits,
+            ),
+
+        ]);
+
+        const summaryMap =
+            new Map(
+
+                summaryData.map(
+                    (x: any) => [
+                        x.audit_unit_id,
+                        x,
+                    ],
+                ),
+            );
+
+        return auditUnits.map(
+            (unit: any) => {
+
+                const summary =
+                    summaryMap.get(
+                        unit.id,
+                    );
+
+                const notStarted =
+                    notStartedData[
+                    unit.id
+                    ] || [];
+
+                return {
+
+                    audit_unit_id:
+                        unit.id,
+
+                    audit_unit_code:
+                        unit.audit_unit_code,
+
+                    audit_unit_name:
+                        unit.name,
+
+                    frequency:
+                        unit.frequency,
+
+                    last_audit_date:
+                        unit.last_audit_date,
+
+                    total_audit:
+                        Number(
+                            summary?.total_audit || 0,
+                        ),
+
+                    audit_pending:
+                        Number(
+                            summary?.audit_pending || 0,
+                        ),
+
+                    review_pending:
+                        Number(
+                            summary?.review_pending || 0,
+                        ),
+
+                    compliance_pending:
+                        Number(
+                            summary?.compliance_pending || 0,
+                        ),
+
+                    audit_completed:
+                        Number(
+                            summary?.audit_completed || 0,
+                        ),
+
+                    latest_assessment_id:
+                        summary?.latest_assessment_id || null,
+
+                    latest_status_id:
+                        summary?.latest_status_id || null,
+
+                    latest_status:
+                        summary?.latest_status
+                        || 'NOT STARTED',
+
+                    not_started_count:
+                        notStarted.length,
+
+                };
+            },
+        );
+
+    } catch (error) {
+
+        console.log(error);
+
+        throw new BadRequestException(
+            'Failed to fetch dashboard',
+        );
     }
+}
 
 
-    async getAuthorizedAuditUnits(
-        employeeId: number,
-    ) {
 
-        const query = `
+async getAuthorizedAuditUnits(
+    employeeId: number,
+) {
+
+    const query = `
 
         SELECT DISTINCT
 
-                au.id,
+            au.id,
+            au.audit_unit_code,
+            au.name,
+            au.frequency,
+            au.last_audit_date
 
-                au.audit_unit_code,
+        FROM audit_unit_master au
 
-                au.name,
+        INNER JOIN audit_assesment_master am
 
-                au.frequency,
+            ON am.audit_unit_id = au.id
 
-                au.last_audit_date
+            AND am.deleted_at IS NULL
 
-            FROM audit_unit_master au
+            AND am.year_id = (
 
-            INNER JOIN audit_assesment_master am
+                SELECT ym.id
 
-                ON am.audit_unit_id = au.id
+                FROM year_master ym
 
-                AND am.deleted_at IS NULL
+                ORDER BY ym.id DESC
 
-                AND am.year_id = (
+                LIMIT 1
 
-                    SELECT id
+            )
 
-                    FROM year_master
-
-                    ORDER BY id DESC
-
-                    LIMIT 1
-
-                )
-
-            WHERE au.is_active = 1
-
+        WHERE
+            au.is_active = 1
             AND au.deleted_at IS NULL
 
             AND au.id::text = ANY(
@@ -190,13 +193,11 @@ export class AuditDashboardService {
                 string_to_array(
 
                     (
+                        SELECT em.audit_unit_authority
 
-                        SELECT audit_unit_authority
+                        FROM employee_master em
 
-                        FROM employee_master
-
-                        WHERE id = $1
-
+                        WHERE em.id = $1
                     ),
 
                     ','
@@ -205,105 +206,123 @@ export class AuditDashboardService {
 
             )
 
-            ORDER BY au.audit_unit_code;
+        ORDER BY
+            au.audit_unit_code;
 
-        `;
+    `;
 
-        const result =
-            await this.db.query(
-                query,
-                [employeeId],
-            );
+    const result =
+        await this.db.query(
+            query,
+            [employeeId],
+        );
 
-        return result.rows;
-    }
+    return result.rows;
+}
 
     
-    async getAssessmentSummary(
-        auditUnitIds: number[],
-    ) {
+   async getAssessmentSummary(
+    auditUnitIds: number[],
+) {
 
-        if (
-            !auditUnitIds.length
-        ) {
-
-            return [];
-        }
-
-        const query = `
-
-         WITH latest_assessment AS (
-    SELECT DISTINCT ON (aam.audit_unit_id)
-        aam.audit_unit_id,
-        aam.id,
-        aam.audit_status_id
-    FROM audit_assesment_master aam
-    WHERE aam.deleted_at IS NULL
-    ORDER BY aam.audit_unit_id, aam.id DESC
-)
-
-SELECT
-    am.audit_unit_id,
-
-    COUNT(am.id) AS total_audit,
-
-    COUNT(*) FILTER (
-        WHERE am.audit_status_id IN (1, 3)
-    ) AS audit_pending,
-
-    COUNT(*) FILTER (
-        WHERE am.audit_status_id IN (2, 5)
-    ) AS review_pending,
-
-    COUNT(*) FILTER (
-        WHERE am.audit_status_id IN (4, 6)
-    ) AS compliance_pending,
-
-    COUNT(*) FILTER (
-        WHERE am.audit_status_id = 7
-    ) AS audit_completed,
-
-    la.id AS latest_assessment_id,
-
-    la.audit_status_id AS latest_status_id,
-
-    CASE
-        WHEN la.audit_status_id IN (1, 3)
-            THEN 'AUDIT PENDING'
-
-        WHEN la.audit_status_id IN (2, 5)
-            THEN 'REVIEW PENDING'
-
-        WHEN la.audit_status_id IN (4, 6)
-            THEN 'COMPLIANCE PENDING'
-
-        WHEN la.audit_status_id = 7
-            THEN 'ASSESMENT COMPLETED'
-
-        ELSE 'NOT STARTED'
-    END AS latest_status
-
-FROM audit_assesment_master am
-
-LEFT JOIN latest_assessment la
-    ON la.audit_unit_id = am.audit_unit_id
-
-WHERE am.deleted_at IS NULL
-    AND am.audit_unit_id = ANY($1)
-
-GROUP BY
-    am.audit_unit_id,
-    la.id,
-    la.audit_status_id;`;
-
-        const result =
-            await this.db.query(
-                query,
-                [auditUnitIds],
-            );
-
-        return result.rows;
+    if (!auditUnitIds.length) {
+        return [];
     }
+
+    const query = `
+
+        WITH latest_assessment AS (
+
+            SELECT DISTINCT ON (aam.audit_unit_id)
+
+                aam.audit_unit_id,
+                aam.id,
+                aam.audit_status_id
+
+            FROM audit_assesment_master aam
+
+            WHERE aam.deleted_at IS NULL
+
+            ORDER BY
+                aam.audit_unit_id,
+                aam.id DESC
+        )
+
+        SELECT
+
+            am.audit_unit_id,
+
+            COUNT(*) AS total_audit,
+
+            COUNT(*) FILTER (
+                WHERE am.audit_status_id IN (1, 3)
+            ) AS audit_pending,
+
+            COUNT(*) FILTER (
+                WHERE am.audit_status_id IN (2, 5)
+            ) AS review_pending,
+
+            COUNT(*) FILTER (
+                WHERE am.audit_status_id IN (4, 6)
+            ) AS compliance_pending,
+
+            COUNT(*) FILTER (
+                WHERE am.audit_status_id = 7
+            ) AS audit_completed,
+
+            MAX(la.id)
+                AS latest_assessment_id,
+
+            MAX(la.audit_status_id)
+                AS latest_status_id,
+
+            CASE
+
+                WHEN MAX(la.audit_status_id)
+                    IN (1, 3)
+
+                THEN 'AUDIT PENDING'
+
+                WHEN MAX(la.audit_status_id)
+                    IN (2, 5)
+
+                THEN 'REVIEW PENDING'
+
+                WHEN MAX(la.audit_status_id)
+                    IN (4, 6)
+
+                THEN 'COMPLIANCE PENDING'
+
+                WHEN MAX(la.audit_status_id) = 7
+
+                THEN 'ASSESMENT COMPLETED'
+
+                ELSE 'NOT STARTED'
+
+            END AS latest_status
+
+        FROM audit_assesment_master am
+
+        LEFT JOIN latest_assessment la
+            ON la.audit_unit_id = am.audit_unit_id
+
+        WHERE
+            am.deleted_at IS NULL
+            AND am.audit_unit_id = ANY($1)
+
+        GROUP BY
+            am.audit_unit_id
+
+    `;
+
+    const result =
+        await this.db.query(
+            query,
+            [auditUnitIds],
+        );
+
+    return result.rows;
+}
 
     
 

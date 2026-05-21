@@ -33,6 +33,7 @@ import { PeriodwiseQuestionsMasterModule } from './modules/periodwise-questions-
 import { AuditDashboardModule } from './modules/auditor/audit-dashboard/audit-dashboard.module';
 import { DepositAccountsModule } from './modules/manage-accounts/deposit-accounts/deposit-accounts.module';
 import { AdvanceAccountsModule } from './modules/manage-accounts/advance-accounts/advance-accounts.module';
+import { QuestionDataModule } from './modules/auditor/question-data/question-data.module';
 
 
 @Module({
@@ -68,7 +69,8 @@ import { AdvanceAccountsModule } from './modules/manage-accounts/advance-account
     PeriodwiseQuestionsMasterModule,
     AuditDashboardModule,
     DepositAccountsModule,
-    AdvanceAccountsModule
+    AdvanceAccountsModule,
+    QuestionDataModule
   ],
   controllers: [AppController],
   providers: [AppService],
