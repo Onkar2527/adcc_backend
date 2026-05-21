@@ -4,7 +4,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { CreateAuditUnitDto, CreateTargetDto, UpdateAuditUnitDto, UpdateTargetDto } from './dto/audit-unit.dto';
+import {
+  CreateAuditUnitDto,
+  CreateTargetDto,
+  UpdateAuditUnitDto,
+  UpdateTargetDto,
+} from './dto/audit-unit.dto';
 
 interface AuditUnitRow {
   id: number;
@@ -54,7 +59,7 @@ type AuditUnitValidationInput = Partial<
 
 @Injectable()
 export class AuditUnitsService {
-  constructor(private readonly db: DatabaseService) { }
+  constructor(private readonly db: DatabaseService) {}
 
   async findAll(): Promise<AuditUnitRow[]> {
     return this.queryRows<AuditUnitRow>(`
@@ -457,7 +462,7 @@ export class AuditUnitsService {
     FROM target_details
     WHERE id = $1 AND deleted_at IS NULL
     `,
-      [id]
+      [id],
     );
 
     if (!row) {
@@ -572,12 +577,12 @@ export class AuditUnitsService {
     FROM year_master
     WHERE deleted_at IS NULL
     ORDER BY id DESC
-    `
+    `,
     );
 
     return rows.map((r: any) => ({
       label: r.year,
-      value: r.id
+      value: r.id,
     }));
   }
 }

@@ -29,7 +29,7 @@ interface AuthRequest extends Request {
 
 @Controller('audit-units')
 export class AuditUnitsController {
-  constructor(private readonly service: AuditUnitsService) { }
+  constructor(private readonly service: AuditUnitsService) {}
 
   @Get()
   findAll() {

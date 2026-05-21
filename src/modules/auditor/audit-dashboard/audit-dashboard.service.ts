@@ -21,140 +21,140 @@ export class AuditDashboardService {
     ) { }
 
     async findAll(
-    dto: AuditDashboardDto,
-) {
+        dto: AuditDashboardDto,
+    ) {
 
-    try {
+        try {
 
-        const auditUnits =
-            await this.getAuthorizedAuditUnits(
-                dto.employee_id,
-            );
+            const auditUnits =
+                await this.getAuthorizedAuditUnits(
+                    dto.employee_id,
+                );
 
-        if (!auditUnits.length) {
-            return [];
-        }
+            if (!auditUnits.length) {
+                return [];
+            }
 
-        const auditUnitIds =
-            auditUnits.map(
-                (x: any) => x.id,
-            );
+            const auditUnitIds =
+                auditUnits.map(
+                    (x: any) => x.id,
+                );
 
-        const [
-            summaryData,
-            notStartedData,
-        ] = await Promise.all([
+            const [
+                summaryData,
+                notStartedData,
+            ] = await Promise.all([
 
-            this.getAssessmentSummary(
-                auditUnitIds,
-            ),
-
-            this.getNotStartedAudits(
-                auditUnits,
-            ),
-
-        ]);
-
-        const summaryMap =
-            new Map(
-
-                summaryData.map(
-                    (x: any) => [
-                        x.audit_unit_id,
-                        x,
-                    ],
+                this.getAssessmentSummary(
+                    auditUnitIds,
                 ),
+
+                this.getNotStartedAudits(
+                    auditUnits,
+                ),
+
+            ]);
+
+            const summaryMap =
+                new Map(
+
+                    summaryData.map(
+                        (x: any) => [
+                            x.audit_unit_id,
+                            x,
+                        ],
+                    ),
+                );
+
+            return auditUnits.map(
+                (unit: any) => {
+
+                    const summary =
+                        summaryMap.get(
+                            unit.id,
+                        );
+
+                    const notStarted =
+                        notStartedData[
+                        unit.id
+                        ] || [];
+
+                    return {
+
+                        audit_unit_id:
+                            unit.id,
+
+                        audit_unit_code:
+                            unit.audit_unit_code,
+
+                        audit_unit_name:
+                            unit.name,
+
+                        frequency:
+                            unit.frequency,
+
+                        last_audit_date:
+                            unit.last_audit_date,
+
+                        total_audit:
+                            Number(
+                                summary?.total_audit || 0,
+                            ),
+
+                        audit_pending:
+                            Number(
+                                summary?.audit_pending || 0,
+                            ),
+
+                        review_pending:
+                            Number(
+                                summary?.review_pending || 0,
+                            ),
+
+                        compliance_pending:
+                            Number(
+                                summary?.compliance_pending || 0,
+                            ),
+
+                        audit_completed:
+                            Number(
+                                summary?.audit_completed || 0,
+                            ),
+
+                        latest_assessment_id:
+                            summary?.latest_assessment_id || null,
+
+                        latest_status_id:
+                            summary?.latest_status_id || null,
+
+                        latest_status:
+                            summary?.latest_status
+                            || 'NOT STARTED',
+
+                        not_started_count:
+                            notStarted.length,
+
+                    };
+                },
             );
 
-        return auditUnits.map(
-            (unit: any) => {
+        } catch (error) {
 
-                const summary =
-                    summaryMap.get(
-                        unit.id,
-                    );
+            console.log(error);
 
-                const notStarted =
-                    notStartedData[
-                    unit.id
-                    ] || [];
-
-                return {
-
-                    audit_unit_id:
-                        unit.id,
-
-                    audit_unit_code:
-                        unit.audit_unit_code,
-
-                    audit_unit_name:
-                        unit.name,
-
-                    frequency:
-                        unit.frequency,
-
-                    last_audit_date:
-                        unit.last_audit_date,
-
-                    total_audit:
-                        Number(
-                            summary?.total_audit || 0,
-                        ),
-
-                    audit_pending:
-                        Number(
-                            summary?.audit_pending || 0,
-                        ),
-
-                    review_pending:
-                        Number(
-                            summary?.review_pending || 0,
-                        ),
-
-                    compliance_pending:
-                        Number(
-                            summary?.compliance_pending || 0,
-                        ),
-
-                    audit_completed:
-                        Number(
-                            summary?.audit_completed || 0,
-                        ),
-
-                    latest_assessment_id:
-                        summary?.latest_assessment_id || null,
-
-                    latest_status_id:
-                        summary?.latest_status_id || null,
-
-                    latest_status:
-                        summary?.latest_status
-                        || 'NOT STARTED',
-
-                    not_started_count:
-                        notStarted.length,
-
-                };
-            },
-        );
-
-    } catch (error) {
-
-        console.log(error);
-
-        throw new BadRequestException(
-            'Failed to fetch dashboard',
-        );
+            throw new BadRequestException(
+                'Failed to fetch dashboard',
+            );
+        }
     }
-}
 
 
 
-async getAuthorizedAuditUnits(
-    employeeId: number,
-) {
+    async getAuthorizedAuditUnits(
+        employeeId: number,
+    ) {
 
-    const query = `
+        const query = `
 
         SELECT DISTINCT
 
@@ -211,25 +211,25 @@ async getAuthorizedAuditUnits(
 
     `;
 
-    const result =
-        await this.db.query(
-            query,
-            [employeeId],
-        );
+        const result =
+            await this.db.query(
+                query,
+                [employeeId],
+            );
 
-    return result.rows;
-}
-
-    
-   async getAssessmentSummary(
-    auditUnitIds: number[],
-) {
-
-    if (!auditUnitIds.length) {
-        return [];
+        return result.rows;
     }
 
-    const query = `
+
+    async getAssessmentSummary(
+        auditUnitIds: number[],
+    ) {
+
+        if (!auditUnitIds.length) {
+            return [];
+        }
+
+        const query = `
 
         WITH latest_assessment AS (
 
@@ -315,16 +315,16 @@ async getAuthorizedAuditUnits(
 
     `;
 
-    const result =
-        await this.db.query(
-            query,
-            [auditUnitIds],
-        );
+        const result =
+            await this.db.query(
+                query,
+                [auditUnitIds],
+            );
 
-    return result.rows;
-}
+        return result.rows;
+    }
 
-    
+
 
     async getNotStartedAudits(
         auditUnits: any[],
@@ -544,7 +544,7 @@ async getAuthorizedAuditUnits(
         return response;
     }
 
-   
+
 
     async getNotStartedByUnit(
         auditUnitId: number,
@@ -597,7 +597,7 @@ LIMIT 1;
         ] || [];
     }
 
-   
+
     async getAssessmentDetails(
         auditUnitId: number,
     ) {
@@ -663,10 +663,33 @@ LIMIT 1;
         return result.rows[0];
     }
 
-   
+
     async openAssessment(
         dto: OpenAssessmentDto,
     ) {
+
+        const hasAuthority =
+            await this.hasAuditUnitAuthority(
+                dto.employee_id,
+                dto.audit_unit_id,
+            );
+
+        if (
+            !hasAuthority
+        ) {
+
+            return {
+
+                assessment_id: null,
+
+                audit_unit_id:
+                    dto.audit_unit_id,
+
+                action: 'not_allowed',
+
+                message: 'Auditor is not authorized for this audit unit',
+            };
+        }
 
         const query = `
 
@@ -674,7 +697,11 @@ SELECT
 
     id,
 
-    audit_status_id
+    audit_status_id,
+
+    audit_due_date,
+
+    is_limit_blocked
 
 FROM audit_assesment_master
 
@@ -694,21 +721,105 @@ LIMIT 1;
                 query,
 
                 [
-                    dto.audit_unit_id,
+                    Number(dto.audit_unit_id),
                 ],
             );
 
         if (
             result.rows.length
         ) {
+            const assessment =
+                result.rows[0];
+
+            if (
+                ![1, 3].includes(
+                    Number(
+                        assessment.audit_status_id,
+                    ),
+                )
+            ) {
+
+                return {
+
+                    assessment_id:
+                        assessment.id,
+
+                    audit_unit_id:
+                        dto.audit_unit_id,
+
+                    audit_status_id:
+                        assessment.audit_status_id,
+
+                    action:
+                        'unit_dashboard',
+
+                    message:
+                        'Current assessment is not pending with auditor.',
+                };
+            }
+
+            if (
+                Number(
+                    assessment.is_limit_blocked || 0,
+                )
+            ) {
+
+                return {
+
+                    assessment_id:
+                        assessment.id,
+
+                    audit_unit_id:
+                        dto.audit_unit_id,
+
+                    audit_status_id:
+                        assessment.audit_status_id,
+
+                    action:
+                        'unit_dashboard',
+
+                    message:
+                        'Current audit assessment is blocked.',
+                };
+            }
+
+            if (
+                assessment.audit_due_date
+                &&
+                this.isPastDate(
+                    assessment.audit_due_date,
+                )
+            ) {
+
+                return {
+
+                    assessment_id:
+                        assessment.id,
+
+                    audit_unit_id:
+                        dto.audit_unit_id,
+
+                    audit_status_id:
+                        assessment.audit_status_id,
+
+                    action:
+                        'unit_dashboard',
+
+                    message:
+                        'Audit period has expired for this assessment.',
+                };
+            }
 
             return {
 
                 assessment_id:
-                    result.rows[0].id,
+                    assessment.id,
+
+                audit_unit_id:
+                    dto.audit_unit_id,
 
                 audit_status_id:
-                    result.rows[0]
+                    assessment
                         .audit_status_id,
 
                 action:
@@ -720,11 +831,14 @@ LIMIT 1;
 
             assessment_id: null,
 
-            action: 'create',
+            audit_unit_id:
+                dto.audit_unit_id,
+
+            action: 'unit_dashboard',
         };
     }
 
-   
+
 
     monthDiff(
         d1: Date,
@@ -764,5 +878,48 @@ LIMIT 1;
         return date
             .toISOString()
             .split('T')[0];
+    }
+
+    async hasAuditUnitAuthority(
+        employeeId: number,
+        auditUnitId: number,
+    ) {
+
+        const result =
+            await this.db.query(
+                `
+SELECT id
+FROM employee_master em
+WHERE em.id = $1
+AND EXISTS (
+    SELECT 1
+    FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
+    WHERE trim(unit_id) = $2::text
+)
+LIMIT 1;
+                `,
+                [
+                    employeeId,
+                    auditUnitId,
+                ],
+            );
+
+        return result.rows.length > 0;
+    }
+
+    isPastDate(
+        value: string | Date,
+    ) {
+
+        const date =
+            new Date(value);
+
+        const today =
+            new Date();
+
+        date.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+
+        return date < today;
     }
 }

@@ -7,9 +7,7 @@ import * as bcrypt from 'bcrypt';
 export class EmployeesService {
   private readonly logger = new Logger(EmployeesService.name);
 
-  constructor(
-    private readonly db: DatabaseService,
-  ) {}
+  constructor(private readonly db: DatabaseService) {}
 
   async findAll() {
     const query = `
@@ -55,7 +53,7 @@ export class EmployeesService {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
       RETURNING id, emp_code, name, email, is_active
     `;
-    
+
     const values = [
       data.emp_code,
       data.user_type_id,
@@ -67,10 +65,12 @@ export class EmployeesService {
       passwordHash,
       data.is_active ?? 1,
       1, // password_policy = 1 initially
-      data.unit_ids ? data.unit_ids.join(',') : (data.audit_unit_authority ?? ''),
+      data.unit_ids
+        ? data.unit_ids.join(',')
+        : (data.audit_unit_authority ?? ''),
       data.admin_id ?? 1,
     ];
-    
+
     const result = await this.db.query(query, values);
     return result.rows[0];
   }
@@ -99,7 +99,7 @@ export class EmployeesService {
     addUpdate('designation', data.designation);
     addUpdate('gender', data.gender);
     addUpdate('is_active', data.is_active);
-    
+
     if (data.unit_ids !== undefined) {
       addUpdate('audit_unit_authority', data.unit_ids.join(','));
     } else {
@@ -135,7 +135,7 @@ export class EmployeesService {
   async remove(id: number) {
     // Check existence
     await this.findOne(id);
-    
+
     // Soft delete logic to match PHP
     const query = `
       UPDATE employee_master 
@@ -158,7 +158,9 @@ export class EmployeesService {
   }
 
   async updateAuthority(id: number, unitIds: number[]) {
-    this.logger.log(`Updating authority for employee ${id} with units: ${JSON.stringify(unitIds)}`);
+    this.logger.log(
+      `Updating authority for employee ${id} with units: ${JSON.stringify(unitIds)}`,
+    );
     // Legacy logic: store as comma separated string
     const authorityStr = (unitIds || []).join(',');
     const query = `

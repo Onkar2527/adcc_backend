@@ -1,6 +1,20 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { EmployeesService } from './employees.service';
-import { CreateEmployeeDto, UpdateEmployeeDto, SetPasswordDto, UpdateAuthorityDto } from './dto/employee.dto';
+import {
+  CreateEmployeeDto,
+  UpdateEmployeeDto,
+  SetPasswordDto,
+  UpdateAuthorityDto,
+} from './dto/employee.dto';
 
 @Controller('employees')
 export class EmployeesController {
@@ -22,7 +36,10 @@ export class EmployeesController {
   }
 
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() updateEmployeeDto: UpdateEmployeeDto) {
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateEmployeeDto: UpdateEmployeeDto,
+  ) {
     return this.employeesService.update(id, updateEmployeeDto);
   }
 
@@ -30,7 +47,7 @@ export class EmployeesController {
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.employeesService.remove(id);
   }
-  
+
   @Patch(':id/status')
   async toggleStatus(@Param('id', ParseIntPipe) id: number) {
     const employee = await this.employeesService.findOne(id);
@@ -39,7 +56,10 @@ export class EmployeesController {
   }
 
   @Patch(':id/password')
-  setPassword(@Param('id', ParseIntPipe) id: number, @Body() setPasswordDto: SetPasswordDto) {
+  setPassword(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() setPasswordDto: SetPasswordDto,
+  ) {
     return this.employeesService.setPassword(id, setPasswordDto.password);
   }
 
