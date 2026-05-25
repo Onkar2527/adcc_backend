@@ -944,4 +944,628 @@ LIMIT 1;
 
         return date < today;
     }
+     async getExecutiveSummary(
+        assessment_id: number,
+    ) {
+
+        const assessment =
+            await this.db.query(
+                `
+SELECT 
+    aam.id,
+    aam.year_id,
+    aam.frequency,
+
+    aam.assesment_period_from,
+
+    aam.assesment_period_to,
+
+    aam.audit_start_date,
+
+    aam.audit_end_date,
+
+    aam.compliance_due_date,
+
+    CASE aam.audit_status_id
+
+        WHEN 1 THEN 'AUDIT (PENDING / ACTIVE)'
+
+        WHEN 2 THEN 'REVIEW (PENDING / ACTIVE)'
+
+        WHEN 3 THEN 'RE AUDIT (PENDING / ACTIVE)'
+
+        WHEN 4 THEN 'COMPLIANCE (PENDING / ACTIVE)'
+
+        WHEN 5 THEN 'REVIEW (PENDING / ACTIVE)'
+
+        WHEN 6 THEN 'RE COMPLIANCE (PENDING / ACTIVE)'
+
+        WHEN 7 THEN 'ASSESMENT COMPLETED'
+
+        WHEN 8 THEN 'REVIEWER TO AUDIT (All OBSERVATIONS)'
+
+        WHEN 9 THEN 'REVIEWER TO COMPLIANCE (All OBSERVATIONS)'
+
+        WHEN 10 THEN 'ADMIN INCREASE ACCEPT / REJECT LIMIT IN AUDIT'
+
+        WHEN 11 THEN 'ADMIN INCREASE ACCEPT / REJECT LIMIT IN COMPLIANCE'
+
+        WHEN 12 THEN 'ADMIN INCREASE DUE DATE IN AUDIT'
+
+        WHEN 13 THEN 'ADMIN INCREASE DUE DATE IN COMPLIANCE'
+
+        WHEN 14 THEN 'REVIEWER TO AUDIT (ENTIRE ASSESMENT BACK TO AUDIT)'
+
+        ELSE 'UNKNOWN'
+
+    END AS audit_status,
+
+    aam.audit_review_date,
+
+    aam.compliance_review_date,
+
+    aum.name AS branch_name,
+
+    aum.audit_unit_code AS branch_code,
+
+    (
+        aam.audit_end_date::date
+        -
+        aam.audit_start_date::date
+    ) AS audit_duration_days,
+
+    branch_manager.name AS branch_manager_name,
+
+    branch_assitant_manager.name AS branch_assistant_manager,
+
+    auditor_name.name AS auditor_name,
+
+    td.deposit_target AS deposit_target,
+
+    td.advances_target AS advances_target,
+
+    td.npa_target AS npa_target,
+	esb.report_submitted_date AS report_submitted_date,
+	esb.staff_count As staff_count,
+	esb.manual_challans_per_day as manual_challans_per_day
+
+FROM audit_assesment_master aam
+
+LEFT JOIN audit_unit_master aum
+    ON aum.id = aam.audit_unit_id
+
+LEFT JOIN employee_master auditor
+    ON auditor.id = aam.audit_emp_id
+
+LEFT JOIN employee_master review
+    ON review.id = aam.audit_review_emp_id
+
+LEFT JOIN employee_master branch_manager
+    ON branch_manager.id = aam.branch_head_id
+
+LEFT JOIN employee_master branch_assitant_manager
+    ON branch_assitant_manager.id = aam.branch_subhead_id
+
+LEFT JOIN employee_master auditor_name
+    ON auditor_name.id = aam.audit_head_id
+
+LEFT JOIN target_details td
+    ON td.audit_unit_id = aam.audit_unit_id
+    AND td.year_id = aam.year_id
+	
+left join executive_summary_basic_details esb
+  on esb.assesment_id=aam.id
+WHERE aam.id = $1
+
+LIMIT 1
+                `,
+                [assessment_id],
+            );
+
+        if (
+             !assessment.rows.length
+        ) {
+
+            throw new NotFoundException(
+                'Assessment not found',
+            );
+
+        }
+
+       const data =
+    assessment.rows[0];
+
+        return {
+            year_id:
+                data.year_id,
+
+            branch_name:
+                data.branch_name,
+
+            branch_code:
+                data.branch_code,
+
+            assessment_period_from:
+                data.assesment_period_from,
+
+            assessment_period_to:
+                data.assesment_period_to,
+
+            frequency:
+                data.frequency,
+
+            audit_status:
+                data.audit_status,
+
+            audit_review_status:
+                data.review_name
+                    || 'Not Available',
+
+            compliance_status:
+                data.compliance_review_date
+                    ? 'Completed'
+                    : 'Not Available',
+
+            compliance_review_status:
+                data.audit_review_date
+                    ? 'Reviewed'
+                    : 'Not Available',
+
+            current_financial_year:
+                this.getFinancialYear(),
+
+          summary_detail: [
+
+    {
+        label:
+            '1. Branch Name',
+
+        value:
+            data.branch_name,
+    },
+
+    {
+        label:
+            '2. Inspection Period',
+
+        value:
+            `${data.frequency} Months`,
+    },
+
+    {
+        label:
+            '3. Name of Branch Manager',
+
+        value:
+            data.branch_manager_name,
+    },
+
+    {
+        label:
+            '4. Name of Assistant Branch Manager',
+
+        value:
+            data.branch_assistant_manager,
+    },
+
+    {
+        label:
+            '5. Inspection Conducted by',
+
+        value:
+            data.auditor_name,
+    },
+
+    {
+        label:
+            '6. Inspection Start Date',
+
+        value:
+            data.audit_start_date,
+    },
+
+    {
+        label:
+            '7. Inspection End Date',
+
+        value:
+            data.audit_end_date,
+    },
+
+    {
+        label:
+            '8. Number of Days taken for Inspection',
+
+        value:
+            data.audit_duration_days
+                ? `${data.audit_duration_days} Days`
+                : null,
+    },
+
+    {
+        label:
+            '9. Audit Report Submitted Date',
+
+        value:
+            data.report_submitted_date,
+    },
+
+    {
+        label:
+            '10. Compliance to be done before date',
+
+        value:
+            data.compliance_due_date,
+    },
+
+    {
+        label:
+            '11. Compliance done date',
+
+        value:
+            data.compliance_review_date,
+    },
+
+    {
+        label:
+            '12. Number of Staff including Contractual/Daily wages staff',
+
+        value:
+            data.staff_count,
+    },
+
+    {
+        label:
+            '13. Approximate Number of manual Challans per day',
+
+        value:
+            data.manual_challans_per_day,
+    },
+
+    {
+        label:
+            '14. CD Ratio',
+
+        value:
+            data.cd_ratio,
+    },
+
+    {
+        label:
+            '15. Per Employee Business (In Lakhs)',
+
+        value:
+            data.per_employee_business,
+    },
+
+    {
+        label:
+            '16. Annual Incremental Deposit Target (IN LAKHS)',
+
+        value:
+            data.deposit_target,
+    },
+
+    {
+        label:
+            '17. Annual Incremental Advances Target (IN LAKHS)',
+
+        value:
+            data.advances_target,
+    },
+
+    {
+        label:
+            '18. Annual Differential NPA Target (IN LAKHS)',
+
+        value:
+            data.npa_target,
+    },
+
+]
+
+        };
+
+    }
+
+
+    getFinancialYear() {
+
+        const currentDate =
+            new Date();
+
+        const currentYear =
+            currentDate.getFullYear();
+
+        const currentMonth =
+            currentDate.getMonth() + 1;
+
+        if (
+            currentMonth >= 4
+        ) {
+
+            return `${currentYear} - ${currentYear + 1}`;
+
+        }
+
+        return `${currentYear - 1} - ${currentYear}`;
+
+    }
+    async saveExecutiveSummary(
+    body: any,
+    admin_id: number,
+) {
+
+    const existing =
+        await this.db.query(
+            `
+            SELECT id
+            FROM executive_summary_basic_details
+            WHERE assesment_id = $1
+            LIMIT 1
+            `,
+            [
+                body.assessment_id,
+            ],
+        );
+
+    // UPDATE
+    if (
+        existing.rows.length > 0
+    ) {
+
+        await this.db.query(
+            `
+            UPDATE executive_summary_basic_details
+
+            SET
+
+                report_submitted_date = $1,
+
+                staff_count = $2,
+
+                manual_challans_per_day = $3,
+
+                updated_at = NOW()
+
+            WHERE assesment_id = $4
+            `,
+            [
+
+                body.audit_report_submitted_date,
+
+                body.staff_count,
+
+                body.manual_challans_per_day,
+
+                body.assessment_id,
+
+            ],
+        );
+
+        return {
+            message:
+                'Executive Summary Updated Successfully',
+        };
+
+    }
+
+    // INSERT
+    await this.db.query(
+        `
+        INSERT INTO executive_summary_basic_details
+        (
+
+            year_id,
+
+            assesment_id,
+
+            report_submitted_date,
+
+            staff_count,
+
+            manual_challans_per_day,
+
+            admin_id,
+
+            created_at
+
+        )
+
+        VALUES
+        (
+
+            $1,
+
+            $2,
+
+            $3,
+
+            $4,
+
+            $5,
+
+            $6,
+
+            NOW()
+
+        )
+        `,
+        [
+
+            body.year_id,
+
+            body.assessment_id,
+
+            body.audit_report_submitted_date,
+
+            body.staff_count,
+
+            body.manual_challans_per_day,
+
+            body.admin_id,
+
+        ],
+    );
+
+    return {
+        message:
+            'Executive Summary Saved Successfully',
+    };
+
+}
+async getBranchFinancialPosition(
+    branch_id: number,
+) {
+
+    const result =
+        await this.db.query(
+            `
+SELECT
+
+    scheme_type,
+
+    scheme_code,
+
+    scheme_name,
+
+    MAX(march_position) AS march_position,
+
+    SUM(total_accounts) AS total_accounts,
+
+    SUM(total_amount) AS total_amount
+
+FROM (
+
+    SELECT
+
+        'DEPOSITS' AS scheme_type,
+
+        sm.scheme_code,
+
+        sm.name AS scheme_name,
+
+        es.march_position,
+
+        COUNT(dd.account_no) AS total_accounts,
+
+        SUM(
+            COALESCE(
+                dd.balance::numeric,
+                0
+            )
+        ) AS total_amount
+
+    FROM dump_deposits dd
+
+    INNER JOIN audit_assesment_master aam
+        ON aam.audit_unit_id = dd.branch_id
+
+    LEFT JOIN scheme_master sm
+        ON sm.id = dd.scheme_id
+
+    LEFT JOIN exe_summary es
+        ON es.audit_unit_id = dd.branch_id
+        AND es.year_id = (
+            aam.year_id - 1
+        )
+        AND es.gl_type_id::text = sm.scheme_code    
+
+    WHERE
+
+        dd.branch_id = $1
+
+        AND dd.account_opening_date
+        BETWEEN
+            aam.assesment_period_from
+            AND
+            aam.assesment_period_to
+
+    GROUP BY
+
+        sm.scheme_code,
+
+        sm.name,
+
+        es.march_position
+
+    UNION ALL
+
+    SELECT
+
+        'ADVANCES' AS scheme_type,
+
+        sm.scheme_code,
+
+        sm.name AS scheme_name,
+
+        es.march_position,
+
+        COUNT(da.account_no) AS total_accounts,
+
+        SUM(
+            COALESCE(
+                da.outstanding_balance::numeric,
+                0
+            )
+        ) AS total_amount
+
+    FROM dump_advances da
+
+    INNER JOIN audit_assesment_master aam
+        ON aam.audit_unit_id = da.branch_id
+
+    LEFT JOIN scheme_master sm
+        ON sm.id = da.scheme_id
+
+    LEFT JOIN exe_summary es
+        ON es.audit_unit_id = da.branch_id
+        AND es.year_id = (
+            aam.year_id - 1
+        )
+    AND es.gl_type_id::text = sm.scheme_code
+    WHERE
+
+        da.branch_id = $2
+
+        AND da.account_opening_date
+        BETWEEN
+            aam.assesment_period_from
+            AND
+            aam.assesment_period_to
+
+    GROUP BY
+
+        sm.scheme_code,
+
+        sm.name,
+
+        es.march_position
+
+) x
+
+GROUP BY
+
+    scheme_type,
+
+    scheme_code,
+
+    scheme_name
+
+ORDER BY
+
+    scheme_type,
+
+    scheme_code
+            `,
+            [
+                branch_id,
+                branch_id,
+            ],
+        );
+
+    return result.rows;
+
+}
+
 }
