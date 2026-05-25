@@ -809,6 +809,7 @@ LEFT JOIN
 
                     'annexure_id', am.id,
                     'annexure_name', am.name,
+                    'risk_defination_id', am.risk_defination_id,
 
                     'columns',
 
@@ -1157,6 +1158,7 @@ SELECT
     qm.show_instances,
     rcm.risk_category AS risk_category_name,
     am.name AS annexure_name,
+    am.risk_defination_id AS annexure_risk_defination_id,
     ac.columns_json AS annexure_columns,
     ans.id AS answer_id,
     ans.answer_given,
@@ -1284,6 +1286,7 @@ SELECT
     qm.show_instances,
     rcm.risk_category AS risk_category_name,
     am.name AS annexure_name,
+    am.risk_defination_id AS annexure_risk_defination_id,
     ac.columns_json AS annexure_columns,
     ans.id AS answer_id,
     ans.answer_given,
@@ -1378,10 +1381,22 @@ ORDER BY
       );
     }
 
+    await this.attachAnnexureRows(
+      sets,
+      assessmentId,
+    );
+
+    const annexureRiskOptions =
+      await this.getAnnexureRiskOptions(
+        Number(overview.year_id),
+      );
+
     return {
       overview,
       category,
       sets,
+      annexure_risk_options:
+        annexureRiskOptions,
     };
   }
 
@@ -1669,6 +1684,571 @@ ORDER BY
     };
   }
 
+  async saveAnnexureRow(
+    assessmentId: number,
+    categoryId: number,
+    questionId: number,
+    employeeId: number,
+    body: any,
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+      );
+
+    const questionMap =
+      new Map<number, any>();
+
+    this.collectQuestions(
+      detail.sets,
+      questionMap,
+    );
+
+    const question =
+      questionMap.get(
+        questionId,
+      );
+
+    if (
+      !question
+      ||
+      Number(question.option_id) !== 4
+      ||
+      !question.annexure_id
+    ) {
+
+      throw new BadRequestException(
+        'Annexure question not found',
+      );
+    }
+
+    const values =
+      Array.isArray(body?.values)
+        ? body.values
+        : [];
+
+    const columns =
+      question.annexure?.columns || [];
+
+    const validationError =
+      this.validateAnnexureValues(
+        columns,
+        values,
+      );
+
+    if (
+      validationError
+    ) {
+
+      return {
+        success:
+          false,
+        message:
+          validationError,
+      };
+    }
+
+    const risk =
+      this.validateAnnexureRisk(
+        question,
+        detail.annexure_risk_options,
+        body,
+      );
+
+    if (
+      risk.error
+    ) {
+
+      return {
+        success:
+          false,
+        message:
+          risk.error,
+      };
+    }
+
+    const parentAnswerId =
+      await this.ensureAnnexureParentAnswer(
+        detail,
+        question,
+        employeeId,
+      );
+
+    const payload =
+      JSON.stringify(values);
+
+    const rowId =
+      Number(body?.id || 0);
+
+    await this.db.transaction(
+      async (client) => {
+
+        if (
+          rowId
+        ) {
+
+          await client.query(
+            `
+UPDATE answers_data_annexure
+SET
+    answer_given = $1,
+    audit_emp_id = $2,
+    business_risk = $3,
+    control_risk = $4,
+    risk_cat_id = $5,
+    batch_key = $6
+WHERE id = $7
+    AND answer_id = $8
+    AND assesment_id = $9
+    AND deleted_at IS NULL;
+            `,
+            [
+              payload,
+              employeeId,
+              risk.business_risk,
+              risk.control_risk,
+              risk.risk_cat_id,
+              detail.overview.batch_key,
+              rowId,
+              parentAnswerId,
+              assessmentId,
+            ],
+          );
+        } else {
+
+          await client.query(
+            `
+INSERT INTO answers_data_annexure (
+    answer_id,
+    assesment_id,
+    answer_given,
+    audit_comment,
+    audit_emp_id,
+    audit_status_id,
+    audit_reviewer_emp_id,
+    audit_reviewer_comment,
+    audit_commpliance,
+    compliance_evidance_upload,
+    compliance_emp_id,
+    compliance_status_id,
+    compliance_reviewer_emp_id,
+    compliance_reviewer_comment,
+    business_risk,
+    control_risk,
+    risk_cat_id,
+    batch_key
+)
+VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+);
+            `,
+            [
+              parentAnswerId,
+              assessmentId,
+              payload,
+              null,
+              employeeId,
+              Number(detail.overview.audit_status_id || 0),
+              0,
+              null,
+              null,
+              null,
+              0,
+              0,
+              0,
+              null,
+              risk.business_risk,
+              risk.control_risk,
+              risk.risk_cat_id,
+              detail.overview.batch_key,
+            ],
+          );
+        }
+      },
+    );
+
+    return {
+      success:
+        true,
+      message:
+        'Annexure row saved successfully',
+    };
+  }
+
+  async deleteAnnexureRow(
+    assessmentId: number,
+    categoryId: number,
+    questionId: number,
+    annexureRowId: number,
+    employeeId: number,
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+      );
+
+    const questionMap =
+      new Map<number, any>();
+
+    this.collectQuestions(
+      detail.sets,
+      questionMap,
+    );
+
+    const question =
+      questionMap.get(
+        questionId,
+      );
+
+    if (
+      !question
+      ||
+      Number(question.option_id) !== 4
+    ) {
+
+      throw new BadRequestException(
+        'Annexure question not found',
+      );
+    }
+
+    const answerId =
+      Number(question.answer?.id || 0);
+
+    if (
+      !answerId
+    ) {
+
+      throw new BadRequestException(
+        'Annexure answer not found',
+      );
+    }
+
+    await this.db.query(
+      `
+UPDATE answers_data_annexure
+SET deleted_at = NOW()
+WHERE id = $1
+    AND answer_id = $2
+    AND assesment_id = $3
+    AND deleted_at IS NULL;
+      `,
+      [
+        annexureRowId,
+        answerId,
+        assessmentId,
+      ],
+    );
+
+    return {
+      success:
+        true,
+      message:
+        'Annexure row deleted successfully',
+    };
+  }
+
+  async getAnnexureCsvSample(
+    assessmentId: number,
+    categoryId: number,
+    questionId: number,
+    employeeId: number,
+  ) {
+
+    const {
+      detail,
+      question,
+    } =
+      await this.getAnnexureQuestionContext(
+        assessmentId,
+        categoryId,
+        questionId,
+        employeeId,
+      );
+
+    const sample =
+      await this.buildAnnexureCsvSample(
+        question,
+        detail.annexure_risk_options,
+      );
+
+    return {
+      success:
+        true,
+      filename:
+        'sample-annexure.csv',
+      csv:
+        this.toCsv(
+          sample.rows,
+        ),
+    };
+  }
+
+  async uploadAnnexureCsv(
+    assessmentId: number,
+    categoryId: number,
+    questionId: number,
+    employeeId: number,
+    file: {
+      filename?: string;
+      mimetype?: string;
+      buffer: Buffer;
+    },
+  ) {
+
+    if (
+      !file?.buffer?.length
+    ) {
+
+      return {
+        success:
+          false,
+        message:
+          'Please select CSV file.',
+      };
+    }
+
+    const filename =
+      String(file.filename || '');
+
+    const mimetype =
+      String(file.mimetype || '');
+
+    if (
+      !filename.toLowerCase().endsWith('.csv')
+      &&
+      ![
+        'text/csv',
+        'application/csv',
+        'application/vnd.ms-excel',
+      ].includes(mimetype)
+    ) {
+
+      return {
+        success:
+          false,
+        message:
+          'Only CSV files are allowed.',
+      };
+    }
+
+    const {
+      detail,
+      question,
+    } =
+      await this.getAnnexureQuestionContext(
+        assessmentId,
+        categoryId,
+        questionId,
+        employeeId,
+      );
+
+    const parsedRows =
+      this.parseCsv(
+        file.buffer.toString('utf8'),
+      );
+
+    if (
+      parsedRows.length < 2
+    ) {
+
+      return {
+        success:
+          false,
+        message:
+          'CSV does not contain annexure data rows.',
+      };
+    }
+
+    const columns =
+      question.annexure?.columns || [];
+
+    const errors: any[] = [];
+    const insertRows: any[] = [];
+
+    for (
+      let index = 1;
+      index < parsedRows.length;
+      index++
+    ) {
+
+      const row =
+        parsedRows[index];
+
+      if (
+        row.every(
+          (value) =>
+            !this.cleanString(value),
+        )
+      ) {
+        continue;
+      }
+
+      const values =
+        columns.map(
+          (_column: any, columnIndex: number) =>
+            this.cleanString(
+              row[columnIndex],
+            ),
+        );
+
+      const rowErrors: string[] = [];
+
+      const validationError =
+        this.validateAnnexureValues(
+          columns,
+          values,
+        );
+
+      if (
+        validationError
+      ) {
+        rowErrors.push(
+          validationError,
+        );
+      }
+
+      const risk =
+        this.resolveAnnexureCsvRisk(
+          question,
+          detail.annexure_risk_options,
+          row.slice(
+            columns.length,
+            columns.length + 3,
+          ),
+        );
+
+      if (
+        risk.error
+      ) {
+        rowErrors.push(
+          risk.error,
+        );
+      }
+
+      if (
+        rowErrors.length
+      ) {
+
+        errors.push({
+          row:
+            index + 1,
+          errors:
+            rowErrors,
+        });
+        continue;
+      }
+
+      insertRows.push({
+        values,
+        business_risk:
+          risk.business_risk,
+        control_risk:
+          risk.control_risk,
+        risk_cat_id:
+          risk.risk_cat_id,
+      });
+    }
+
+    if (
+      errors.length
+    ) {
+
+      return {
+        success:
+          false,
+        message:
+          'CSV has invalid annexure rows.',
+        errors,
+      };
+    }
+
+    if (
+      !insertRows.length
+    ) {
+
+      return {
+        success:
+          false,
+        message:
+          'CSV does not contain valid annexure rows.',
+      };
+    }
+
+    const parentAnswerId =
+      await this.ensureAnnexureParentAnswer(
+        detail,
+        question,
+        employeeId,
+      );
+
+    await this.db.transaction(
+      async (client) => {
+
+        for (
+          const row
+          of insertRows
+        ) {
+
+          await client.query(
+            `
+INSERT INTO answers_data_annexure (
+    answer_id,
+    assesment_id,
+    answer_given,
+    audit_comment,
+    audit_emp_id,
+    audit_status_id,
+    audit_reviewer_emp_id,
+    audit_reviewer_comment,
+    audit_commpliance,
+    compliance_evidance_upload,
+    compliance_emp_id,
+    compliance_status_id,
+    compliance_reviewer_emp_id,
+    compliance_reviewer_comment,
+    business_risk,
+    control_risk,
+    risk_cat_id,
+    batch_key
+)
+VALUES (
+    $1, $2, $3, NULL, $4, $5, 0, NULL,
+    NULL, NULL, 0, 0, 0, NULL, $6, $7, $8, $9
+);
+            `,
+            [
+              parentAnswerId,
+              assessmentId,
+              JSON.stringify(row.values),
+              employeeId,
+              Number(detail.overview.audit_status_id || 0),
+              row.business_risk,
+              row.control_risk,
+              row.risk_cat_id,
+              detail.overview.batch_key,
+            ],
+          );
+        }
+      },
+    );
+
+    return {
+      success:
+        true,
+      message:
+        `${insertRows.length} annexure row(s) uploaded successfully.`,
+      inserted:
+        insertRows.length,
+    };
+  }
+
   private groupCategoryQuestions(
     rows: any[],
   ) {
@@ -1759,6 +2339,8 @@ ORDER BY
                 row.annexure_id,
               name:
                 row.annexure_name,
+              risk_defination_id:
+                row.annexure_risk_defination_id,
               columns:
                 row.annexure_columns || [],
             }
@@ -1816,13 +2398,12 @@ ORDER BY
           of header.questions || []
         ) {
 
+          question.header_id =
+            header.id;
+
           questionMap.set(
             Number(question.id),
-            {
-              ...question,
-              header_id:
-                header.id,
-            },
+            question,
           );
 
           this.collectQuestions(
@@ -1830,6 +2411,929 @@ ORDER BY
             questionMap,
           );
         }
+      }
+    }
+  }
+
+  private async ensureAnnexureParentAnswer(
+    detail: any,
+    question: any,
+    employeeId: number,
+  ) {
+
+    const assessmentId =
+      Number(detail.overview.id);
+
+    const categoryId =
+      Number(detail.category.id);
+
+    const existing =
+      await this.db.findOne(
+        `
+SELECT id
+FROM answers_data
+WHERE assesment_id = $1
+    AND category_id = $2
+    AND header_id = $3
+    AND question_id = $4
+    AND dump_id = 0
+    AND deleted_at IS NULL
+LIMIT 1;
+        `,
+        [
+          assessmentId,
+          categoryId,
+          question.header_id,
+          question.id,
+        ],
+      );
+
+    if (
+      existing?.id
+    ) {
+
+      await this.db.query(
+        `
+UPDATE answers_data
+SET
+    answer_given = $1,
+    audit_emp_id = $2,
+    is_compliance = 1,
+    business_risk = 1,
+    control_risk = 1,
+    batch_key = $3
+WHERE id = $4;
+        `,
+        [
+          String(question.annexure_id),
+          employeeId,
+          detail.overview.batch_key,
+          existing.id,
+        ],
+      );
+
+      return Number(existing.id);
+    }
+
+    const inserted =
+      await this.db.findOne(
+        `
+INSERT INTO answers_data (
+    section_type_id,
+    assesment_id,
+    menu_id,
+    category_id,
+    header_id,
+    question_id,
+    dump_id,
+    answer_given,
+    audit_comment,
+    audit_emp_id,
+    audit_status_id,
+    audit_reviewer_emp_id,
+    audit_reviewer_comment,
+    is_compliance,
+    audit_commpliance,
+    compliance_evidance_upload,
+    compliance_emp_id,
+    compliance_status_id,
+    compliance_reviewer_emp_id,
+    compliance_reviewer_comment,
+    business_risk,
+    control_risk,
+    instances_count,
+    batch_key
+)
+VALUES (
+    $1, $2, $3, $4, $5, $6, 0, $7,
+    NULL, $8, 0, 0, NULL, 1, NULL, NULL,
+    0, 0, 0, NULL, 1, 1, 0, $9
+)
+RETURNING id;
+        `,
+        [
+          detail.category.section_type_id || 0,
+          assessmentId,
+          detail.category.menu_id,
+          categoryId,
+          question.header_id,
+          question.id,
+          String(question.annexure_id),
+          employeeId,
+          detail.overview.batch_key,
+        ],
+      );
+
+    return Number(inserted?.id || 0);
+  }
+
+  private validateAnnexureValues(
+    columns: any[],
+    values: any[],
+  ) {
+
+    if (
+      !columns.length
+    ) {
+
+      return 'Annexure columns are not configured.';
+    }
+
+    if (
+      columns.length !== values.length
+    ) {
+
+      return 'Annexure row values do not match configured columns.';
+    }
+
+    for (
+      let i = 0;
+      i < columns.length;
+      i++
+    ) {
+
+      const value =
+        this.cleanString(
+          values[i],
+        );
+
+      if (
+        !value
+      ) {
+
+        return 'Please fill all annexure columns.';
+      }
+
+      if (
+        Number(columns[i].column_type_id) === 3
+      ) {
+
+        const options =
+          columns[i].options || [];
+
+        if (
+          options.length
+          &&
+          !options.some(
+            (option: any) =>
+              this.cleanString(option.option_label)
+              ===
+              value,
+          )
+        ) {
+
+          return 'Please select a valid annexure column option.';
+        }
+      }
+    }
+
+    return '';
+  }
+
+  private async getAnnexureQuestionContext(
+    assessmentId: number,
+    categoryId: number,
+    questionId: number,
+    employeeId: number,
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+      );
+
+    const questionMap =
+      new Map<number, any>();
+
+    this.collectQuestions(
+      detail.sets,
+      questionMap,
+    );
+
+    const question =
+      questionMap.get(
+        questionId,
+      );
+
+    if (
+      !question
+      ||
+      Number(question.option_id) !== 4
+      ||
+      !question.annexure_id
+    ) {
+
+      throw new BadRequestException(
+        'Annexure question not found',
+      );
+    }
+
+    return {
+      detail,
+      question,
+    };
+  }
+
+  private async buildAnnexureCsvSample(
+    question: any,
+    riskOptions: any,
+  ) {
+
+    const columns =
+      question.annexure?.columns || [];
+
+    const riskCategories =
+      (riskOptions?.risk_categories || [])
+        .filter(
+          (risk: any) =>
+            Number(risk.id) !== 10,
+        );
+
+    const headers = [
+      ...columns.map(
+        (column: any) =>
+          String(
+            column.name
+            || column.column_name
+            || '',
+          ).toUpperCase(),
+      ),
+      'BUSINESS RISK',
+      'CONTROL RISK',
+      'RISK TYPE',
+    ];
+
+    const dataColumns =
+      columns.map(
+        (column: any) =>
+          Number(column.column_type_id) === 3
+            ? (column.options || []).map(
+              (option: any) =>
+                option.option_label,
+            )
+            : [],
+      );
+
+    const riskDefinitionId =
+      Number(
+        question.annexure?.risk_defination_id || 0,
+      );
+
+    if (
+      riskDefinitionId === 1
+    ) {
+
+      dataColumns.push(
+        (riskOptions?.business_risks || [])
+          .map(
+            (option: { label: any; }) =>
+              option.label,
+          ),
+      );
+      dataColumns.push(
+        (riskOptions?.control_risks || [])
+          .map(
+            (option: { label: any; }) =>
+              option.label,
+          ),
+      );
+      dataColumns.push(
+        riskCategories.map(
+          (risk: any) =>
+            risk.risk_category,
+        ),
+      );
+    } else {
+
+      const riskCategory =
+        this.defaultAnnexureRiskCategory(
+          riskCategories,
+        );
+
+      dataColumns.push(['HIGH RISK']);
+      dataColumns.push(['HIGH RISK']);
+      dataColumns.push([
+        riskCategory?.risk_category || '',
+      ]);
+    }
+
+    const totalRows =
+      Math.max(
+        1,
+        ...dataColumns.map(
+          (column: string | any[]) =>
+            column.length,
+        ),
+      );
+
+    const rows = [
+      headers,
+    ];
+
+    for (
+      let index = 0;
+      index < totalRows;
+      index++
+    ) {
+
+      rows.push(
+        dataColumns.map(
+          (column: any[]) =>
+            column[index] || '',
+        ),
+      );
+    }
+
+    return {
+      rows,
+    };
+  }
+
+  private async getRiskCategories(
+    includeNotApplicable = false,
+  ) {
+
+    const result =
+      await this.db.query(
+        `
+SELECT id, risk_category
+FROM risk_category_master
+WHERE is_active = 1
+    AND ($1 = true OR id != 10)
+    AND deleted_at IS NULL
+ORDER BY id;
+        `,
+        [includeNotApplicable],
+      );
+
+    return result.rows;
+  }
+
+  private async getAnnexureRiskOptions(
+    yearId: number,
+  ) {
+
+    const result =
+      await this.db.query(
+        `
+SELECT
+    risk_parameter,
+    business_risk_app,
+    control_risk_app
+FROM risk_matrix
+WHERE year_id = $1
+    AND deleted_at IS NULL
+ORDER BY risk_parameter;
+        `,
+        [yearId],
+      );
+
+    const matrix =
+      result.rows;
+
+    const riskParameters =
+      this.riskParameterOptions();
+
+    const businessRisks =
+      riskParameters.filter(
+        (risk) =>
+          matrix.some(
+            (row: any) =>
+              Number(row.risk_parameter) === risk.id
+              &&
+              Number(row.business_risk_app) === 1,
+          ),
+      );
+
+    const controlRisks =
+      riskParameters.filter(
+        (risk) =>
+          matrix.some(
+            (row: any) =>
+              Number(row.risk_parameter) === risk.id
+              &&
+              Number(row.control_risk_app) === 1,
+          ),
+      );
+
+    return {
+      business_risks:
+        businessRisks.length
+          ? businessRisks
+          : riskParameters.slice(0, 3),
+      control_risks:
+        controlRisks.length
+          ? controlRisks
+          : riskParameters.slice(0, 3),
+      risk_categories:
+        await this.getRiskCategories(true),
+    };
+  }
+
+  private riskParameterOptions() {
+
+    return [
+      {
+        id:
+          1,
+        label:
+          'HIGH RISK',
+      },
+      {
+        id:
+          2,
+        label:
+          'MEDIUM RISK',
+      },
+      {
+        id:
+          3,
+        label:
+          'LOW RISK',
+      },
+      {
+        id:
+          4,
+        label:
+          'NO RISK',
+      },
+    ];
+  }
+
+  private resolveAnnexureCsvRisk(
+    question: any,
+    riskOptions: any,
+    riskValues: any[],
+  ) {
+
+    const riskDefinitionId =
+      Number(
+        question.annexure?.risk_defination_id || 0,
+      );
+
+    const riskCategories =
+      (riskOptions?.risk_categories || [])
+        .filter(
+          (risk: any) =>
+            Number(risk.id) !== 10,
+        );
+
+    const defaultRiskCategory =
+      this.defaultAnnexureRiskCategory(
+        riskCategories,
+      );
+
+    if (
+      riskDefinitionId !== 1
+    ) {
+
+      return {
+        error:
+          '',
+        business_risk:
+          1,
+        control_risk:
+          1,
+        risk_cat_id:
+          Number(defaultRiskCategory?.id || 0),
+      };
+    }
+
+    const businessRisk =
+      this.findRiskParameter(
+        riskValues[0],
+        riskOptions?.business_risks || [],
+      );
+
+    const controlRisk =
+      this.findRiskParameter(
+        riskValues[1],
+        riskOptions?.control_risks || [],
+      );
+
+    const riskCategory =
+      this.findRiskCategory(
+        riskValues[2],
+        riskCategories,
+      );
+
+    if (
+      !businessRisk
+    ) {
+
+      return {
+        error:
+          'Please select a valid business risk.',
+      };
+    }
+
+    if (
+      !controlRisk
+    ) {
+
+      return {
+        error:
+          'Please select a valid control risk.',
+      };
+    }
+
+    if (
+      !riskCategory
+    ) {
+
+      return {
+        error:
+          'Please select a valid risk type.',
+      };
+    }
+
+    return {
+      error:
+        '',
+      business_risk:
+        businessRisk.id,
+      control_risk:
+        controlRisk.id,
+      risk_cat_id:
+        Number(riskCategory.id),
+    };
+  }
+
+  private validateAnnexureRisk(
+    question: any,
+    riskOptions: any,
+    body: any,
+  ) {
+
+    const riskDefinitionId =
+      Number(
+        question.annexure?.risk_defination_id || 0,
+      );
+
+    const defaultRiskCategory =
+      this.defaultAnnexureRiskCategory(
+        riskOptions?.risk_categories || [],
+      );
+
+    if (
+      riskDefinitionId !== 1
+    ) {
+
+      return {
+        error:
+          '',
+        business_risk:
+          1,
+        control_risk:
+          1,
+        risk_cat_id:
+          Number(defaultRiskCategory?.id || 0),
+      };
+    }
+
+    const businessRisk =
+      (riskOptions?.business_risks || [])
+        .find(
+          (risk: any) =>
+            Number(risk.id)
+            ===
+            Number(body?.business_risk),
+        );
+
+    if (
+      !businessRisk
+    ) {
+
+      return {
+        error:
+          'Please select a valid business risk.',
+      };
+    }
+
+    const controlRisk =
+      (riskOptions?.control_risks || [])
+        .find(
+          (risk: any) =>
+            Number(risk.id)
+            ===
+            Number(body?.control_risk),
+        );
+
+    if (
+      !controlRisk
+    ) {
+
+      return {
+        error:
+          'Please select a valid control risk.',
+      };
+    }
+
+    const riskCategory =
+      (riskOptions?.risk_categories || [])
+        .find(
+          (risk: any) =>
+            Number(risk.id)
+            ===
+            Number(body?.risk_cat_id),
+        );
+
+    if (
+      !riskCategory
+    ) {
+
+      return {
+        error:
+          'Please select a valid risk type.',
+      };
+    }
+
+    return {
+      error:
+        '',
+      business_risk:
+        Number(businessRisk.id),
+      control_risk:
+        Number(controlRisk.id),
+      risk_cat_id:
+        Number(riskCategory.id),
+    };
+  }
+
+  private findRiskParameter(
+    value: any,
+    options: any[],
+  ) {
+
+    const normalized =
+      this.normalizeLookupValue(
+        value,
+      );
+
+    return options
+      .find(
+        (option) =>
+          String(option.id) === normalized
+          ||
+          this.normalizeLookupValue(option.label)
+          ===
+          normalized,
+      );
+  }
+
+  private defaultAnnexureRiskCategory(
+    riskCategories: any[],
+  ) {
+
+    return riskCategories.find(
+      (risk: any) =>
+        Number(risk.id) === 1,
+    )
+      || riskCategories[0];
+  }
+
+  private findRiskCategory(
+    value: any,
+    riskCategories: any[],
+  ) {
+
+    const normalized =
+      this.normalizeLookupValue(
+        value,
+      );
+
+    return riskCategories.find(
+      (risk: any) =>
+        String(risk.id) === normalized
+        ||
+        this.normalizeLookupValue(risk.risk_category)
+        ===
+        normalized,
+    );
+  }
+
+  private normalizeLookupValue(
+    value: any,
+  ) {
+
+    return this.cleanString(value)
+      .toUpperCase()
+      .replace(/\s+/g, ' ');
+  }
+
+  private toCsv(
+    rows: any[][],
+  ) {
+
+    return rows
+      .map(
+        (row) =>
+          row.map(
+            (value) => {
+
+              const text =
+                String(value ?? '');
+
+              if (
+                /[",\r\n]/.test(text)
+              ) {
+
+                return `"${text.replace(/"/g, '""')}"`;
+              }
+
+              return text;
+            },
+          ).join(','),
+      )
+      .join('\r\n');
+  }
+
+  private parseCsv(
+    csv: string,
+  ) {
+
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let value = '';
+    let quoted = false;
+
+    for (
+      let index = 0;
+      index < csv.length;
+      index++
+    ) {
+
+      const char =
+        csv[index];
+
+      if (
+        char === '"'
+      ) {
+
+        if (
+          quoted
+          &&
+          csv[index + 1] === '"'
+        ) {
+
+          value += '"';
+          index++;
+        } else {
+
+          quoted =
+            !quoted;
+        }
+
+        continue;
+      }
+
+      if (
+        char === ','
+        &&
+        !quoted
+      ) {
+
+        row.push(value);
+        value = '';
+        continue;
+      }
+
+      if (
+        (char === '\n' || char === '\r')
+        &&
+        !quoted
+      ) {
+
+        if (
+          char === '\r'
+          &&
+          csv[index + 1] === '\n'
+        ) {
+          index++;
+        }
+
+        row.push(value);
+        rows.push(row);
+        row = [];
+        value = '';
+        continue;
+      }
+
+      value += char;
+    }
+
+    if (
+      value
+      ||
+      row.length
+    ) {
+
+      row.push(value);
+      rows.push(row);
+    }
+
+    return rows;
+  }
+
+  private async attachAnnexureRows(
+    sets: any[],
+    assessmentId: number,
+  ) {
+
+    const questionMap =
+      new Map<number, any>();
+
+    this.collectQuestions(
+      sets,
+      questionMap,
+    );
+
+    const answerIds =
+      Array.from(
+        questionMap.values(),
+      )
+        .map(
+          (question: any) =>
+            Number(question.answer?.id || 0),
+        )
+        .filter(Boolean);
+
+    if (
+      !answerIds.length
+    ) {
+      return;
+    }
+
+    const result =
+      await this.db.query(
+        `
+SELECT
+    id,
+    answer_id,
+    answer_given,
+    business_risk,
+    control_risk,
+    risk_cat_id
+FROM answers_data_annexure
+WHERE assesment_id = $1
+    AND answer_id = ANY($2::int[])
+    AND deleted_at IS NULL
+ORDER BY id;
+        `,
+        [
+          assessmentId,
+          answerIds,
+        ],
+      );
+
+    const rowsByAnswer =
+      new Map<number, any[]>();
+
+    for (
+      const row
+      of result.rows
+    ) {
+
+      const answerId =
+        Number(row.answer_id);
+
+      if (
+        !rowsByAnswer.has(answerId)
+      ) {
+        rowsByAnswer.set(answerId, []);
+      }
+
+      rowsByAnswer.get(answerId)?.push({
+        id:
+          row.id,
+        values:
+          this.parseJsonArray(
+            row.answer_given,
+          ),
+        business_risk:
+          row.business_risk,
+        control_risk:
+          row.control_risk,
+        risk_cat_id:
+          row.risk_cat_id,
+      });
+    }
+
+    for (
+      const question
+      of questionMap.values()
+    ) {
+
+      const answerId =
+        Number(question.answer?.id || 0);
+
+      if (
+        answerId
+      ) {
+        question.answer.annexure_rows =
+          rowsByAnswer.get(answerId) || [];
       }
     }
   }
@@ -2088,6 +3592,52 @@ ORDER BY
       return Array.isArray(parsed)
         ? parsed
         : [];
+    } catch {
+
+      return [];
+    }
+  }
+
+  private parseJsonArray(
+    value: any,
+  ) {
+
+    if (
+      Array.isArray(value)
+    ) {
+      return value;
+    }
+
+    if (
+      !value
+    ) {
+      return [];
+    }
+
+    try {
+      const parsed =
+        JSON.parse(
+          String(value),
+        );
+
+      if (
+        Array.isArray(parsed)
+      ) {
+        return parsed;
+      }
+
+      return Object.keys(parsed || {})
+        .sort(
+          (
+            a,
+            b,
+          ) =>
+            Number(a) - Number(b),
+        )
+        .map(
+          (key) =>
+            parsed[key],
+        );
     } catch {
 
       return [];
