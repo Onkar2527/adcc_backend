@@ -9,6 +9,15 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 
 const AUDITOR_STATUS_IDS = [1, 3];
+const REMARK_TYPES: Record<number, string> = {
+  1: 'Remark for Auditor',
+  2: 'Remark for Reviewer',
+  3: 'Remark for Compliance',
+  4: 'Remark for Reviewer & Compliance',
+  5: 'Remark for Auditor & Compliance',
+};
+const AUDITOR_REMARK_RECIPIENT_IDS = [2, 3, 4];
+const AUDITOR_INCOMING_REMARK_IDS = [1, 5];
 const EVIDENCE_MAX_SIZE =
   5 * 1024 * 1024;
 const EVIDENCE_FILE_TYPES: Record<string, {
@@ -687,7 +696,296 @@ ORDER BY year_id DESC, id ASC;
           auditStatusId,
           isBlocked,
           isExpired,
+      ),
+    };
+  }
+
+  async getRemarks(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    const assessment =
+      await this.assertAuditorRemarkAccess(
+        assessmentId,
+        employeeId,
+      );
+
+    const result =
+      await this.db.query(
+        `
+SELECT
+    ar.id,
+    ar.subject,
+    ar.message,
+    ar.noti_type,
+    ar.admin_id,
+    ar.created_at,
+    em.name AS author_name,
+    em.emp_code AS author_code,
+    EXISTS (
+        SELECT 1
+        FROM audit_remark_status ars
+        WHERE ars.noti_id = ar.id
+    ) AS has_been_read
+FROM audit_remarks ar
+LEFT JOIN employee_master em
+    ON em.id = ar.admin_id
+WHERE ar.assesment_id = $1
+    AND ar.deleted_at IS NULL
+    AND (
+        ar.admin_id = $2
+        OR ar.noti_type = ANY($3::int[])
+    )
+ORDER BY ar.id DESC;
+        `,
+        [
+          assessmentId,
+          employeeId,
+          AUDITOR_INCOMING_REMARK_IDS,
+        ],
+      );
+
+    const remarks =
+      result.rows.map(
+        (remark: any) => ({
+          ...remark,
+          noti_type_label:
+            REMARK_TYPES[
+            Number(remark.noti_type)
+            ]
+            || 'Remark',
+          can_delete:
+            Number(remark.admin_id)
+            === employeeId
+            &&
+            !remark.has_been_read,
+          is_unread:
+            Number(remark.admin_id)
+            !== employeeId
+            &&
+            !remark.has_been_read,
+        }),
+      );
+
+    return {
+      assessment_id:
+        assessment.id,
+      remark_types:
+        AUDITOR_REMARK_RECIPIENT_IDS.map(
+          (id) => ({
+            id,
+            name:
+              REMARK_TYPES[id],
+          }),
         ),
+      current:
+        remarks.filter(
+          (remark: any) =>
+            Number(remark.admin_id)
+            === employeeId,
+        ),
+      other:
+        remarks.filter(
+          (remark: any) =>
+            Number(remark.admin_id)
+            !== employeeId,
+        ),
+      unread_count:
+        remarks.filter(
+          (remark: any) =>
+            remark.is_unread,
+        ).length,
+    };
+  }
+
+  async saveRemark(
+    assessmentId: number,
+    employeeId: number,
+    payload: any,
+  ) {
+
+    await this.assertAuditorRemarkAccess(
+      assessmentId,
+      employeeId,
+    );
+
+    const notiType =
+      Number(payload?.noti_type || 0);
+    const subject =
+      String(payload?.subject || '')
+        .trim();
+    const message =
+      String(payload?.message || '')
+        .trim();
+
+    if (
+      !AUDITOR_REMARK_RECIPIENT_IDS.includes(
+        notiType,
+      )
+    ) {
+
+      throw new BadRequestException(
+        'Please select a valid remark type.',
+      );
+    }
+
+    if (
+      !subject
+    ) {
+
+      throw new BadRequestException(
+        'Remark subject is required.',
+      );
+    }
+
+    if (
+      !message
+    ) {
+
+      throw new BadRequestException(
+        'Remark message is required.',
+      );
+    }
+
+    await this.db.query(
+      `
+INSERT INTO audit_remarks (
+    subject,
+    message,
+    noti_type,
+    assesment_id,
+    admin_id
+) VALUES ($1, $2, $3, $4, $5);
+      `,
+      [
+        subject,
+        message,
+        notiType,
+        assessmentId,
+        employeeId,
+      ],
+    );
+
+    return {
+      success: true,
+      message:
+        'Assessment remark saved successfully.',
+    };
+  }
+
+  async markRemarkRead(
+    assessmentId: number,
+    remarkId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertAuditorRemarkAccess(
+      assessmentId,
+      employeeId,
+    );
+
+    const remark =
+      await this.db.query(
+        `
+SELECT id
+FROM audit_remarks
+WHERE id = $1
+    AND assesment_id = $2
+    AND admin_id <> $3
+    AND noti_type = ANY($4::int[])
+    AND deleted_at IS NULL
+LIMIT 1;
+        `,
+        [
+          remarkId,
+          assessmentId,
+          employeeId,
+          AUDITOR_INCOMING_REMARK_IDS,
+        ],
+      );
+
+    if (
+      !remark.rows.length
+    ) {
+
+      throw new NotFoundException(
+        'Remark not found.',
+      );
+    }
+
+    await this.db.query(
+      `
+INSERT INTO audit_remark_status (
+    noti_id,
+    emp_id,
+    readed_at
+)
+SELECT $1, $2, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM audit_remark_status
+    WHERE noti_id = $1
+        AND emp_id = $2
+);
+      `,
+      [
+        remarkId,
+        employeeId,
+      ],
+    );
+
+    return {
+      success: true,
+    };
+  }
+
+  async deleteRemark(
+    assessmentId: number,
+    remarkId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertAuditorRemarkAccess(
+      assessmentId,
+      employeeId,
+    );
+
+    const result =
+      await this.db.query(
+        `
+DELETE FROM audit_remarks ar
+WHERE ar.id = $1
+    AND ar.assesment_id = $2
+    AND ar.admin_id = $3
+    AND ar.deleted_at IS NULL
+    AND NOT EXISTS (
+        SELECT 1
+        FROM audit_remark_status ars
+        WHERE ars.noti_id = ar.id
+    )
+RETURNING ar.id;
+        `,
+        [
+          remarkId,
+          assessmentId,
+          employeeId,
+        ],
+      );
+
+    if (
+      !result.rows.length
+    ) {
+
+      throw new BadRequestException(
+        'This remark was already read or cannot be removed.',
+      );
+    }
+
+    return {
+      success: true,
+      message:
+        'Assessment remark removed successfully.',
     };
   }
 
@@ -1100,6 +1398,213 @@ ORDER BY
     };
   }
 
+  async getSubmissionPreview(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    const menuData =
+      await this.getMenu(
+        assessmentId,
+        employeeId,
+      );
+
+    const overview =
+      menuData.overview;
+
+    if (
+      !overview.can_continue
+    ) {
+      return {
+        can_submit:
+          false,
+        pending_count:
+          0,
+        compliance_count:
+          0,
+        compliance_points:
+          [],
+        message:
+          overview.block_reason
+          || 'Current assessment cannot be submitted by auditor.',
+        issues:
+          [],
+        overview,
+      };
+    }
+
+    if (
+      Number(overview.audit_status_id) !== 1
+    ) {
+      return {
+        can_submit:
+          false,
+        pending_count:
+          0,
+        compliance_count:
+          0,
+        compliance_points:
+          [],
+        message:
+          'Re-audit submission will be enabled with the re-audit workflow.',
+        issues:
+          [],
+        overview,
+      };
+    }
+
+    const issues: any[] = [];
+    const compliancePoints: any[] = [];
+    let complianceCount = 0;
+
+    for (
+      const menu
+      of menuData.menus || []
+    ) {
+      for (
+        const category
+        of menu.categories || []
+      ) {
+
+        const detail =
+          await this.getCategory(
+            assessmentId,
+            Number(category.id),
+            employeeId,
+          );
+
+        complianceCount +=
+          this.validateSubmissionSets(
+            detail.sets || [],
+            {
+              id:
+                category.id,
+              name:
+                category.name,
+              menu_name:
+                menu.name,
+            },
+            issues,
+            compliancePoints,
+          );
+      }
+    }
+
+    return {
+      can_submit:
+        issues.length === 0,
+      pending_count:
+        issues.length,
+      compliance_count:
+        complianceCount,
+      compliance_points:
+        compliancePoints,
+      message:
+        issues.length
+          ? 'Complete the pending audit points before submitting for review.'
+          : 'Audit is ready to submit for review.',
+      issues,
+      overview,
+    };
+  }
+
+  async submitAssessment(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    const preview =
+      await this.getSubmissionPreview(
+        assessmentId,
+        employeeId,
+      );
+
+    if (
+      !preview.can_submit
+    ) {
+      return {
+        success:
+          false,
+        ...preview,
+      };
+    }
+
+    await this.db.transaction(
+      async (client) => {
+
+        const updated =
+          await client.query(
+            `
+            UPDATE audit_assesment_master
+            SET
+                audit_end_date = CURRENT_DATE,
+                audit_status_id = 2,
+                audit_emp_id = $2
+            WHERE id = $1
+                AND audit_status_id = 1
+                AND deleted_at IS NULL
+            RETURNING id;
+            `,
+            [
+              assessmentId,
+              employeeId,
+            ],
+          );
+
+        if (
+          !updated.rows.length
+        ) {
+          throw new BadRequestException(
+            'Assessment is no longer pending with auditor.',
+          );
+        }
+
+        await client.query(
+          `
+          INSERT INTO audit_assesment_timeline (
+              assesment_id,
+              type_id,
+              status_id,
+              rejected_cnt,
+              reviewer_emp_id,
+              batch_key
+          )
+          VALUES ($1, 1, 2, 0, $2, $3);
+          `,
+          [
+            assessmentId,
+            employeeId,
+            preview.overview.batch_key,
+          ],
+        );
+
+        await client.query(
+          `
+          UPDATE audit_unit_master
+          SET last_audit_date = $1
+          WHERE id = $2
+              AND deleted_at IS NULL;
+          `,
+          [
+            preview.overview.assesment_period_to,
+            preview.overview.audit_unit_id,
+          ],
+        );
+      },
+    );
+
+    return {
+      success:
+        true,
+      message:
+        'Audit submitted to reviewer successfully.',
+      status_id:
+        2,
+      status:
+        STATUS_LABELS[2],
+    };
+  }
+
   async getCategory(
     assessmentId: number,
     categoryId: number,
@@ -1190,6 +1695,7 @@ SELECT
     ans.answer_given,
     ans.audit_comment,
     ans.is_compliance,
+    ans.audit_compulsary_ev_upload,
     ans.business_risk,
     ans.control_risk,
     ans.audit_status_id AS answer_status_id
@@ -1318,6 +1824,7 @@ SELECT
     ans.answer_given,
     ans.audit_comment,
     ans.is_compliance,
+    ans.audit_compulsary_ev_upload,
     ans.business_risk,
     ans.control_risk,
     ans.audit_status_id AS answer_status_id
@@ -1557,6 +2064,14 @@ ORDER BY
           )
             ? 1
             : 0,
+        audit_compulsary_ev_upload:
+          (
+            answer?.audit_compulsary_ev_upload === true
+            ||
+            Number(answer?.audit_compulsary_ev_upload || 0) === 1
+          )
+            ? 1
+            : 0,
         business_risk:
           validation.business_risk,
         control_risk:
@@ -1621,16 +2136,18 @@ ORDER BY
                   audit_comment = $2,
                   audit_emp_id = $3,
                   is_compliance = $4,
-                  business_risk = $5,
-                  control_risk = $6,
-                  batch_key = $7
-              WHERE id = $8;
+                  audit_compulsary_ev_upload = $5,
+                  business_risk = $6,
+                  control_risk = $7,
+                  batch_key = $8
+              WHERE id = $9;
               `,
               [
                 row.answer_given,
                 row.audit_comment,
                 row.audit_emp_id,
                 row.is_compliance,
+                row.audit_compulsary_ev_upload,
                 row.business_risk,
                 row.control_risk,
                 row.batch_key,
@@ -1656,6 +2173,7 @@ ORDER BY
                   audit_reviewer_emp_id,
                   audit_reviewer_comment,
                   is_compliance,
+                  audit_compulsary_ev_upload,
                   audit_commpliance,
                   compliance_evidance_upload,
                   compliance_emp_id,
@@ -1670,7 +2188,8 @@ ORDER BY
               VALUES (
                   $1, $2, $3, $4, $5, $6, $7, $8,
                   $9, $10, $11, $12, $13, $14, $15, $16,
-                  $17, $18, $19, $20, $21, $22, $23, $24
+                  $17, $18, $19, $20, $21, $22, $23, $24,
+                  $25
               );
               `,
               [
@@ -1688,6 +2207,7 @@ ORDER BY
                 0,
                 null,
                 row.is_compliance,
+                row.audit_compulsary_ev_upload,
                 null,
                 null,
                 0,
@@ -1825,7 +2345,7 @@ ORDER BY
 
           const result =
             await client.query(
-            `
+              `
 UPDATE answers_data_annexure
 SET
     answer_given = $1,
@@ -1840,18 +2360,18 @@ WHERE id = $7
     AND deleted_at IS NULL
 RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
             `,
-            [
-              payload,
-              employeeId,
-              risk.business_risk,
-              risk.control_risk,
-              risk.risk_cat_id,
-              detail.overview.batch_key,
-              rowId,
-              parentAnswerId,
-              assessmentId,
-            ],
-          );
+              [
+                payload,
+                employeeId,
+                risk.business_risk,
+                risk.control_risk,
+                risk.risk_cat_id,
+                detail.overview.batch_key,
+                rowId,
+                parentAnswerId,
+                assessmentId,
+              ],
+            );
 
           savedRow =
             result.rows[0];
@@ -1859,7 +2379,7 @@ RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
 
           const result =
             await client.query(
-            `
+              `
 INSERT INTO answers_data_annexure (
     answer_id,
     assesment_id,
@@ -1886,27 +2406,27 @@ VALUES (
 )
 RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
             `,
-            [
-              parentAnswerId,
-              assessmentId,
-              payload,
-              null,
-              employeeId,
-              Number(detail.overview.audit_status_id || 0),
-              0,
-              null,
-              null,
-              null,
-              0,
-              0,
-              0,
-              null,
-              risk.business_risk,
-              risk.control_risk,
-              risk.risk_cat_id,
-              detail.overview.batch_key,
-            ],
-          );
+              [
+                parentAnswerId,
+                assessmentId,
+                payload,
+                null,
+                employeeId,
+                Number(detail.overview.audit_status_id || 0),
+                0,
+                null,
+                null,
+                null,
+                0,
+                0,
+                0,
+                null,
+                risk.business_risk,
+                risk.control_risk,
+                risk.risk_cat_id,
+                detail.overview.batch_key,
+              ],
+            );
 
           savedRow =
             result.rows[0];
@@ -2177,7 +2697,7 @@ VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
         ],
       );
     } catch (
-      error
+    error
     ) {
       if (
         fs.existsSync(storagePath)
@@ -2714,6 +3234,8 @@ VALUES (
                 row.audit_comment,
               is_compliance:
                 row.is_compliance,
+              audit_compulsary_ev_upload:
+                row.audit_compulsary_ev_upload,
               business_risk:
                 row.business_risk,
               control_risk:
@@ -3940,6 +4462,191 @@ ORDER BY id DESC;
     )?.[0] || 'application/octet-stream';
   }
 
+  private validateSubmissionSets(
+    sets: any[],
+    category: {
+      id: number;
+      name: string;
+      menu_name: string;
+    },
+    issues: any[],
+    compliancePoints: any[],
+  ) {
+
+    let complianceCount = 0;
+
+    for (
+      const set
+      of sets || []
+    ) {
+      for (
+        const header
+        of set.headers || []
+      ) {
+        for (
+          const question
+          of header.questions || []
+        ) {
+
+          const answer =
+            question.answer;
+
+          const issueBase = {
+            category_id:
+              category.id,
+            category_name:
+              category.name,
+            menu_name:
+              category.menu_name,
+            question_id:
+              question.id,
+            question:
+              question.question,
+          };
+
+          if (
+            !answer?.id
+          ) {
+            issues.push({
+              ...issueBase,
+              type:
+                'answer',
+              message:
+                'Answer is pending.',
+            });
+            continue;
+          }
+
+          const isAnnexureAnswer =
+            Number(question.option_id) === 4
+            &&
+            question.annexure_id
+            &&
+            String(answer.answer_given || '')
+            === String(question.annexure_id);
+
+          if (
+            Number(answer.is_compliance || 0) === 1
+          ) {
+            complianceCount++;
+            compliancePoints.push({
+              ...issueBase,
+              answer_given:
+                isAnnexureAnswer
+                  ? 'As per annexure'
+                  : String(answer.answer_given || ''),
+              audit_comment:
+                answer.audit_comment || '',
+            });
+          }
+
+          if (
+            isAnnexureAnswer
+          ) {
+
+            const rows =
+              answer.annexure_rows || [];
+
+            if (
+              !rows.length
+            ) {
+              issues.push({
+                ...issueBase,
+                type:
+                  'annexure',
+                message:
+                  'At least one annexure row is required.',
+              });
+            }
+
+            if (
+              Number(answer.audit_compulsary_ev_upload || 0) === 1
+            ) {
+              for (
+                const row
+                of rows
+              ) {
+                if (
+                  !row.evidence?.id
+                ) {
+                  issues.push({
+                    ...issueBase,
+                    annexure_row_id:
+                      row.id,
+                    type:
+                      'evidence',
+                    message:
+                      'Evidence is pending for an annexure row.',
+                  });
+                }
+              }
+            }
+          } else if (
+            Number(answer.audit_compulsary_ev_upload || 0) === 1
+            &&
+            !answer.evidence?.id
+          ) {
+            issues.push({
+              ...issueBase,
+              type:
+                'evidence',
+              message:
+                'Audit evidence is required.',
+            });
+          }
+
+          if (
+            Number(question.option_id) === 5
+          ) {
+
+            const subsetIds =
+              String(question.subset_multi_id || '')
+                .split(',')
+                .map(
+                  (value) =>
+                    value.trim(),
+                )
+                .filter(Boolean);
+
+            const selectedSubset =
+              (question.subset_sets || [])
+                .find(
+                  (subset: any) =>
+                    String(subset.id)
+                    === String(answer.answer_given || ''),
+                );
+
+            if (
+              selectedSubset
+            ) {
+              complianceCount +=
+                this.validateSubmissionSets(
+                  [selectedSubset],
+                  category,
+                  issues,
+                  compliancePoints,
+                );
+            } else if (
+              subsetIds.includes(
+                String(answer.answer_given || ''),
+              )
+            ) {
+              issues.push({
+                ...issueBase,
+                type:
+                  'subset',
+                message:
+                  'Selected subset questions could not be validated.',
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return complianceCount;
+  }
+
   private getSubsetIdsFromRows(
     rows: any[],
   ) {
@@ -4261,6 +4968,37 @@ ORDER BY id DESC;
 
     return String(value)
       .trim();
+  }
+
+  private async assertAuditorRemarkAccess(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    await this.assertAuthority(
+      assessment.audit_unit_id,
+      employeeId,
+    );
+
+    if (
+      !AUDITOR_STATUS_IDS.includes(
+        Number(
+          assessment.audit_status_id,
+        ),
+      )
+    ) {
+
+      throw new BadRequestException(
+        'Assessment remarks are not pending with auditor.',
+      );
+    }
+
+    return assessment;
   }
 
   private async findAssessment(
