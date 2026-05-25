@@ -4,8 +4,34 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
+import * as fs from 'fs';
+import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 const AUDITOR_STATUS_IDS = [1, 3];
+const EVIDENCE_MAX_SIZE =
+  5 * 1024 * 1024;
+const EVIDENCE_FILE_TYPES: Record<string, {
+  id: number;
+  extension: string;
+}> = {
+  'image/jpeg': {
+    id: 1,
+    extension: '.jpg',
+  },
+  'image/jpg': {
+    id: 2,
+    extension: '.jpg',
+  },
+  'image/png': {
+    id: 3,
+    extension: '.png',
+  },
+  'application/pdf': {
+    id: 4,
+    extension: '.pdf',
+  },
+};
 
 const STATUS_LABELS: Record<number, string> = {
   1: 'AUDIT (PENDING / ACTIVE)',
@@ -1386,6 +1412,11 @@ ORDER BY
       assessmentId,
     );
 
+    await this.attachEvidenceRows(
+      sets,
+      assessmentId,
+    );
+
     const annexureRiskOptions =
       await this.getAnnexureRiskOptions(
         Number(overview.year_id),
@@ -1783,6 +1814,8 @@ ORDER BY
     const rowId =
       Number(body?.id || 0);
 
+    let savedRow: any;
+
     await this.db.transaction(
       async (client) => {
 
@@ -1790,7 +1823,8 @@ ORDER BY
           rowId
         ) {
 
-          await client.query(
+          const result =
+            await client.query(
             `
 UPDATE answers_data_annexure
 SET
@@ -1803,7 +1837,8 @@ SET
 WHERE id = $7
     AND answer_id = $8
     AND assesment_id = $9
-    AND deleted_at IS NULL;
+    AND deleted_at IS NULL
+RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
             `,
             [
               payload,
@@ -1817,9 +1852,13 @@ WHERE id = $7
               assessmentId,
             ],
           );
+
+          savedRow =
+            result.rows[0];
         } else {
 
-          await client.query(
+          const result =
+            await client.query(
             `
 INSERT INTO answers_data_annexure (
     answer_id,
@@ -1844,7 +1883,8 @@ INSERT INTO answers_data_annexure (
 VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8,
     $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
-);
+)
+RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
             `,
             [
               parentAnswerId,
@@ -1867,6 +1907,9 @@ VALUES (
               detail.overview.batch_key,
             ],
           );
+
+          savedRow =
+            result.rows[0];
         }
       },
     );
@@ -1876,6 +1919,25 @@ VALUES (
         true,
       message:
         'Annexure row saved successfully',
+      answer_id:
+        parentAnswerId,
+      row:
+        savedRow
+          ? {
+            id:
+              savedRow.id,
+            values:
+              this.parseJsonArray(
+                savedRow.answer_given,
+              ),
+            business_risk:
+              savedRow.business_risk,
+            control_risk:
+              savedRow.control_risk,
+            risk_cat_id:
+              savedRow.risk_cat_id,
+          }
+          : null,
     };
   }
 
@@ -1930,6 +1992,36 @@ VALUES (
       );
     }
 
+    const activeEvidence =
+      await this.db.findOne(
+        `
+SELECT id
+FROM evidence_master
+WHERE answer_id = $1
+    AND annex_id = $2
+    AND assesment_id = $3
+    AND evi_type = 1
+    AND deleted_at IS NULL
+LIMIT 1;
+        `,
+        [
+          answerId,
+          annexureRowId,
+          assessmentId,
+        ],
+      );
+
+    if (
+      activeEvidence?.id
+    ) {
+      return {
+        success:
+          false,
+        message:
+          'Remove the evidence before deleting this annexure row.',
+      };
+    }
+
     await this.db.query(
       `
 UPDATE answers_data_annexure
@@ -1951,6 +2043,266 @@ WHERE id = $1
         true,
       message:
         'Annexure row deleted successfully',
+    };
+  }
+
+  async uploadEvidence(
+    assessmentId: number,
+    categoryId: number,
+    questionId: number,
+    annexureRowId: number,
+    employeeId: number,
+    file: {
+      filename: string;
+      mimetype: string;
+      buffer: Buffer;
+    },
+  ) {
+
+    const evidenceType =
+      EVIDENCE_FILE_TYPES[file?.mimetype];
+
+    if (
+      !evidenceType
+    ) {
+      return {
+        success:
+          false,
+        message:
+          'Only JPG, JPEG, PNG and PDF evidence files are allowed.',
+      };
+    }
+
+    if (
+      !file?.buffer?.length
+      ||
+      file.buffer.length > EVIDENCE_MAX_SIZE
+    ) {
+      return {
+        success:
+          false,
+        message:
+          'Evidence file size must be less than or equal to 5 MB.',
+      };
+    }
+
+    const target =
+      await this.getEvidenceTarget(
+        assessmentId,
+        categoryId,
+        questionId,
+        annexureRowId,
+        employeeId,
+      );
+
+    const existing =
+      await this.db.findOne(
+        `
+SELECT id
+FROM evidence_master
+WHERE answer_id = $1
+    AND annex_id = $2
+    AND assesment_id = $3
+    AND evi_type = 1
+    AND deleted_at IS NULL
+LIMIT 1;
+        `,
+        [
+          target.answerId,
+          annexureRowId,
+          assessmentId,
+        ],
+      );
+
+    if (
+      existing?.id
+    ) {
+      return {
+        success:
+          false,
+        message:
+          'Evidence document already uploaded. Please remove it before uploading another file.',
+      };
+    }
+
+    const storedName =
+      `${randomUUID()}${evidenceType.extension}`;
+
+    const storagePath =
+      this.getEvidenceStoragePath(
+        assessmentId,
+        storedName,
+      );
+
+    fs.mkdirSync(
+      path.dirname(storagePath),
+      {
+        recursive: true,
+      },
+    );
+
+    fs.writeFileSync(
+      storagePath,
+      file.buffer,
+    );
+
+    try {
+      await this.db.query(
+        `
+INSERT INTO evidence_master (
+    answer_id,
+    annex_id,
+    assesment_id,
+    evi_type,
+    file_name,
+    file_type,
+    description,
+    emp_id,
+    status_id,
+    review_emp_id,
+    deleted_by_emp_id,
+    created_at,
+    updated_at
+)
+VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
+        `,
+        [
+          target.answerId,
+          annexureRowId,
+          assessmentId,
+          storedName,
+          evidenceType.id,
+          file.filename || null,
+          employeeId,
+        ],
+      );
+    } catch (
+      error
+    ) {
+      if (
+        fs.existsSync(storagePath)
+      ) {
+        fs.unlinkSync(storagePath);
+      }
+
+      throw error;
+    }
+
+    return {
+      success:
+        true,
+      message:
+        'Evidence uploaded successfully.',
+    };
+  }
+
+  async getEvidenceFile(
+    assessmentId: number,
+    categoryId: number,
+    evidenceId: number,
+    employeeId: number,
+  ) {
+
+    const evidence =
+      await this.findAccessibleEvidence(
+        assessmentId,
+        categoryId,
+        evidenceId,
+        employeeId,
+      );
+
+    const filePath =
+      this.getEvidenceStoragePath(
+        assessmentId,
+        evidence.file_name,
+      );
+
+    if (
+      !fs.existsSync(filePath)
+    ) {
+      throw new NotFoundException(
+        'Evidence file not found',
+      );
+    }
+
+    return {
+      path:
+        filePath,
+      filename:
+        path.basename(
+          String(
+            evidence.description || evidence.file_name,
+          ),
+        ).replace(
+          /["\r\n]/g,
+          '_',
+        ),
+      mimetype:
+        this.getEvidenceMimetype(
+          Number(evidence.file_type),
+        ),
+    };
+  }
+
+  async deleteEvidence(
+    assessmentId: number,
+    categoryId: number,
+    evidenceId: number,
+    employeeId: number,
+  ) {
+
+    const evidence =
+      await this.findAccessibleEvidence(
+        assessmentId,
+        categoryId,
+        evidenceId,
+        employeeId,
+      );
+
+    if (
+      Number(evidence.status_id) !== 0
+    ) {
+      return {
+        success:
+          false,
+        message:
+          'Reviewed evidence cannot be removed.',
+      };
+    }
+
+    await this.db.query(
+      `
+UPDATE evidence_master
+SET
+    deleted_by_emp_id = $1,
+    deleted_at = NOW(),
+    updated_at = NOW()
+WHERE id = $2
+    AND deleted_at IS NULL;
+      `,
+      [
+        employeeId,
+        evidenceId,
+      ],
+    );
+
+    const filePath =
+      this.getEvidenceStoragePath(
+        assessmentId,
+        evidence.file_name,
+      );
+
+    if (
+      fs.existsSync(filePath)
+    ) {
+      fs.unlinkSync(filePath);
+    }
+
+    return {
+      success:
+        true,
+      message:
+        'Evidence removed successfully.',
     };
   }
 
@@ -3336,6 +3688,256 @@ ORDER BY id;
           rowsByAnswer.get(answerId) || [];
       }
     }
+  }
+
+  private async attachEvidenceRows(
+    sets: any[],
+    assessmentId: number,
+  ) {
+
+    const questionMap =
+      new Map<number, any>();
+
+    this.collectQuestions(
+      sets,
+      questionMap,
+    );
+
+    const answerIds =
+      Array.from(
+        questionMap.values(),
+      )
+        .map(
+          (question: any) =>
+            Number(question.answer?.id || 0),
+        )
+        .filter(Boolean);
+
+    if (
+      !answerIds.length
+    ) {
+      return;
+    }
+
+    const result =
+      await this.db.query(
+        `
+SELECT
+    id,
+    answer_id,
+    annex_id,
+    file_name,
+    file_type,
+    description,
+    status_id
+FROM evidence_master
+WHERE assesment_id = $1
+    AND answer_id = ANY($2::int[])
+    AND evi_type = 1
+    AND deleted_at IS NULL
+ORDER BY id DESC;
+        `,
+        [
+          assessmentId,
+          answerIds,
+        ],
+      );
+
+    const evidenceByTarget =
+      new Map<string, any>();
+
+    for (
+      const row
+      of result.rows
+    ) {
+      evidenceByTarget.set(
+        `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`,
+        row,
+      );
+    }
+
+    for (
+      const question
+      of questionMap.values()
+    ) {
+
+      const answerId =
+        Number(question.answer?.id || 0);
+
+      if (
+        !answerId
+      ) {
+        continue;
+      }
+
+      question.answer.evidence =
+        evidenceByTarget.get(
+          `${answerId}:0`,
+        ) || null;
+
+      for (
+        const row
+        of question.answer.annexure_rows || []
+      ) {
+        row.evidence =
+          evidenceByTarget.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || null;
+      }
+    }
+  }
+
+  private async getEvidenceTarget(
+    assessmentId: number,
+    categoryId: number,
+    questionId: number,
+    annexureRowId: number,
+    employeeId: number,
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+      );
+
+    const questionMap =
+      new Map<number, any>();
+
+    this.collectQuestions(
+      detail.sets,
+      questionMap,
+    );
+
+    const question =
+      questionMap.get(questionId);
+
+    const answerId =
+      Number(question?.answer?.id || 0);
+
+    if (
+      !question
+      ||
+      !answerId
+    ) {
+      throw new BadRequestException(
+        'Save the answer before uploading evidence.',
+      );
+    }
+
+    if (
+      !annexureRowId
+      &&
+      Number(question.option_id) === 4
+      &&
+      question.annexure_id
+      &&
+      String(question.answer?.answer_given || '')
+      === String(question.annexure_id)
+    ) {
+      throw new BadRequestException(
+        'Upload evidence against an annexure row.',
+      );
+    }
+
+    if (
+      annexureRowId
+      &&
+      !(question.answer.annexure_rows || [])
+        .some(
+          (row: any) =>
+            Number(row.id) === annexureRowId,
+        )
+    ) {
+      throw new BadRequestException(
+        'Annexure row not found',
+      );
+    }
+
+    return {
+      question,
+      answerId,
+    };
+  }
+
+  private async findAccessibleEvidence(
+    assessmentId: number,
+    categoryId: number,
+    evidenceId: number,
+    employeeId: number,
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+      );
+
+    const questionMap =
+      new Map<number, any>();
+
+    this.collectQuestions(
+      detail.sets,
+      questionMap,
+    );
+
+    for (
+      const question
+      of questionMap.values()
+    ) {
+      if (
+        Number(question.answer?.evidence?.id || 0)
+        === evidenceId
+      ) {
+        return question.answer.evidence;
+      }
+
+      const evidence =
+        (question.answer?.annexure_rows || [])
+          .find(
+            (row: any) =>
+              Number(row.evidence?.id || 0)
+              === evidenceId,
+          )?.evidence;
+
+      if (
+        evidence
+      ) {
+        return evidence;
+      }
+    }
+
+    throw new NotFoundException(
+      'Evidence not found',
+    );
+  }
+
+  private getEvidenceStoragePath(
+    assessmentId: number,
+    filename: string,
+  ) {
+
+    return path.join(
+      process.cwd(),
+      'uploads',
+      'audit-evidence',
+      `evi_audit_${assessmentId}`,
+      path.basename(filename),
+    );
+  }
+
+  private getEvidenceMimetype(
+    fileType: number,
+  ) {
+
+    return Object.entries(
+      EVIDENCE_FILE_TYPES,
+    ).find(
+      ([, type]) =>
+        type.id === fileType,
+    )?.[0] || 'application/octet-stream';
   }
 
   private getSubsetIdsFromRows(

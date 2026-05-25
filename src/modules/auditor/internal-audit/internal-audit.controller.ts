@@ -7,9 +7,11 @@ import {
   Post,
   Query,
   Req,
+  Res,
 } from '@nestjs/common';
 import { InternalAuditService } from './internal-audit.service';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import * as fs from 'fs';
 import '@fastify/multipart';
 
 @Controller('internal-audit')
@@ -214,6 +216,120 @@ export class InternalAuditController {
     );
   }
 
+  @Post(':assessmentId/category/:categoryId/question/:questionId/evidence/upload')
+  async uploadQuestionEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Param('questionId', ParseIntPipe)
+    questionId: number,
+
+    @Req()
+    req: FastifyRequest,
+  ) {
+
+    return this.receiveEvidenceUpload(
+      assessmentId,
+      categoryId,
+      questionId,
+      0,
+      req,
+    );
+  }
+
+  @Post(':assessmentId/category/:categoryId/question/:questionId/annexure/:annexureRowId/evidence/upload')
+  async uploadAnnexureEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Param('questionId', ParseIntPipe)
+    questionId: number,
+
+    @Param('annexureRowId', ParseIntPipe)
+    annexureRowId: number,
+
+    @Req()
+    req: FastifyRequest,
+  ) {
+
+    return this.receiveEvidenceUpload(
+      assessmentId,
+      categoryId,
+      questionId,
+      annexureRowId,
+      req,
+    );
+  }
+
+  @Get(':assessmentId/category/:categoryId/evidence/:evidenceId/view')
+  async viewEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Param('evidenceId', ParseIntPipe)
+    evidenceId: number,
+
+    @Query('employee_id')
+    employeeId: string,
+
+    @Res()
+    reply: FastifyReply,
+  ) {
+
+    const evidence =
+      await this.service.getEvidenceFile(
+        assessmentId,
+        categoryId,
+        evidenceId,
+        Number(employeeId || 0),
+      );
+
+    reply.header(
+      'Content-Type',
+      evidence.mimetype,
+    );
+    reply.header(
+      'Content-Disposition',
+      `inline; filename="${evidence.filename}"`,
+    );
+
+    return reply.send(
+      fs.createReadStream(evidence.path),
+    );
+  }
+
+  @Post(':assessmentId/category/:categoryId/evidence/:evidenceId/delete')
+  deleteEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Param('evidenceId', ParseIntPipe)
+    evidenceId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.deleteEvidence(
+      assessmentId,
+      categoryId,
+      evidenceId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
   @Get('unit/:auditUnitId')
   getAuditUnitDashboard(
     @Param('auditUnitId', ParseIntPipe)
@@ -264,6 +380,50 @@ export class InternalAuditController {
       auditUnitId,
       yearId,
       Number(body?.employee_id || 0),
+    );
+  }
+
+  private async receiveEvidenceUpload(
+    assessmentId: number,
+    categoryId: number,
+    questionId: number,
+    annexureRowId: number,
+    req: FastifyRequest,
+  ) {
+
+    const part =
+      await req.file();
+
+    if (!part) {
+      return {
+        success:
+          false,
+        message:
+          'Please select evidence file.',
+      };
+    }
+
+    const fields: any = {};
+
+    for (const key in part.fields) {
+      fields[key] =
+        (part.fields as any)[key]?.value;
+    }
+
+    return this.service.uploadEvidence(
+      assessmentId,
+      categoryId,
+      questionId,
+      annexureRowId,
+      Number(fields.employee_id || 0),
+      {
+        filename:
+          part.filename,
+        mimetype:
+          part.mimetype,
+        buffer:
+          await part.toBuffer(),
+      },
     );
   }
 }
