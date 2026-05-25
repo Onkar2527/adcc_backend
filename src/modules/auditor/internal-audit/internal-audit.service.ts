@@ -9,6 +9,15 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 
 const AUDITOR_STATUS_IDS = [1, 3];
+const REMARK_TYPES: Record<number, string> = {
+  1: 'Remark for Auditor',
+  2: 'Remark for Reviewer',
+  3: 'Remark for Compliance',
+  4: 'Remark for Reviewer & Compliance',
+  5: 'Remark for Auditor & Compliance',
+};
+const AUDITOR_REMARK_RECIPIENT_IDS = [2, 3, 4];
+const AUDITOR_INCOMING_REMARK_IDS = [1, 5];
 const EVIDENCE_MAX_SIZE =
   5 * 1024 * 1024;
 const EVIDENCE_FILE_TYPES: Record<string, {
@@ -687,7 +696,296 @@ ORDER BY year_id DESC, id ASC;
           auditStatusId,
           isBlocked,
           isExpired,
+      ),
+    };
+  }
+
+  async getRemarks(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    const assessment =
+      await this.assertAuditorRemarkAccess(
+        assessmentId,
+        employeeId,
+      );
+
+    const result =
+      await this.db.query(
+        `
+SELECT
+    ar.id,
+    ar.subject,
+    ar.message,
+    ar.noti_type,
+    ar.admin_id,
+    ar.created_at,
+    em.name AS author_name,
+    em.emp_code AS author_code,
+    EXISTS (
+        SELECT 1
+        FROM audit_remark_status ars
+        WHERE ars.noti_id = ar.id
+    ) AS has_been_read
+FROM audit_remarks ar
+LEFT JOIN employee_master em
+    ON em.id = ar.admin_id
+WHERE ar.assesment_id = $1
+    AND ar.deleted_at IS NULL
+    AND (
+        ar.admin_id = $2
+        OR ar.noti_type = ANY($3::int[])
+    )
+ORDER BY ar.id DESC;
+        `,
+        [
+          assessmentId,
+          employeeId,
+          AUDITOR_INCOMING_REMARK_IDS,
+        ],
+      );
+
+    const remarks =
+      result.rows.map(
+        (remark: any) => ({
+          ...remark,
+          noti_type_label:
+            REMARK_TYPES[
+            Number(remark.noti_type)
+            ]
+            || 'Remark',
+          can_delete:
+            Number(remark.admin_id)
+            === employeeId
+            &&
+            !remark.has_been_read,
+          is_unread:
+            Number(remark.admin_id)
+            !== employeeId
+            &&
+            !remark.has_been_read,
+        }),
+      );
+
+    return {
+      assessment_id:
+        assessment.id,
+      remark_types:
+        AUDITOR_REMARK_RECIPIENT_IDS.map(
+          (id) => ({
+            id,
+            name:
+              REMARK_TYPES[id],
+          }),
         ),
+      current:
+        remarks.filter(
+          (remark: any) =>
+            Number(remark.admin_id)
+            === employeeId,
+        ),
+      other:
+        remarks.filter(
+          (remark: any) =>
+            Number(remark.admin_id)
+            !== employeeId,
+        ),
+      unread_count:
+        remarks.filter(
+          (remark: any) =>
+            remark.is_unread,
+        ).length,
+    };
+  }
+
+  async saveRemark(
+    assessmentId: number,
+    employeeId: number,
+    payload: any,
+  ) {
+
+    await this.assertAuditorRemarkAccess(
+      assessmentId,
+      employeeId,
+    );
+
+    const notiType =
+      Number(payload?.noti_type || 0);
+    const subject =
+      String(payload?.subject || '')
+        .trim();
+    const message =
+      String(payload?.message || '')
+        .trim();
+
+    if (
+      !AUDITOR_REMARK_RECIPIENT_IDS.includes(
+        notiType,
+      )
+    ) {
+
+      throw new BadRequestException(
+        'Please select a valid remark type.',
+      );
+    }
+
+    if (
+      !subject
+    ) {
+
+      throw new BadRequestException(
+        'Remark subject is required.',
+      );
+    }
+
+    if (
+      !message
+    ) {
+
+      throw new BadRequestException(
+        'Remark message is required.',
+      );
+    }
+
+    await this.db.query(
+      `
+INSERT INTO audit_remarks (
+    subject,
+    message,
+    noti_type,
+    assesment_id,
+    admin_id
+) VALUES ($1, $2, $3, $4, $5);
+      `,
+      [
+        subject,
+        message,
+        notiType,
+        assessmentId,
+        employeeId,
+      ],
+    );
+
+    return {
+      success: true,
+      message:
+        'Assessment remark saved successfully.',
+    };
+  }
+
+  async markRemarkRead(
+    assessmentId: number,
+    remarkId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertAuditorRemarkAccess(
+      assessmentId,
+      employeeId,
+    );
+
+    const remark =
+      await this.db.query(
+        `
+SELECT id
+FROM audit_remarks
+WHERE id = $1
+    AND assesment_id = $2
+    AND admin_id <> $3
+    AND noti_type = ANY($4::int[])
+    AND deleted_at IS NULL
+LIMIT 1;
+        `,
+        [
+          remarkId,
+          assessmentId,
+          employeeId,
+          AUDITOR_INCOMING_REMARK_IDS,
+        ],
+      );
+
+    if (
+      !remark.rows.length
+    ) {
+
+      throw new NotFoundException(
+        'Remark not found.',
+      );
+    }
+
+    await this.db.query(
+      `
+INSERT INTO audit_remark_status (
+    noti_id,
+    emp_id,
+    readed_at
+)
+SELECT $1, $2, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM audit_remark_status
+    WHERE noti_id = $1
+        AND emp_id = $2
+);
+      `,
+      [
+        remarkId,
+        employeeId,
+      ],
+    );
+
+    return {
+      success: true,
+    };
+  }
+
+  async deleteRemark(
+    assessmentId: number,
+    remarkId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertAuditorRemarkAccess(
+      assessmentId,
+      employeeId,
+    );
+
+    const result =
+      await this.db.query(
+        `
+DELETE FROM audit_remarks ar
+WHERE ar.id = $1
+    AND ar.assesment_id = $2
+    AND ar.admin_id = $3
+    AND ar.deleted_at IS NULL
+    AND NOT EXISTS (
+        SELECT 1
+        FROM audit_remark_status ars
+        WHERE ars.noti_id = ar.id
+    )
+RETURNING ar.id;
+        `,
+        [
+          remarkId,
+          assessmentId,
+          employeeId,
+        ],
+      );
+
+    if (
+      !result.rows.length
+    ) {
+
+      throw new BadRequestException(
+        'This remark was already read or cannot be removed.',
+      );
+    }
+
+    return {
+      success: true,
+      message:
+        'Assessment remark removed successfully.',
     };
   }
 
@@ -4670,6 +4968,37 @@ ORDER BY id DESC;
 
     return String(value)
       .trim();
+  }
+
+  private async assertAuditorRemarkAccess(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    await this.assertAuthority(
+      assessment.audit_unit_id,
+      employeeId,
+    );
+
+    if (
+      !AUDITOR_STATUS_IDS.includes(
+        Number(
+          assessment.audit_status_id,
+        ),
+      )
+    ) {
+
+      throw new BadRequestException(
+        'Assessment remarks are not pending with auditor.',
+      );
+    }
+
+    return assessment;
   }
 
   private async findAssessment(

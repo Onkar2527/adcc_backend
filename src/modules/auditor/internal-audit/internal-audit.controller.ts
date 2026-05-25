@@ -81,6 +81,75 @@ export class InternalAuditController {
     );
   }
 
+  @Get(':assessmentId/remarks')
+  getRemarks(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Query('employee_id')
+    employeeId?: string,
+  ) {
+
+    return this.service.getRemarks(
+      assessmentId,
+      Number(employeeId || 0),
+    );
+  }
+
+  @Post(':assessmentId/remarks')
+  saveRemark(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.saveRemark(
+      assessmentId,
+      Number(body?.employee_id || 0),
+      body || {},
+    );
+  }
+
+  @Post(':assessmentId/remarks/:remarkId/read')
+  markRemarkRead(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('remarkId', ParseIntPipe)
+    remarkId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.markRemarkRead(
+      assessmentId,
+      remarkId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
+  @Post(':assessmentId/remarks/:remarkId/delete')
+  deleteRemark(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('remarkId', ParseIntPipe)
+    remarkId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.deleteRemark(
+      assessmentId,
+      remarkId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
   @Get(':assessmentId/category/:categoryId')
   getCategory(
     @Param('assessmentId', ParseIntPipe)
