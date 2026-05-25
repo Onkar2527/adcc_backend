@@ -51,6 +51,36 @@ export class InternalAuditController {
     );
   }
 
+  @Get(':assessmentId/submission-preview')
+  getSubmissionPreview(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Query('employee_id')
+    employeeId?: string,
+  ) {
+
+    return this.service.getSubmissionPreview(
+      assessmentId,
+      Number(employeeId || 0),
+    );
+  }
+
+  @Post(':assessmentId/submit')
+  submitAssessment(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.submitAssessment(
+      assessmentId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
   @Get(':assessmentId/category/:categoryId')
   getCategory(
     @Param('assessmentId', ParseIntPipe)
