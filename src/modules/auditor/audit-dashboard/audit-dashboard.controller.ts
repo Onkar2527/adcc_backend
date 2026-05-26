@@ -107,14 +107,14 @@ export class AuditDashboardController {
     );
 
   }
-  @Get('branch-financial-position/:branch_id')
+  @Get('branch-financial-position/:assessmentId')
   async getBranchFinancialPosition(
-    @Param('branch_id')
-    branch_id: number,
+    @Param('assessmentId')
+    assessmentId: number,
   ) {
 
     return this.service.getBranchFinancialPosition(
-      Number(branch_id),
+      Number(assessmentId),
     );
 
   }

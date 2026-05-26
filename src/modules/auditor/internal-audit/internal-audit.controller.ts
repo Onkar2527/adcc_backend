@@ -21,6 +21,315 @@ export class InternalAuditController {
       InternalAuditService,
   ) { }
 
+  @Get('reviewer/pending')
+  getReviewerPending(
+    @Query('employee_id')
+    employeeId?: string,
+  ) {
+
+    return this.service.getReviewerPending(
+      Number(employeeId || 0),
+    );
+  }
+
+  @Get('reviewer/compliance/:assessmentId')
+  getReviewerComplianceAssessment(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Query('employee_id')
+    employeeId?: string,
+  ) {
+
+    return this.service.getReviewerComplianceAssessment(
+      assessmentId,
+      Number(employeeId || 0),
+    );
+  }
+
+  @Get('reviewer/compliance/:assessmentId/evidence/:evidenceId/view')
+  async viewReviewerComplianceEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('evidenceId', ParseIntPipe)
+    evidenceId: number,
+
+    @Query('employee_id')
+    employeeId: string,
+
+    @Res()
+    reply: FastifyReply,
+  ) {
+
+    const evidence =
+      await this.service.getReviewerComplianceEvidenceFile(
+        assessmentId,
+        evidenceId,
+        Number(employeeId || 0),
+      );
+
+    reply.header(
+      'Content-Type',
+      evidence.mimetype,
+    );
+    reply.header(
+      'Content-Disposition',
+      `inline; filename="${evidence.filename}"`,
+    );
+
+    return reply.send(
+      fs.createReadStream(evidence.path),
+    );
+  }
+
+  @Post('reviewer/compliance/:assessmentId/observation/:targetType/:observationId/action')
+  saveReviewerComplianceAction(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('targetType')
+    targetType: string,
+
+    @Param('observationId', ParseIntPipe)
+    observationId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.saveReviewerComplianceAction(
+      assessmentId,
+      targetType,
+      observationId,
+      Number(body?.employee_id || 0),
+      Number(body?.action || 0),
+      String(body?.comment || ''),
+    );
+  }
+
+  @Post('reviewer/compliance/:assessmentId/submit')
+  submitReviewerComplianceAssessment(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.submitReviewerComplianceAssessment(
+      assessmentId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
+  @Get('reviewer/:assessmentId')
+  getReviewerAssessment(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Query('employee_id')
+    employeeId?: string,
+  ) {
+
+    return this.service.getReviewerAssessment(
+      assessmentId,
+      Number(employeeId || 0),
+    );
+  }
+
+  @Get('reviewer/:assessmentId/evidence/:evidenceId/view')
+  async viewReviewerEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('evidenceId', ParseIntPipe)
+    evidenceId: number,
+
+    @Query('employee_id')
+    employeeId: string,
+
+    @Res()
+    reply: FastifyReply,
+  ) {
+
+    const evidence =
+      await this.service.getReviewerEvidenceFile(
+        assessmentId,
+        evidenceId,
+        Number(employeeId || 0),
+      );
+
+    reply.header(
+      'Content-Type',
+      evidence.mimetype,
+    );
+    reply.header(
+      'Content-Disposition',
+      `inline; filename="${evidence.filename}"`,
+    );
+
+    return reply.send(
+      fs.createReadStream(evidence.path),
+    );
+  }
+
+  @Post('reviewer/:assessmentId/observation/:targetType/:observationId/action')
+  saveReviewerAction(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('targetType')
+    targetType: string,
+
+    @Param('observationId', ParseIntPipe)
+    observationId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.saveReviewerAction(
+      assessmentId,
+      targetType,
+      observationId,
+      Number(body?.employee_id || 0),
+      Number(body?.action || 0),
+      String(body?.comment || ''),
+    );
+  }
+
+  @Post('reviewer/:assessmentId/submit')
+  submitReviewerAssessment(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.submitReviewerAssessment(
+      assessmentId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
+  @Get('compliance/pending')
+  getCompliancePending(
+    @Query('employee_id')
+    employeeId?: string,
+  ) {
+
+    return this.service.getCompliancePending(
+      Number(employeeId || 0),
+    );
+  }
+
+  @Get('compliance/:assessmentId')
+  getComplianceAssessment(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Query('employee_id')
+    employeeId?: string,
+  ) {
+
+    return this.service.getComplianceAssessment(
+      assessmentId,
+      Number(employeeId || 0),
+    );
+  }
+
+  @Get('compliance/:assessmentId/evidence/:evidenceId/view')
+  async viewComplianceEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('evidenceId', ParseIntPipe)
+    evidenceId: number,
+
+    @Query('employee_id')
+    employeeId: string,
+
+    @Res()
+    reply: FastifyReply,
+  ) {
+
+    const evidence =
+      await this.service.getComplianceEvidenceFile(
+        assessmentId,
+        evidenceId,
+        Number(employeeId || 0),
+      );
+
+    reply.header(
+      'Content-Type',
+      evidence.mimetype,
+    );
+    reply.header(
+      'Content-Disposition',
+      `inline; filename="${evidence.filename}"`,
+    );
+
+    return reply.send(
+      fs.createReadStream(evidence.path),
+    );
+  }
+
+  @Post('compliance/:assessmentId/observation/:targetType/:observationId/response')
+  saveComplianceResponse(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('targetType')
+    targetType: string,
+
+    @Param('observationId', ParseIntPipe)
+    observationId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.saveComplianceResponse(
+      assessmentId,
+      targetType,
+      observationId,
+      Number(body?.employee_id || 0),
+      String(body?.response || ''),
+    );
+  }
+
+  @Get('compliance/:assessmentId/submission-preview')
+  getComplianceSubmissionPreview(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Query('employee_id')
+    employeeId?: string,
+  ) {
+
+    return this.service.getComplianceSubmissionPreview(
+      assessmentId,
+      Number(employeeId || 0),
+    );
+  }
+
+  @Post('compliance/:assessmentId/submit')
+  submitComplianceAssessment(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.submitComplianceAssessment(
+      assessmentId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
   @Get(':assessmentId/overview')
   getOverview(
     @Param('assessmentId', ParseIntPipe)

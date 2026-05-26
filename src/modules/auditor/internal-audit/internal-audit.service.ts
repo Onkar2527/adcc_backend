@@ -72,21 +72,21 @@ export class InternalAuditService {
     const unitResult =
       await this.db.query(
         `
-SELECT
-    au.id,
-    au.audit_unit_code,
-    au.name,
-    au.section_type_id,
-    au.frequency,
-    au.last_audit_date,
-    asm.name AS section_type_name
-FROM audit_unit_master au
-LEFT JOIN audit_section_master asm
-    ON asm.id = au.section_type_id
-WHERE au.id = $1
-    AND au.is_active = 1
-    AND au.deleted_at IS NULL
-LIMIT 1;
+        SELECT
+            au.id,
+            au.audit_unit_code,
+            au.name,
+            au.section_type_id,
+            au.frequency,
+            au.last_audit_date,
+            asm.name AS section_type_name
+        FROM audit_unit_master au
+        LEFT JOIN audit_section_master asm
+            ON asm.id = au.section_type_id
+        WHERE au.id = $1
+            AND au.is_active = 1
+            AND au.deleted_at IS NULL
+        LIMIT 1;
         `,
         [auditUnitId],
       );
@@ -103,10 +103,10 @@ LIMIT 1;
     const yearsResult =
       await this.db.query(
         `
-SELECT id, year
-FROM year_master
-WHERE deleted_at IS NULL
-ORDER BY id DESC;
+        SELECT id, year
+        FROM year_master
+        WHERE deleted_at IS NULL
+        ORDER BY id DESC;
         `,
       );
 
@@ -116,22 +116,22 @@ ORDER BY id DESC;
     const assessmentResult =
       await this.db.query(
         `
-SELECT
-    id,
-    year_id,
-    audit_unit_id,
-    frequency,
-    audit_status_id,
-    assesment_period_from,
-    assesment_period_to,
-    audit_due_date,
-    compliance_due_date,
-    is_limit_blocked,
-    compliance_onhold_count
-FROM audit_assesment_master
-WHERE audit_unit_id = $1
-    AND deleted_at IS NULL
-ORDER BY year_id DESC, id ASC;
+        SELECT
+            id,
+            year_id,
+            audit_unit_id,
+            frequency,
+            audit_status_id,
+            assesment_period_from,
+            assesment_period_to,
+            audit_due_date,
+            compliance_due_date,
+            is_limit_blocked,
+            compliance_onhold_count
+        FROM audit_assesment_master
+        WHERE audit_unit_id = $1
+            AND deleted_at IS NULL
+        ORDER BY year_id DESC, id ASC;
         `,
         [auditUnitId],
       );
@@ -696,9 +696,11 @@ ORDER BY year_id DESC, id ASC;
           auditStatusId,
           isBlocked,
           isExpired,
-      ),
+        ),
     };
   }
+
+  // Audit Remarks
 
   async getRemarks(
     assessmentId: number,
@@ -714,30 +716,30 @@ ORDER BY year_id DESC, id ASC;
     const result =
       await this.db.query(
         `
-SELECT
-    ar.id,
-    ar.subject,
-    ar.message,
-    ar.noti_type,
-    ar.admin_id,
-    ar.created_at,
-    em.name AS author_name,
-    em.emp_code AS author_code,
-    EXISTS (
-        SELECT 1
-        FROM audit_remark_status ars
-        WHERE ars.noti_id = ar.id
-    ) AS has_been_read
-FROM audit_remarks ar
-LEFT JOIN employee_master em
-    ON em.id = ar.admin_id
-WHERE ar.assesment_id = $1
-    AND ar.deleted_at IS NULL
-    AND (
-        ar.admin_id = $2
-        OR ar.noti_type = ANY($3::int[])
-    )
-ORDER BY ar.id DESC;
+        SELECT
+            ar.id,
+            ar.subject,
+            ar.message,
+            ar.noti_type,
+            ar.admin_id,
+            ar.created_at,
+            em.name AS author_name,
+            em.emp_code AS author_code,
+            EXISTS (
+                SELECT 1
+                FROM audit_remark_status ars
+                WHERE ars.noti_id = ar.id
+            ) AS has_been_read
+        FROM audit_remarks ar
+        LEFT JOIN employee_master em
+            ON em.id = ar.admin_id
+        WHERE ar.assesment_id = $1
+            AND ar.deleted_at IS NULL
+            AND (
+                ar.admin_id = $2
+                OR ar.noti_type = ANY($3::int[])
+            )
+        ORDER BY ar.id DESC;
         `,
         [
           assessmentId,
@@ -850,13 +852,13 @@ ORDER BY ar.id DESC;
 
     await this.db.query(
       `
-INSERT INTO audit_remarks (
-    subject,
-    message,
-    noti_type,
-    assesment_id,
-    admin_id
-) VALUES ($1, $2, $3, $4, $5);
+      INSERT INTO audit_remarks (
+          subject,
+          message,
+          noti_type,
+          assesment_id,
+          admin_id
+      ) VALUES ($1, $2, $3, $4, $5);
       `,
       [
         subject,
@@ -888,14 +890,14 @@ INSERT INTO audit_remarks (
     const remark =
       await this.db.query(
         `
-SELECT id
-FROM audit_remarks
-WHERE id = $1
-    AND assesment_id = $2
-    AND admin_id <> $3
-    AND noti_type = ANY($4::int[])
-    AND deleted_at IS NULL
-LIMIT 1;
+        SELECT id
+        FROM audit_remarks
+        WHERE id = $1
+            AND assesment_id = $2
+            AND admin_id <> $3
+            AND noti_type = ANY($4::int[])
+            AND deleted_at IS NULL
+        LIMIT 1;
         `,
         [
           remarkId,
@@ -916,18 +918,18 @@ LIMIT 1;
 
     await this.db.query(
       `
-INSERT INTO audit_remark_status (
-    noti_id,
-    emp_id,
-    readed_at
-)
-SELECT $1, $2, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM audit_remark_status
-    WHERE noti_id = $1
-        AND emp_id = $2
-);
+      INSERT INTO audit_remark_status (
+          noti_id,
+          emp_id,
+          readed_at
+      )
+      SELECT $1, $2, CURRENT_TIMESTAMP
+      WHERE NOT EXISTS (
+          SELECT 1
+          FROM audit_remark_status
+          WHERE noti_id = $1
+              AND emp_id = $2
+      );
       `,
       [
         remarkId,
@@ -954,17 +956,17 @@ WHERE NOT EXISTS (
     const result =
       await this.db.query(
         `
-DELETE FROM audit_remarks ar
-WHERE ar.id = $1
-    AND ar.assesment_id = $2
-    AND ar.admin_id = $3
-    AND ar.deleted_at IS NULL
-    AND NOT EXISTS (
-        SELECT 1
-        FROM audit_remark_status ars
-        WHERE ars.noti_id = ar.id
-    )
-RETURNING ar.id;
+        DELETE FROM audit_remarks ar
+        WHERE ar.id = $1
+            AND ar.assesment_id = $2
+            AND ar.admin_id = $3
+            AND ar.deleted_at IS NULL
+            AND NOT EXISTS (
+                SELECT 1
+                FROM audit_remark_status ars
+                WHERE ars.noti_id = ar.id
+            )
+        RETURNING ar.id;
         `,
         [
           remarkId,
@@ -989,6 +991,8 @@ RETURNING ar.id;
     };
   }
 
+  // Menu
+
   async getMenu(
     assessmentId: number,
     employeeId: number,
@@ -1010,241 +1014,248 @@ RETURNING ar.id;
       };
     }
 
+    const reAuditScope =
+      Number(overview.audit_status_id) === 3
+        ? await this.getReAuditScope(
+          assessmentId,
+        )
+        : null;
+
     const query = `
 
-SELECT
+      SELECT
 
-    mm.id AS menu_id,
-    mm.name AS menu_name,
+          mm.id AS menu_id,
+          mm.name AS menu_name,
 
-    cm.id AS category_id,
-    cm.name AS category_name,
-    cm.linked_table_id,
+          cm.id AS category_id,
+          cm.name AS category_name,
+          cm.linked_table_id,
 
-    qsm.id AS question_set_id,
-    qsm.name AS question_set_name,
+          qsm.id AS question_set_id,
+          qsm.name AS question_set_name,
 
-    qhm.id AS header_id,
-    qhm.name AS header_name,
+          qhm.id AS header_id,
+          qhm.name AS header_name,
 
-    COUNT(DISTINCT qm.id)
-        AS question_count,
+          COUNT(DISTINCT qm.id)
+              AS question_count,
 
-    COUNT(DISTINCT ans.id)
-        AS answered_count,
+          COUNT(DISTINCT ans.id)
+              AS answered_count,
 
-    q.questions
+          q.questions
 
-FROM menu_master mm
+      FROM menu_master mm
 
-LEFT JOIN category_master cm
-    ON cm.menu_id = mm.id
-    AND cm.is_active = 1
-    AND cm.deleted_at IS NULL
-    AND (
-        $2 = ''
-        OR cm.id::text = ANY(
-            string_to_array($2, ',')
-        )
-    )
+      LEFT JOIN category_master cm
+          ON cm.menu_id = mm.id
+          AND cm.is_active = 1
+          AND cm.deleted_at IS NULL
+          AND (
+              $2 = ''
+              OR cm.id::text = ANY(
+                  string_to_array($2, ',')
+              )
+          )
 
-LEFT JOIN question_set_master qsm
-    ON qsm.id::text = ANY(
-        string_to_array(
-            COALESCE(
-                cm.question_set_ids,
-                ''
-            ),
-            ','
-        )
-    )
-    AND qsm.is_active = 1
-    AND qsm.deleted_at IS NULL
+      LEFT JOIN question_set_master qsm
+          ON qsm.id::text = ANY(
+              string_to_array(
+                  COALESCE(
+                      cm.question_set_ids,
+                      ''
+                  ),
+                  ','
+              )
+          )
+          AND qsm.is_active = 1
+          AND qsm.deleted_at IS NULL
 
-LEFT JOIN question_header_master qhm
-    ON qhm.question_set_id = qsm.id
-    AND qhm.is_active = 1
-    AND qhm.deleted_at IS NULL
-    AND (
-        $3 = ''
-        OR qhm.id::text = ANY(
-            string_to_array($3, ',')
-        )
-    )
+      LEFT JOIN question_header_master qhm
+          ON qhm.question_set_id = qsm.id
+          AND qhm.is_active = 1
+          AND qhm.deleted_at IS NULL
+          AND (
+              $3 = ''
+              OR qhm.id::text = ANY(
+                  string_to_array($3, ',')
+              )
+          )
 
-LEFT JOIN question_master qm
-    ON qm.header_id = qhm.id
-    AND qm.set_id = qsm.id
-    AND qm.is_active = 1
-    AND qm.deleted_at IS NULL
-    AND (
-        $4 = ''
-        OR qm.id::text = ANY(
-            string_to_array($4, ',')
-        )
-    )
+      LEFT JOIN question_master qm
+          ON qm.header_id = qhm.id
+          AND qm.set_id = qsm.id
+          AND qm.is_active = 1
+          AND qm.deleted_at IS NULL
+          AND (
+              $4 = ''
+              OR qm.id::text = ANY(
+                  string_to_array($4, ',')
+              )
+          )
 
-LEFT JOIN answers_data ans
-    ON ans.assesment_id = $5
-    AND ans.category_id = cm.id
-    AND ans.question_id = qm.id
-    AND ans.deleted_at IS NULL
+      LEFT JOIN answers_data ans
+          ON ans.assesment_id = $5
+          AND ans.category_id = cm.id
+          AND ans.question_id = qm.id
+          AND ans.deleted_at IS NULL
 
-LEFT JOIN
-(
+      LEFT JOIN
+      (
 
-    SELECT
+          SELECT
 
-        qm.header_id,
-        qm.set_id,
+              qm.header_id,
+              qm.set_id,
 
-        jsonb_agg(
+              jsonb_agg(
 
-            jsonb_build_object(
+                  jsonb_build_object(
 
-                'question_id', qm.id,
-                'question', qm.question,
-                'question_type_id', qm.question_type_id,
-                'option_id', qm.option_id,
+                      'question_id', qm.id,
+                      'question', qm.question,
+                      'question_type_id', qm.question_type_id,
+                      'option_id', qm.option_id,
 
-                'parameters',
+                      'parameters',
 
-                CASE
-                    WHEN qm.parameters IS NULL
-                         OR qm.parameters = ''
-                    THEN '[]'::jsonb
-                    ELSE qm.parameters::jsonb
-                END,
+                      CASE
+                          WHEN qm.parameters IS NULL
+                              OR qm.parameters = ''
+                          THEN '[]'::jsonb
+                          ELSE qm.parameters::jsonb
+                      END,
 
-                'risk_category_id', qm.risk_category_id,
-                'annexure_id', qm.annexure_id,
-                'area_of_audit_id', qm.area_of_audit_id,
-                'applicable_id', qm.applicable_id,
-                'control_risk_id', qm.control_risk_id,
-                'key_aspect_id', qm.key_aspect_id,
-                'residual_risk_id', qm.residual_risk_id,
-                'show_instances', qm.show_instances,
-                'audit_ev_upload', qm.audit_ev_upload,
-                'compliance_ev_upload', qm.compliance_ev_upload,
+                      'risk_category_id', qm.risk_category_id,
+                      'annexure_id', qm.annexure_id,
+                      'area_of_audit_id', qm.area_of_audit_id,
+                      'applicable_id', qm.applicable_id,
+                      'control_risk_id', qm.control_risk_id,
+                      'key_aspect_id', qm.key_aspect_id,
+                      'residual_risk_id', qm.residual_risk_id,
+                      'show_instances', qm.show_instances,
+                      'audit_ev_upload', qm.audit_ev_upload,
+                      'compliance_ev_upload', qm.compliance_ev_upload,
 
-                'annexure',
+                      'annexure',
 
-                jsonb_build_object(
+                      jsonb_build_object(
 
-                    'annexure_id', am.id,
-                    'annexure_name', am.name,
-                    'risk_defination_id', am.risk_defination_id,
+                          'annexure_id', am.id,
+                          'annexure_name', am.name,
+                          'risk_defination_id', am.risk_defination_id,
 
-                    'columns',
+                          'columns',
 
-                    COALESCE(
-                        ac.columns_json,
-                        '[]'::jsonb
-                    )
+                          COALESCE(
+                              ac.columns_json,
+                              '[]'::jsonb
+                          )
 
-                )
+                      )
 
-            )
+                  )
 
-        ) AS questions
+              ) AS questions
 
-    FROM question_master qm
+          FROM question_master qm
 
-    LEFT JOIN annexure_master am
-        ON am.id = qm.annexure_id
+          LEFT JOIN annexure_master am
+              ON am.id = qm.annexure_id
 
-    LEFT JOIN
-    (
+          LEFT JOIN
+          (
 
-        SELECT
+              SELECT
 
-            ac.annexure_id,
+                  ac.annexure_id,
 
-            jsonb_agg(
+                  jsonb_agg(
 
-                jsonb_build_object(
+                      jsonb_build_object(
 
-                    'id', ac.id,
-                    'column_name', ac.name,
-                    'column_type_id', ac.column_type_id,
-                    'options', COALESCE(aco.options_json, '[]'::jsonb)
+                          'id', ac.id,
+                          'column_name', ac.name,
+                          'column_type_id', ac.column_type_id,
+                          'options', COALESCE(aco.options_json, '[]'::jsonb)
 
-                )
-                ORDER BY ac.id
+                      )
+                      ORDER BY ac.id
 
-            ) AS columns_json
+                  ) AS columns_json
 
-        FROM annexure_columns ac
+              FROM annexure_columns ac
 
-        LEFT JOIN (
-            SELECT
-                annexure_column_id,
-                jsonb_agg(
-                    jsonb_build_object(
-                        'id', id,
-                        'option_label', option_label
-                    )
-                    ORDER BY id
-                ) AS options_json
-            FROM annexure_column_options
-            WHERE deleted_at IS NULL
-            GROUP BY annexure_column_id
-        ) aco
-            ON aco.annexure_column_id = ac.id
+              LEFT JOIN (
+                  SELECT
+                      annexure_column_id,
+                      jsonb_agg(
+                          jsonb_build_object(
+                              'id', id,
+                              'option_label', option_label
+                          )
+                          ORDER BY id
+                      ) AS options_json
+                  FROM annexure_column_options
+                  WHERE deleted_at IS NULL
+                  GROUP BY annexure_column_id
+              ) aco
+                  ON aco.annexure_column_id = ac.id
 
-        WHERE ac.deleted_at IS NULL
+              WHERE ac.deleted_at IS NULL
 
-        GROUP BY ac.annexure_id
+              GROUP BY ac.annexure_id
 
-    ) ac
-        ON ac.annexure_id = am.id
+          ) ac
+              ON ac.annexure_id = am.id
 
-    WHERE
-        qm.deleted_at IS NULL
-        AND qm.is_active = 1
+          WHERE
+              qm.deleted_at IS NULL
+              AND qm.is_active = 1
 
-    GROUP BY
-        qm.header_id,
-        qm.set_id
+          GROUP BY
+              qm.header_id,
+              qm.set_id
 
-) q
-    ON q.header_id = qhm.id
-   AND q.set_id = qsm.id
+      ) q
+          ON q.header_id = qhm.id
+        AND q.set_id = qsm.id
 
-WHERE
-    mm.is_active = 1
-    AND mm.deleted_at IS NULL
-    AND (
-        $1 = ''
-        OR mm.id::text = ANY(
-            string_to_array($1, ',')
-        )
-    )
+      WHERE
+          mm.is_active = 1
+          AND mm.deleted_at IS NULL
+          AND (
+              $1 = ''
+              OR mm.id::text = ANY(
+                  string_to_array($1, ',')
+              )
+          )
 
-GROUP BY
+      GROUP BY
 
-    mm.id,
-    mm.name,
+          mm.id,
+          mm.name,
 
-    cm.id,
-    cm.name,
-    cm.linked_table_id,
+          cm.id,
+          cm.name,
+          cm.linked_table_id,
 
-    qsm.id,
-    qsm.name,
+          qsm.id,
+          qsm.name,
 
-    qhm.id,
-    qhm.name,
-    q.questions
-  
-ORDER BY
+          qhm.id,
+          qhm.name,
+          q.questions
+        
+      ORDER BY
 
-    mm.id,
-    cm.id,
-    qsm.id,
-    qhm.id
+          mm.id,
+          cm.id,
+          qsm.id,
+          qhm.id
 
-`;
+    `;
 
     const result =
       await this.db.query(
@@ -1302,6 +1313,14 @@ ORDER BY
       if (
         !category &&
         row.category_id
+        &&
+        (
+          !reAuditScope
+          ||
+          reAuditScope.categories.has(
+            Number(row.category_id),
+          )
+        )
       ) {
 
         category = {
@@ -1316,14 +1335,22 @@ ORDER BY
             row.linked_table_id,
 
           question_count:
-            Number(
-              row.question_count || 0,
-            ),
+            reAuditScope
+              ? reAuditScope.categoryQuestionCount.get(
+                Number(row.category_id),
+              ) || 0
+              : Number(
+                row.question_count || 0,
+              ),
 
           answered_count:
-            Number(
-              row.answered_count || 0,
-            ),
+            reAuditScope
+              ? reAuditScope.categoryQuestionCount.get(
+                Number(row.category_id),
+              ) || 0
+              : Number(
+                row.answered_count || 0,
+              ),
 
           question_sets:
             [],
@@ -1336,6 +1363,8 @@ ORDER BY
 
       if (
         row.question_set_id
+        &&
+        category
       ) {
 
         let questionSet =
@@ -1408,12 +1437,22 @@ ORDER BY
             overview,
           );
 
+        const visibleAccounts =
+          reAuditScope
+            ? accounts.filter(
+              (account: any) =>
+                reAuditScope.dumps.has(
+                  `${Number(category.id)}:${Number(account.id)}`,
+                ),
+            )
+            : accounts;
+
         category.account_based =
           true;
         category.account_count =
-          accounts.length;
+          visibleAccounts.length;
         category.completed_account_count =
-          accounts.filter(
+          visibleAccounts.filter(
             (account: any) =>
               account.is_completed,
           ).length;
@@ -1427,10 +1466,17 @@ ORDER BY
       menus:
         Array.from(
           menuMap.values(),
+        ).filter(
+          (menu: any) =>
+            !reAuditScope
+            ||
+            menu.categories?.length,
         ),
 
     };
   }
+
+  // Submit Assessment
 
   async getSubmissionPreview(
     assessmentId: number,
@@ -1468,6 +1514,42 @@ ORDER BY
     }
 
     if (
+      Number(overview.audit_status_id) === 3
+    ) {
+      const reAuditScope =
+        await this.getReAuditScope(
+          assessmentId,
+        );
+      const pendingCorrections =
+        await this.getReAuditPendingCorrectionCount(
+          assessmentId,
+          String(overview.batch_key || ''),
+        );
+
+      return {
+        can_submit:
+          reAuditScope.questions.size > 0
+          &&
+          pendingCorrections === 0,
+        pending_count:
+          pendingCorrections,
+        compliance_count:
+          reAuditScope.questions.size,
+        compliance_points:
+          [],
+        message:
+          !reAuditScope.questions.size
+            ? 'No Reviewer-rejected audit observation is available for correction.'
+            : pendingCorrections
+              ? 'Save each Reviewer-rejected point after correction before resubmitting.'
+              : 'Corrected re-audit points are ready to submit back to Reviewer.',
+        issues:
+          [],
+        overview,
+      };
+    }
+
+    if (
       Number(overview.audit_status_id) !== 1
     ) {
       return {
@@ -1480,7 +1562,7 @@ ORDER BY
         compliance_points:
           [],
         message:
-          'Re-audit submission will be enabled with the re-audit workflow.',
+          'Current assessment is not pending with Auditor.',
         issues:
           [],
         overview,
@@ -1672,6 +1754,11 @@ ORDER BY
     await this.db.transaction(
       async (client) => {
 
+        const currentStatus =
+          Number(
+            preview.overview.audit_status_id,
+          );
+
         const updated =
           await client.query(
             `
@@ -1681,13 +1768,14 @@ ORDER BY
                 audit_status_id = 2,
                 audit_emp_id = $2
             WHERE id = $1
-                AND audit_status_id = 1
+                AND audit_status_id = $3
                 AND deleted_at IS NULL
             RETURNING id;
             `,
             [
               assessmentId,
               employeeId,
+              currentStatus,
             ],
           );
 
@@ -1737,13 +1825,2056 @@ ORDER BY
       success:
         true,
       message:
-        'Audit submitted to reviewer successfully.',
+        Number(preview.overview.audit_status_id) === 3
+          ? 'Corrected audit points submitted back to Reviewer successfully.'
+          : 'Audit submitted to reviewer successfully.',
       status_id:
         2,
       status:
         STATUS_LABELS[2],
     };
   }
+
+  // Reveiwer
+
+  async getReviewerPending(
+    employeeId: number,
+  ) {
+
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    const result =
+      await this.db.query(
+        `
+        SELECT
+            aam.id,
+            aam.audit_unit_id,
+            aam.audit_status_id,
+            aam.assesment_period_from,
+            aam.assesment_period_to,
+            aam.audit_end_date,
+            au.audit_unit_code,
+            au.name AS audit_unit_name,
+            ym.year,
+            COUNT(ad.id) FILTER (
+                WHERE aam.audit_status_id = 2
+                    OR ad.is_compliance = 1
+            )::int AS total_points,
+            COUNT(ad.id) FILTER (WHERE ad.is_compliance = 1)::int AS compliance_points,
+            COUNT(ad.id) FILTER (
+                WHERE (aam.audit_status_id = 2 AND ad.audit_status_id = 3)
+                    OR (aam.audit_status_id = 5 AND ad.compliance_status_id = 3)
+            )::int AS rejected_points,
+            CASE
+                WHEN aam.audit_status_id = 5 THEN 'Compliance Review'
+                ELSE 'Audit Review'
+            END AS review_stage
+        FROM audit_assesment_master aam
+        INNER JOIN audit_unit_master au
+            ON au.id = aam.audit_unit_id
+        LEFT JOIN year_master ym
+            ON ym.id = aam.year_id
+        LEFT JOIN answers_data ad
+            ON ad.assesment_id = aam.id
+            AND ad.deleted_at IS NULL
+        WHERE aam.audit_status_id IN (2, 5)
+            AND aam.deleted_at IS NULL
+        GROUP BY
+            aam.id,
+            au.audit_unit_code,
+            au.name,
+            ym.year
+        ORDER BY aam.audit_status_id, aam.audit_end_date DESC NULLS LAST, aam.id DESC;
+        `,
+      );
+
+    return {
+      assessments:
+        result.rows,
+    };
+  }
+
+  async getReviewerComplianceAssessment(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    const overview =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      Number(overview.audit_status_id) !== 5
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance review.',
+      );
+    }
+
+    const answerResult =
+      await this.db.query(
+        `
+        SELECT
+            ad.id,
+            ad.menu_id,
+            ad.category_id,
+            ad.header_id,
+            ad.question_id,
+            ad.dump_id,
+            ad.answer_given,
+            ad.audit_comment,
+            ad.is_compliance,
+            ad.business_risk,
+            ad.control_risk,
+            ad.audit_reviewer_comment,
+            ad.audit_commpliance AS compliance_response,
+            ad.compliance_status_id,
+            ad.compliance_reviewer_comment,
+            mm.name AS menu_name,
+            cm.name AS category_name,
+            qhm.name AS header_name,
+            qm.question,
+            qm.option_id
+        FROM answers_data ad
+        LEFT JOIN menu_master mm
+            ON mm.id = ad.menu_id
+        LEFT JOIN category_master cm
+            ON cm.id = ad.category_id
+        LEFT JOIN question_header_master qhm
+            ON qhm.id = ad.header_id
+        LEFT JOIN question_master qm
+            ON qm.id = ad.question_id
+        WHERE ad.assesment_id = $1
+            AND ad.is_compliance = 1
+            AND ad.deleted_at IS NULL
+        ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id;
+        `,
+        [assessmentId],
+      );
+
+    const answerIds =
+      answerResult.rows.map(
+        (row: any) =>
+          Number(row.id),
+      );
+
+    let annexureRows: any[] = [];
+    let evidenceRows: any[] = [];
+
+    if (
+      answerIds.length
+    ) {
+      const annexureResult =
+        await this.db.query(
+          `
+          SELECT
+              id,
+              answer_id,
+              answer_given,
+              business_risk,
+              control_risk,
+              audit_commpliance AS compliance_response,
+              compliance_status_id,
+              compliance_reviewer_comment
+          FROM answers_data_annexure
+          WHERE assesment_id = $1
+              AND answer_id = ANY($2::int[])
+              AND deleted_at IS NULL
+          ORDER BY answer_id, id;
+          `,
+          [
+            assessmentId,
+            answerIds,
+          ],
+        );
+
+      annexureRows =
+        annexureResult.rows;
+
+      const evidenceResult =
+        await this.db.query(
+          `
+          SELECT
+              id,
+              answer_id,
+              annex_id,
+              file_name,
+              file_type,
+              description
+          FROM evidence_master
+          WHERE assesment_id = $1
+              AND answer_id = ANY($2::int[])
+              AND evi_type = 1
+              AND deleted_at IS NULL
+          ORDER BY id DESC;
+          `,
+          [
+            assessmentId,
+            answerIds,
+          ],
+        );
+
+      evidenceRows =
+        evidenceResult.rows;
+    }
+
+    const annexureMap =
+      new Map<number, any[]>();
+    const evidenceMap =
+      new Map<string, any>();
+
+    for (
+      const row
+      of evidenceRows
+    ) {
+      const key =
+        `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`;
+
+      if (
+        !evidenceMap.has(key)
+      ) {
+        evidenceMap.set(
+          key,
+          row,
+        );
+      }
+    }
+
+    for (
+      const row
+      of annexureRows
+    ) {
+      const answerId =
+        Number(row.answer_id);
+      const values =
+        annexureMap.get(answerId)
+        || [];
+
+      values.push({
+        ...row,
+        values:
+          this.parseJsonArray(
+            row.answer_given,
+          ),
+        evidence:
+          evidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || null,
+      });
+      annexureMap.set(
+        answerId,
+        values,
+      );
+    }
+
+    const answers =
+      answerResult.rows.map(
+        (row: any) => ({
+          ...row,
+          evidence:
+            evidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || null,
+          annexure_rows:
+            annexureMap.get(
+              Number(row.id),
+            ) || [],
+        }),
+      );
+
+    return {
+      overview,
+      answers,
+      counts:
+        this.getReviewerComplianceCounts(
+          answers,
+        ),
+    };
+  }
+
+  async getReviewerComplianceEvidenceFile(
+    assessmentId: number,
+    evidenceId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      Number(assessment.audit_status_id) !== 5
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance review.',
+      );
+    }
+
+    const evidence =
+      await this.db.findOne(
+        `
+        SELECT
+            em.file_name,
+            em.file_type,
+            em.description
+        FROM evidence_master em
+        INNER JOIN answers_data ad
+            ON ad.id = em.answer_id
+            AND ad.assesment_id = em.assesment_id
+            AND ad.is_compliance = 1
+            AND ad.deleted_at IS NULL
+        WHERE em.id = $1
+            AND em.assesment_id = $2
+            AND em.evi_type = 1
+            AND em.deleted_at IS NULL
+        LIMIT 1;
+        `,
+        [
+          evidenceId,
+          assessmentId,
+        ],
+      );
+
+    if (
+      !evidence
+    ) {
+      throw new NotFoundException(
+        'Evidence document not found.',
+      );
+    }
+
+    const filePath =
+      this.getEvidenceStoragePath(
+        assessmentId,
+        evidence.file_name,
+      );
+
+    if (
+      !fs.existsSync(filePath)
+    ) {
+      throw new NotFoundException(
+        'Evidence file not found.',
+      );
+    }
+
+    return {
+      path:
+        filePath,
+      filename:
+        path.basename(
+          String(
+            evidence.description
+            || evidence.file_name,
+          ),
+        ).replace(
+          /["\r\n]/g,
+          '_',
+        ),
+      mimetype:
+        this.getEvidenceMimetype(
+          Number(evidence.file_type),
+        ),
+    };
+  }
+
+  async saveReviewerComplianceAction(
+    assessmentId: number,
+    targetType: string,
+    observationId: number,
+    employeeId: number,
+    action: number,
+    comment: string,
+  ) {
+
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    if (
+      !['answer', 'annexure'].includes(
+        targetType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid observation type.',
+      );
+    }
+
+    if (
+      ![2, 3].includes(action)
+    ) {
+      throw new BadRequestException(
+        'Choose Accepted or Re-Compliance Needed.',
+      );
+    }
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      Number(assessment.audit_status_id) !== 5
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance review.',
+      );
+    }
+
+    const result =
+      await this.db.transaction(
+        async (client) => {
+
+          if (
+            targetType === 'answer'
+          ) {
+            const parentResult =
+              await client.query(
+                `
+                UPDATE answers_data
+                SET
+                    compliance_status_id = $1,
+                    compliance_reviewer_emp_id = $2,
+                    compliance_reviewer_comment = $3,
+                    batch_key = $4
+                WHERE id = $5
+                    AND assesment_id = $6
+                    AND is_compliance = 1
+                    AND deleted_at IS NULL
+                RETURNING id;
+                `,
+                [
+                  action,
+                  employeeId,
+                  this.cleanString(comment)
+                  || null,
+                  assessment.batch_key,
+                  observationId,
+                  assessmentId,
+                ],
+              );
+
+            if (
+              parentResult.rows.length
+            ) {
+              await client.query(
+                `
+                UPDATE answers_data_annexure
+                SET
+                    compliance_status_id = $1,
+                    compliance_reviewer_emp_id = $2,
+                    batch_key = $3
+                WHERE answer_id = $4
+                    AND assesment_id = $5
+                    AND deleted_at IS NULL;
+                `,
+                [
+                  action,
+                  employeeId,
+                  assessment.batch_key,
+                  observationId,
+                  assessmentId,
+                ],
+              );
+            }
+
+            return parentResult;
+          }
+
+          const annexureResult =
+            await client.query(
+              `
+              UPDATE answers_data_annexure aa
+              SET
+                  compliance_status_id = $1,
+                  compliance_reviewer_emp_id = $2,
+                  compliance_reviewer_comment = $3,
+                  batch_key = $4
+              WHERE aa.id = $5
+                  AND aa.assesment_id = $6
+                  AND aa.deleted_at IS NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM answers_data ad
+                      WHERE ad.id = aa.answer_id
+                          AND ad.assesment_id = aa.assesment_id
+                          AND ad.is_compliance = 1
+                          AND ad.deleted_at IS NULL
+                  )
+              RETURNING aa.id, aa.answer_id;
+              `,
+              [
+                action,
+                employeeId,
+                this.cleanString(comment)
+                || null,
+                assessment.batch_key,
+                observationId,
+                assessmentId,
+              ],
+            );
+
+          if (
+            annexureResult.rows.length
+          ) {
+            const answerId =
+              Number(
+                annexureResult.rows[0].answer_id,
+              );
+            const remainingRejections =
+              await client.query(
+                `
+                SELECT COUNT(*)::int AS rejected_count
+                FROM answers_data_annexure
+                WHERE answer_id = $1
+                    AND assesment_id = $2
+                    AND compliance_status_id = 3
+                    AND deleted_at IS NULL;
+                `,
+                [
+                  answerId,
+                  assessmentId,
+                ],
+              );
+            const parentStatus =
+              Number(
+                remainingRejections.rows[0]?.rejected_count || 0,
+              ) > 0
+                ? 3
+                : 2;
+
+            await client.query(
+              `
+              UPDATE answers_data
+              SET
+                  compliance_status_id = $1,
+                  compliance_reviewer_emp_id = $2,
+                  batch_key = $3
+              WHERE id = $4
+                  AND assesment_id = $5
+                  AND is_compliance = 1
+                  AND deleted_at IS NULL;
+              `,
+              [
+                parentStatus,
+                employeeId,
+                assessment.batch_key,
+                answerId,
+                assessmentId,
+              ],
+            );
+          }
+
+          return annexureResult;
+        },
+      );
+
+    if (
+      !result.rows.length
+    ) {
+      throw new NotFoundException(
+        'Compliance point not found for this assessment.',
+      );
+    }
+
+    return {
+      success:
+        true,
+      message:
+        action === 2
+          ? 'Compliance response accepted.'
+          : 'Compliance response marked for re-compliance.',
+    };
+  }
+
+  async submitReviewerComplianceAssessment(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      Number(assessment.audit_status_id) !== 5
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance review.',
+      );
+    }
+
+    const result =
+      await this.db.transaction(
+        async (client) => {
+
+          await client.query(
+            `
+            UPDATE answers_data
+            SET
+                compliance_status_id = 2,
+                compliance_reviewer_emp_id = $2
+            WHERE assesment_id = $1
+                AND is_compliance = 1
+                AND COALESCE(compliance_status_id, 0) NOT IN (2, 3)
+                AND deleted_at IS NULL;
+            `,
+            [
+              assessmentId,
+              employeeId,
+            ],
+          );
+
+          await client.query(
+            `
+            UPDATE answers_data_annexure aa
+            SET
+                compliance_status_id = 2,
+                compliance_reviewer_emp_id = $2
+            WHERE aa.assesment_id = $1
+                AND COALESCE(aa.compliance_status_id, 0) NOT IN (2, 3)
+                AND aa.deleted_at IS NULL
+                AND EXISTS (
+                    SELECT 1
+                    FROM answers_data ad
+                    WHERE ad.id = aa.answer_id
+                        AND ad.assesment_id = aa.assesment_id
+                        AND ad.is_compliance = 1
+                        AND ad.deleted_at IS NULL
+                );
+            `,
+            [
+              assessmentId,
+              employeeId,
+            ],
+          );
+
+          const reviewSummary =
+            await client.query(
+              `
+              SELECT (
+                  (SELECT COUNT(*)
+                      FROM answers_data
+                      WHERE assesment_id = $1
+                          AND is_compliance = 1
+                          AND compliance_status_id = 3
+                          AND deleted_at IS NULL)
+                  +
+                  (SELECT COUNT(*)
+                      FROM answers_data_annexure aa
+                      WHERE aa.assesment_id = $1
+                          AND aa.compliance_status_id = 3
+                          AND aa.deleted_at IS NULL
+                          AND EXISTS (
+                              SELECT 1
+                              FROM answers_data ad
+                              WHERE ad.id = aa.answer_id
+                                  AND ad.assesment_id = aa.assesment_id
+                                  AND ad.is_compliance = 1
+                                  AND ad.deleted_at IS NULL
+                          ))
+              )::int AS rejected_count;
+              `,
+              [assessmentId],
+            );
+
+          const rejectedCount =
+            Number(
+              reviewSummary.rows[0]?.rejected_count || 0,
+            );
+          const nextStatus =
+            rejectedCount > 0
+              ? 6
+              : 7;
+
+          const updated =
+            await client.query(
+              `
+              UPDATE audit_assesment_master
+              SET
+                  audit_status_id = $2::bigint,
+                  compliance_review_emp_id = $3,
+                  compliance_review_date = CURRENT_DATE,
+                  batch_key = CASE
+                      WHEN $2::bigint = 6
+                      THEN CONCAT('C-', TO_CHAR(CLOCK_TIMESTAMP(), 'YYYYMMDDHH24MISSMS'))
+                      ELSE batch_key
+                  END
+              WHERE id = $1
+                  AND audit_status_id = 5
+                  AND deleted_at IS NULL
+              RETURNING batch_key;
+              `,
+              [
+                assessmentId,
+                nextStatus,
+                employeeId,
+              ],
+            );
+
+          if (
+            !updated.rows.length
+          ) {
+            throw new BadRequestException(
+              'Compliance review status has changed.',
+            );
+          }
+
+          await client.query(
+            `
+            INSERT INTO audit_assesment_timeline (
+                assesment_id,
+                type_id,
+                status_id,
+                rejected_cnt,
+                reviewer_emp_id,
+                batch_key
+            )
+            VALUES ($1, 2, $2, $3, $4, $5);
+            `,
+            [
+              assessmentId,
+              nextStatus,
+              rejectedCount,
+              employeeId,
+              updated.rows[0].batch_key,
+            ],
+          );
+
+          return {
+            rejectedCount,
+            nextStatus,
+          };
+        },
+      );
+
+    return {
+      success:
+        true,
+      status_id:
+        result.nextStatus,
+      rejected_count:
+        result.rejectedCount,
+      message:
+        result.nextStatus === 6
+          ? 'Compliance review submitted. Rejected responses returned to Manager.'
+          : 'Compliance review submitted. Assessment completed.',
+    };
+  }
+
+  async getReviewerAssessment(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    const overview =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      Number(overview.audit_status_id) !== 2
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for audit review.',
+      );
+    }
+
+    const answerResult =
+      await this.db.query(
+        `
+        SELECT
+            ad.id,
+            ad.menu_id,
+            ad.category_id,
+            ad.header_id,
+            ad.question_id,
+            ad.dump_id,
+            ad.answer_given,
+            ad.audit_comment,
+            ad.is_compliance,
+            ad.business_risk,
+            ad.control_risk,
+            ad.audit_status_id,
+            ad.audit_reviewer_comment,
+            mm.name AS menu_name,
+            cm.name AS category_name,
+            qhm.name AS header_name,
+            qm.question,
+            qm.option_id
+        FROM answers_data ad
+        LEFT JOIN menu_master mm
+            ON mm.id = ad.menu_id
+        LEFT JOIN category_master cm
+            ON cm.id = ad.category_id
+        LEFT JOIN question_header_master qhm
+            ON qhm.id = ad.header_id
+        LEFT JOIN question_master qm
+            ON qm.id = ad.question_id
+        WHERE ad.assesment_id = $1
+            AND ad.deleted_at IS NULL
+        ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id;
+        `,
+        [assessmentId],
+      );
+
+    const answerIds =
+      answerResult.rows.map(
+        (row: any) =>
+          Number(row.id),
+      );
+
+    let annexureRows: any[] = [];
+    let evidenceRows: any[] = [];
+
+    if (
+      answerIds.length
+    ) {
+      const annexureResult =
+        await this.db.query(
+          `
+          SELECT
+              id,
+              answer_id,
+              answer_given,
+              business_risk,
+              control_risk,
+              audit_status_id,
+              audit_reviewer_comment
+          FROM answers_data_annexure
+          WHERE assesment_id = $1
+              AND answer_id = ANY($2::int[])
+              AND deleted_at IS NULL
+          ORDER BY answer_id, id;
+          `,
+          [
+            assessmentId,
+            answerIds,
+          ],
+        );
+
+      annexureRows =
+        annexureResult.rows;
+
+      const evidenceResult =
+        await this.db.query(
+          `
+          SELECT
+              id,
+              answer_id,
+              annex_id,
+              file_name,
+              file_type,
+              description
+          FROM evidence_master
+          WHERE assesment_id = $1
+              AND answer_id = ANY($2::int[])
+              AND evi_type = 1
+              AND deleted_at IS NULL
+          ORDER BY id DESC;
+          `,
+          [
+            assessmentId,
+            answerIds,
+          ],
+        );
+
+      evidenceRows =
+        evidenceResult.rows;
+    }
+
+    const annexureMap =
+      new Map<number, any[]>();
+    const evidenceMap =
+      new Map<string, any>();
+
+    for (
+      const row
+      of evidenceRows
+    ) {
+      const key =
+        `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`;
+
+      if (
+        !evidenceMap.has(key)
+      ) {
+        evidenceMap.set(
+          key,
+          row,
+        );
+      }
+    }
+
+    for (
+      const row
+      of annexureRows
+    ) {
+      const answerId =
+        Number(row.answer_id);
+      const values =
+        annexureMap.get(answerId)
+        || [];
+
+      values.push({
+        ...row,
+        values:
+          this.parseJsonArray(
+            row.answer_given,
+          ),
+        evidence:
+          evidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || null,
+      });
+      annexureMap.set(
+        answerId,
+        values,
+      );
+    }
+
+    const answers =
+      answerResult.rows.map(
+        (row: any) => ({
+          ...row,
+          evidence:
+            evidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || null,
+          annexure_rows:
+            annexureMap.get(
+              Number(row.id),
+            ) || [],
+        }),
+      );
+
+    return {
+      overview,
+      answers,
+      counts:
+        this.getReviewerCounts(
+          answers,
+        ),
+    };
+  }
+
+  async getReviewerEvidenceFile(
+    assessmentId: number,
+    evidenceId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      Number(assessment.audit_status_id) !== 2
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for audit review.',
+      );
+    }
+
+    const evidence =
+      await this.db.findOne(
+        `
+        SELECT
+            em.file_name,
+            em.file_type,
+            em.description
+        FROM evidence_master em
+        INNER JOIN answers_data ad
+            ON ad.id = em.answer_id
+            AND ad.assesment_id = em.assesment_id
+            AND ad.deleted_at IS NULL
+        WHERE em.id = $1
+            AND em.assesment_id = $2
+            AND em.evi_type = 1
+            AND em.deleted_at IS NULL
+        LIMIT 1;
+        `,
+        [
+          evidenceId,
+          assessmentId,
+        ],
+      );
+
+    if (
+      !evidence
+    ) {
+      throw new NotFoundException(
+        'Evidence document not found.',
+      );
+    }
+
+    const filePath =
+      this.getEvidenceStoragePath(
+        assessmentId,
+        evidence.file_name,
+      );
+
+    if (
+      !fs.existsSync(filePath)
+    ) {
+      throw new NotFoundException(
+        'Evidence file not found.',
+      );
+    }
+
+    return {
+      path:
+        filePath,
+      filename:
+        path.basename(
+          String(
+            evidence.description
+            || evidence.file_name,
+          ),
+        ).replace(
+          /["\r\n]/g,
+          '_',
+        ),
+      mimetype:
+        this.getEvidenceMimetype(
+          Number(evidence.file_type),
+        ),
+    };
+  }
+
+  async saveReviewerAction(
+    assessmentId: number,
+    targetType: string,
+    observationId: number,
+    employeeId: number,
+    action: number,
+    comment: string,
+  ) {
+
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    if (
+      !['answer', 'annexure'].includes(
+        targetType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid observation type.',
+      );
+    }
+
+    if (
+      ![2, 3].includes(action)
+    ) {
+      throw new BadRequestException(
+        'Choose Accepted or Re-Audit Needed.',
+      );
+    }
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      Number(assessment.audit_status_id) !== 2
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for audit review.',
+      );
+    }
+
+    const table =
+      targetType === 'answer'
+        ? 'answers_data'
+        : 'answers_data_annexure';
+
+    const result =
+      await this.db.query(
+        `
+        UPDATE ${table}
+        SET
+            audit_status_id = $1,
+            audit_reviewer_emp_id = $2,
+            audit_reviewer_comment = $3
+        WHERE id = $4
+            AND assesment_id = $5
+            AND deleted_at IS NULL
+        RETURNING id;
+        `,
+        [
+          action,
+          employeeId,
+          this.cleanString(comment)
+          || null,
+          observationId,
+          assessmentId,
+        ],
+      );
+
+    if (
+      !result.rows.length
+    ) {
+      throw new NotFoundException(
+        'Observation not found for this assessment.',
+      );
+    }
+
+    return {
+      success:
+        true,
+      message:
+        action === 2
+          ? 'Observation accepted.'
+          : 'Observation marked for re-audit.',
+    };
+  }
+
+  async submitReviewerAssessment(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      Number(assessment.audit_status_id) !== 2
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for audit review.',
+      );
+    }
+
+    const result =
+      await this.db.transaction(
+        async (client) => {
+
+          await client.query(
+            `
+            UPDATE answers_data
+            SET
+                audit_status_id = 2,
+                audit_reviewer_emp_id = $2
+            WHERE assesment_id = $1
+                AND COALESCE(audit_status_id, 0) NOT IN (2, 3)
+                AND deleted_at IS NULL;
+            `,
+            [
+              assessmentId,
+              employeeId,
+            ],
+          );
+
+          await client.query(
+            `
+            UPDATE answers_data_annexure
+            SET
+                audit_status_id = 2,
+                audit_reviewer_emp_id = $2
+            WHERE assesment_id = $1
+                AND COALESCE(audit_status_id, 0) NOT IN (2, 3)
+                AND deleted_at IS NULL;
+            `,
+            [
+              assessmentId,
+              employeeId,
+            ],
+          );
+
+          const reviewSummary =
+            await client.query(
+              `
+              SELECT (
+                  (SELECT COUNT(*) FROM answers_data
+                      WHERE assesment_id = $1
+                          AND audit_status_id = 3
+                          AND deleted_at IS NULL)
+                  +
+                  (SELECT COUNT(*) FROM answers_data_annexure
+                      WHERE assesment_id = $1
+                          AND audit_status_id = 3
+                          AND deleted_at IS NULL)
+              )::int AS rejected_count,
+              (
+                  SELECT COUNT(*)
+                  FROM answers_data
+                  WHERE assesment_id = $1
+                      AND is_compliance = 1
+                      AND deleted_at IS NULL
+              )::int AS compliance_count;
+              `,
+              [assessmentId],
+            );
+
+          const rejectedCount =
+            Number(
+              reviewSummary.rows[0]?.rejected_count || 0,
+            );
+          const complianceCount =
+            Number(
+              reviewSummary.rows[0]?.compliance_count || 0,
+            );
+          const nextStatus =
+            rejectedCount > 0
+              ? 3
+              : complianceCount > 0
+                ? 4
+                : 7;
+
+          const updated =
+            await client.query(
+              `
+              UPDATE audit_assesment_master
+              SET
+                  audit_status_id = $2::bigint,
+                  audit_review_emp_id = $3,
+                  audit_review_date = CURRENT_DATE,
+                  compliance_start_date = CASE WHEN $2::bigint = 4 THEN CURRENT_DATE ELSE compliance_start_date END,
+                  compliance_due_date = CASE WHEN $2::bigint = 4 THEN CURRENT_DATE + INTERVAL '16 days' ELSE compliance_due_date END,
+                  batch_key = CASE
+                      WHEN $2::bigint = 3
+                      THEN CONCAT('A-', TO_CHAR(CLOCK_TIMESTAMP(), 'YYYYMMDDHH24MISSMS'))
+                      ELSE batch_key
+                  END
+              WHERE id = $1
+                  AND audit_status_id = 2
+                  AND deleted_at IS NULL
+              RETURNING batch_key;
+              `,
+              [
+                assessmentId,
+                nextStatus,
+                employeeId,
+              ],
+            );
+
+          if (
+            !updated.rows.length
+          ) {
+            throw new BadRequestException(
+              'Assessment review status has changed.',
+            );
+          }
+
+          await client.query(
+            `
+            INSERT INTO audit_assesment_timeline (
+                assesment_id,
+                type_id,
+                status_id,
+                rejected_cnt,
+                reviewer_emp_id,
+                batch_key
+            )
+            VALUES ($1, 1, $2, $3, $4, $5);
+            `,
+            [
+              assessmentId,
+              nextStatus,
+              rejectedCount,
+              employeeId,
+              updated.rows[0].batch_key,
+            ],
+          );
+
+          return {
+            rejectedCount,
+            complianceCount,
+            nextStatus,
+          };
+        },
+      );
+
+    return {
+      success:
+        true,
+      status_id:
+        result.nextStatus,
+      rejected_count:
+        result.rejectedCount,
+      message:
+        result.nextStatus === 3
+          ? 'Review submitted. Rejected observations returned to Auditor.'
+          : result.nextStatus === 4
+            ? 'Review submitted. Assessment sent to Manager for compliance.'
+            : 'Review submitted. Assessment completed with no compliance action required.',
+    };
+  }
+
+  // Compliance
+
+  async getCompliancePending(
+    employeeId: number,
+  ) {
+
+    await this.assertCompliance(
+      employeeId,
+    );
+
+    const result =
+      await this.db.query(
+        `
+        SELECT
+            aam.id,
+            aam.audit_unit_id,
+            aam.audit_status_id,
+            aam.assesment_period_from,
+            aam.assesment_period_to,
+            aam.compliance_start_date,
+            aam.compliance_due_date,
+            au.audit_unit_code,
+            au.name AS audit_unit_name,
+            ym.year,
+            CASE
+                WHEN aam.audit_status_id = 6 THEN 'Re-Compliance'
+                ELSE 'Compliance'
+            END AS compliance_stage,
+            (
+                COUNT(DISTINCT ad.id) FILTER (
+                    WHERE ad.is_compliance = 1
+                        AND ad.audit_status_id = 2
+                        AND (
+                            aam.audit_status_id = 4
+                            OR ad.compliance_status_id = 3
+                        )
+                )
+                +
+                COUNT(DISTINCT aa.id) FILTER (
+                    WHERE ad.is_compliance = 1
+                        AND ad.audit_status_id = 2
+                        AND aa.audit_status_id = 2
+                        AND (
+                            aam.audit_status_id = 4
+                            OR aa.compliance_status_id = 3
+                        )
+                )
+            )::int AS compliance_points,
+            (
+                COUNT(DISTINCT ad.id) FILTER (
+                    WHERE ad.is_compliance = 1
+                        AND ad.audit_status_id = 2
+                        AND (
+                            aam.audit_status_id = 4
+                            OR ad.compliance_status_id = 3
+                        )
+                        AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+                        AND (
+                            aam.audit_status_id = 4
+                            OR ad.batch_key = aam.batch_key
+                        )
+                )
+                +
+                COUNT(DISTINCT aa.id) FILTER (
+                    WHERE ad.is_compliance = 1
+                        AND ad.audit_status_id = 2
+                        AND aa.audit_status_id = 2
+                        AND (
+                            aam.audit_status_id = 4
+                            OR aa.compliance_status_id = 3
+                        )
+                        AND NULLIF(BTRIM(COALESCE(aa.audit_commpliance, '')), '') IS NOT NULL
+                        AND (
+                            aam.audit_status_id = 4
+                            OR aa.batch_key = aam.batch_key
+                        )
+                )
+            )::int AS responded_points
+        FROM audit_assesment_master aam
+        INNER JOIN audit_unit_master au
+            ON au.id = aam.audit_unit_id
+        LEFT JOIN year_master ym
+            ON ym.id = aam.year_id
+        LEFT JOIN answers_data ad
+            ON ad.assesment_id = aam.id
+            AND ad.deleted_at IS NULL
+        LEFT JOIN answers_data_annexure aa
+            ON aa.answer_id = ad.id
+            AND aa.assesment_id = ad.assesment_id
+            AND aa.deleted_at IS NULL
+        WHERE aam.audit_status_id IN (4, 6)
+            AND aam.deleted_at IS NULL
+        GROUP BY
+            aam.id,
+            au.audit_unit_code,
+            au.name,
+            ym.year
+        ORDER BY aam.compliance_start_date DESC NULLS LAST, aam.id DESC;
+        `,
+      );
+
+    return {
+      assessments:
+        result.rows,
+    };
+  }
+
+  async getComplianceAssessment(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertCompliance(
+      employeeId,
+    );
+
+    const overview =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    const complianceStatus =
+      Number(overview.audit_status_id);
+
+    if (
+      ![4, 6].includes(
+        complianceStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance.',
+      );
+    }
+
+    const answerResult =
+      await this.db.query(
+        `
+        SELECT
+            ad.id,
+            ad.menu_id,
+            ad.category_id,
+            ad.header_id,
+            ad.question_id,
+            ad.dump_id,
+            ad.answer_given,
+            ad.audit_comment,
+            ad.is_compliance,
+            ad.business_risk,
+            ad.control_risk,
+            ad.audit_status_id,
+            ad.audit_reviewer_comment,
+            ad.audit_commpliance AS compliance_response,
+            ad.compliance_status_id,
+            ad.compliance_reviewer_comment,
+            ad.batch_key,
+            mm.name AS menu_name,
+            cm.name AS category_name,
+            qhm.name AS header_name,
+            qm.question,
+            qm.option_id
+        FROM answers_data ad
+        LEFT JOIN menu_master mm
+            ON mm.id = ad.menu_id
+        LEFT JOIN category_master cm
+            ON cm.id = ad.category_id
+        LEFT JOIN question_header_master qhm
+            ON qhm.id = ad.header_id
+        LEFT JOIN question_master qm
+            ON qm.id = ad.question_id
+        WHERE ad.assesment_id = $1
+            AND ad.is_compliance = 1
+            AND ad.audit_status_id = 2
+            AND ad.deleted_at IS NULL
+            AND (
+                $2::int = 4
+                OR ad.compliance_status_id = 3
+                OR EXISTS (
+                    SELECT 1
+                    FROM answers_data_annexure aa
+                    WHERE aa.answer_id = ad.id
+                        AND aa.assesment_id = ad.assesment_id
+                        AND aa.compliance_status_id = 3
+                        AND aa.deleted_at IS NULL
+                )
+            )
+        ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id;
+        `,
+        [
+          assessmentId,
+          complianceStatus,
+        ],
+      );
+
+    const answerIds =
+      answerResult.rows.map(
+        (row: any) =>
+          Number(row.id),
+      );
+
+    let annexureRows: any[] = [];
+    let evidenceRows: any[] = [];
+
+    if (
+      answerIds.length
+    ) {
+      const annexureResult =
+        await this.db.query(
+          `
+          SELECT
+              id,
+              answer_id,
+              answer_given,
+              business_risk,
+              control_risk,
+              audit_status_id,
+              audit_reviewer_comment,
+              audit_commpliance AS compliance_response,
+              compliance_status_id,
+              compliance_reviewer_comment,
+              batch_key
+          FROM answers_data_annexure
+          WHERE assesment_id = $1
+              AND answer_id = ANY($2::int[])
+              AND audit_status_id = 2
+              AND deleted_at IS NULL
+              AND (
+                  $3::int = 4
+                  OR compliance_status_id = 3
+              )
+          ORDER BY answer_id, id;
+          `,
+          [
+            assessmentId,
+            answerIds,
+            complianceStatus,
+          ],
+        );
+
+      annexureRows =
+        annexureResult.rows;
+
+      const evidenceResult =
+        await this.db.query(
+          `
+SELECT
+    id,
+    answer_id,
+    annex_id,
+    file_name,
+    file_type,
+    description
+FROM evidence_master
+WHERE assesment_id = $1
+    AND answer_id = ANY($2::int[])
+    AND evi_type = 1
+    AND deleted_at IS NULL
+ORDER BY id DESC;
+          `,
+          [
+            assessmentId,
+            answerIds,
+          ],
+        );
+
+      evidenceRows =
+        evidenceResult.rows;
+    }
+
+    const annexureMap =
+      new Map<number, any[]>();
+    const evidenceMap =
+      new Map<string, any>();
+
+    for (
+      const row
+      of evidenceRows
+    ) {
+      const key =
+        `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`;
+
+      if (
+        !evidenceMap.has(key)
+      ) {
+        evidenceMap.set(
+          key,
+          row,
+        );
+      }
+    }
+
+    for (
+      const row
+      of annexureRows
+    ) {
+      const answerId =
+        Number(row.answer_id);
+      const values =
+        annexureMap.get(answerId)
+        || [];
+
+      values.push({
+        ...row,
+        values:
+          this.parseJsonArray(
+            row.answer_given,
+          ),
+        evidence:
+          evidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || null,
+      });
+      annexureMap.set(
+        answerId,
+        values,
+      );
+    }
+
+    const answers =
+      answerResult.rows.map(
+        (row: any) => ({
+          ...row,
+          response_required:
+            complianceStatus === 4
+            ||
+            Number(row.compliance_status_id) === 3,
+          evidence:
+            evidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || null,
+          annexure_rows:
+            (
+              annexureMap.get(
+                Number(row.id),
+              ) || []
+            ).map(
+              (annexure: any) => ({
+                ...annexure,
+                response_required:
+                  complianceStatus === 4
+                  ||
+                  Number(annexure.compliance_status_id) === 3,
+              }),
+            ),
+        }),
+      );
+
+    return {
+      overview,
+      answers,
+      counts:
+        this.getComplianceCounts(
+          answers,
+          String(
+            overview.batch_key || '',
+          ),
+          complianceStatus === 6,
+        ),
+    };
+  }
+
+  async getComplianceEvidenceFile(
+    assessmentId: number,
+    evidenceId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertCompliance(
+      employeeId,
+    );
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      ![4, 6].includes(
+        Number(assessment.audit_status_id),
+      )
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance.',
+      );
+    }
+
+    const evidence =
+      await this.db.findOne(
+        `
+        SELECT
+            em.file_name,
+            em.file_type,
+            em.description
+        FROM evidence_master em
+        INNER JOIN answers_data ad
+            ON ad.id = em.answer_id
+            AND ad.assesment_id = em.assesment_id
+            AND ad.is_compliance = 1
+            AND ad.audit_status_id = 2
+            AND ad.deleted_at IS NULL
+        WHERE em.id = $1
+            AND em.assesment_id = $2
+            AND em.evi_type = 1
+            AND em.deleted_at IS NULL
+            AND (
+                $3::int = 4
+                OR ad.compliance_status_id = 3
+                OR EXISTS (
+                    SELECT 1
+                    FROM answers_data_annexure aa
+                    WHERE aa.answer_id = ad.id
+                        AND aa.assesment_id = ad.assesment_id
+                        AND aa.compliance_status_id = 3
+                        AND aa.deleted_at IS NULL
+                )
+            )
+        LIMIT 1;
+        `,
+        [
+          evidenceId,
+          assessmentId,
+          Number(assessment.audit_status_id),
+        ],
+      );
+
+    if (
+      !evidence
+    ) {
+      throw new NotFoundException(
+        'Evidence document not found.',
+      );
+    }
+
+    const filePath =
+      this.getEvidenceStoragePath(
+        assessmentId,
+        evidence.file_name,
+      );
+
+    if (
+      !fs.existsSync(filePath)
+    ) {
+      throw new NotFoundException(
+        'Evidence file not found.',
+      );
+    }
+
+    return {
+      path:
+        filePath,
+      filename:
+        path.basename(
+          String(
+            evidence.description
+            || evidence.file_name,
+          ),
+        ).replace(
+          /["\r\n]/g,
+          '_',
+        ),
+      mimetype:
+        this.getEvidenceMimetype(
+          Number(evidence.file_type),
+        ),
+    };
+  }
+
+  async saveComplianceResponse(
+    assessmentId: number,
+    targetType: string,
+    observationId: number,
+    employeeId: number,
+    rawResponse: string,
+  ) {
+
+    await this.assertCompliance(
+      employeeId,
+    );
+
+    if (
+      !['answer', 'annexure'].includes(
+        targetType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid observation type.',
+      );
+    }
+
+    const response =
+      this.cleanString(
+        rawResponse,
+      );
+
+    if (
+      !response
+    ) {
+      throw new BadRequestException(
+        'Compliance response is required.',
+      );
+    }
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    const complianceStatus =
+      Number(assessment.audit_status_id);
+
+    if (
+      ![4, 6].includes(
+        complianceStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance.',
+      );
+    }
+
+    const result =
+      targetType === 'answer'
+        ? await this.db.query(
+          `
+            UPDATE answers_data
+            SET
+                audit_commpliance = $1,
+                compliance_emp_id = $2,
+                compliance_status_id = CASE
+                    WHEN $6::int = 6 THEN compliance_status_id
+                    ELSE 0
+                END,
+                batch_key = $3
+            WHERE id = $4
+                AND assesment_id = $5
+                AND is_compliance = 1
+                AND audit_status_id = 2
+                AND deleted_at IS NULL
+                AND (
+                    $6::int = 4
+                    OR compliance_status_id = 3
+                )
+            RETURNING id;
+          `,
+          [
+            response,
+            employeeId,
+            assessment.batch_key,
+            observationId,
+            assessmentId,
+            complianceStatus,
+          ],
+        )
+        : await this.db.query(
+          `
+            UPDATE answers_data_annexure aa
+            SET
+                audit_commpliance = $1,
+                compliance_emp_id = $2,
+                compliance_status_id = CASE
+                    WHEN $6::int = 6 THEN compliance_status_id
+                    ELSE 0
+                END,
+                batch_key = $3
+            WHERE aa.id = $4
+                AND aa.assesment_id = $5
+                AND aa.audit_status_id = 2
+                AND aa.deleted_at IS NULL
+                AND (
+                    $6::int = 4
+                    OR aa.compliance_status_id = 3
+                )
+                AND EXISTS (
+                    SELECT 1
+                    FROM answers_data ad
+                    WHERE ad.id = aa.answer_id
+                        AND ad.assesment_id = aa.assesment_id
+                        AND ad.is_compliance = 1
+                        AND ad.audit_status_id = 2
+                        AND ad.deleted_at IS NULL
+                )
+            RETURNING aa.id;
+          `,
+          [
+            response,
+            employeeId,
+            assessment.batch_key,
+            observationId,
+            assessmentId,
+            complianceStatus,
+          ],
+        );
+
+    if (
+      !result.rows.length
+    ) {
+      throw new NotFoundException(
+        'Compliance point not found for this assessment.',
+      );
+    }
+
+    return {
+      success:
+        true,
+      message:
+        complianceStatus === 6
+          ? 'Corrected compliance response saved.'
+          : 'Compliance response saved.',
+    };
+  }
+
+  async getComplianceSubmissionPreview(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    const detail =
+      await this.getComplianceAssessment(
+        assessmentId,
+        employeeId,
+      );
+
+    const counts =
+      detail.counts;
+    const isReCompliance =
+      Number(detail.overview.audit_status_id) === 6;
+
+    return {
+      can_submit:
+        counts.total > 0
+        && counts.pending === 0,
+      total_points:
+        counts.total,
+      completed_points:
+        counts.completed,
+      pending_count:
+        counts.pending,
+      message:
+        !counts.total
+          ? 'No compliance-required observations were found.'
+          : counts.pending
+            ? `${counts.pending} compliance response(s) are pending.`
+            : isReCompliance
+              ? 'All corrected compliance responses are saved. Assessment is ready to return to Reviewer.'
+              : 'All compliance responses are saved. Assessment is ready for reviewer compliance review.',
+    };
+  }
+
+  async submitComplianceAssessment(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+
+    const preview =
+      await this.getComplianceSubmissionPreview(
+        assessmentId,
+        employeeId,
+      );
+
+    if (
+      !preview.can_submit
+    ) {
+      throw new BadRequestException(
+        preview.message,
+      );
+    }
+
+    const currentStatus =
+      Number(
+        (
+          await this.findAssessment(
+            assessmentId,
+          )
+        ).audit_status_id,
+      );
+
+    await this.db.transaction(
+      async (client) => {
+
+        const updated =
+          await client.query(
+            `
+            UPDATE audit_assesment_master
+            SET
+                audit_status_id = 5,
+                compliance_emp_id = $2,
+                compliance_end_date = CURRENT_DATE
+            WHERE id = $1
+                AND audit_status_id = $3
+                AND deleted_at IS NULL
+            RETURNING batch_key;
+            `,
+            [
+              assessmentId,
+              employeeId,
+              currentStatus,
+            ],
+          );
+
+        if (
+          !updated.rows.length
+        ) {
+          throw new BadRequestException(
+            'Assessment compliance status has changed.',
+          );
+        }
+
+        await client.query(
+          `
+          INSERT INTO audit_assesment_timeline (
+              assesment_id,
+              type_id,
+              status_id,
+              rejected_cnt,
+              reviewer_emp_id,
+              batch_key
+          )
+          VALUES ($1, 2, 5, 0, $2, $3);
+          `,
+          [
+            assessmentId,
+            employeeId,
+            updated.rows[0].batch_key,
+          ],
+        );
+      },
+    );
+
+    return {
+      success:
+        true,
+      status_id:
+        5,
+      message:
+        currentStatus === 6
+          ? 'Corrected compliance responses submitted back to Reviewer.'
+          : 'Compliance submitted to Reviewer.',
+    };
+  }
+
+  // Categor Assessment
 
   async getCategory(
     assessmentId: number,
@@ -1770,29 +3901,29 @@ ORDER BY
     const category =
       await this.db.findOne(
         `
-SELECT
-    cm.id,
-    cm.menu_id,
-    cm.name,
-    cm.linked_table_id,
-    cm.question_set_ids,
-    mm.name AS menu_name,
-    mm.section_type_id
-FROM category_master cm
-LEFT JOIN menu_master mm
-    ON mm.id = cm.menu_id
-WHERE cm.id = $1
-    AND cm.is_active = 1
-    AND cm.deleted_at IS NULL
-    AND (
-        $2 = ''
-        OR cm.id::text = ANY(string_to_array($2, ','))
-    )
-    AND (
-        $3 = ''
-        OR cm.menu_id::text = ANY(string_to_array($3, ','))
-    )
-LIMIT 1;
+        SELECT
+            cm.id,
+            cm.menu_id,
+            cm.name,
+            cm.linked_table_id,
+            cm.question_set_ids,
+            mm.name AS menu_name,
+            mm.section_type_id
+        FROM category_master cm
+        LEFT JOIN menu_master mm
+            ON mm.id = cm.menu_id
+        WHERE cm.id = $1
+            AND cm.is_active = 1
+            AND cm.deleted_at IS NULL
+            AND (
+                $2 = ''
+                OR cm.id::text = ANY(string_to_array($2, ','))
+            )
+            AND (
+                $3 = ''
+                OR cm.menu_id::text = ANY(string_to_array($3, ','))
+            )
+        LIMIT 1;
         `,
         [
           categoryId,
@@ -1810,7 +3941,14 @@ LIMIT 1;
       );
     }
 
-    const accounts =
+    const reAuditScope =
+      Number(overview.audit_status_id) === 3
+        ? await this.getReAuditScope(
+          assessmentId,
+        )
+        : null;
+
+    let accounts =
       [1, 2].includes(
         Number(category.linked_table_id),
       )
@@ -1819,6 +3957,20 @@ LIMIT 1;
           overview,
         )
         : [];
+
+    if (
+      reAuditScope
+      &&
+      accounts.length
+    ) {
+      accounts =
+        accounts.filter(
+          (account: any) =>
+            reAuditScope.dumps.has(
+              `${categoryId}:${Number(account.id)}`,
+            ),
+        );
+    }
 
     if (
       dumpId
@@ -1836,106 +3988,107 @@ LIMIT 1;
     const questionResult =
       await this.db.query(
         `
-SELECT
-    qsm.id AS set_id,
-    qsm.name AS set_name,
-    qhm.id AS header_id,
-    qhm.name AS header_name,
-    qm.id AS question_id,
-    qm.question,
-    qm.question_type_id,
-    qm.option_id,
-    qm.parameters,
-    qm.risk_category_id,
-    qm.annexure_id,
-    qm.subset_multi_id,
-    qm.audit_ev_upload,
-    qm.show_instances,
-    rcm.risk_category AS risk_category_name,
-    am.name AS annexure_name,
-    am.risk_defination_id AS annexure_risk_defination_id,
-    ac.columns_json AS annexure_columns,
-    ans.id AS answer_id,
-    ans.answer_given,
-    ans.audit_comment,
-    ans.is_compliance,
-    ans.audit_compulsary_ev_upload,
-    ans.business_risk,
-    ans.control_risk,
-    ans.audit_status_id AS answer_status_id
-FROM question_set_master qsm
-INNER JOIN question_header_master qhm
-    ON qhm.question_set_id = qsm.id
-    AND qhm.is_active = 1
-    AND qhm.deleted_at IS NULL
-    AND (
-        $3 = ''
-        OR qhm.id::text = ANY(string_to_array($3, ','))
-    )
-INNER JOIN question_master qm
-    ON qm.set_id = qsm.id
-    AND qm.header_id = qhm.id
-    AND qm.is_active = 1
-    AND qm.deleted_at IS NULL
-    AND (
-        $4 = ''
-        OR qm.id::text = ANY(string_to_array($4, ','))
-    )
-LEFT JOIN risk_category_master rcm
-    ON rcm.id = qm.risk_category_id
-LEFT JOIN annexure_master am
-    ON am.id = qm.annexure_id
-    AND am.deleted_at IS NULL
-LEFT JOIN (
-    SELECT
-        ac.annexure_id,
-        jsonb_agg(
-            jsonb_build_object(
-                'id', ac.id,
-                'name', ac.name,
-                'column_type_id', ac.column_type_id,
-                'options', COALESCE(aco.options_json, '[]'::jsonb)
-            )
-            ORDER BY ac.id
-        ) AS columns_json
-    FROM annexure_columns ac
-    LEFT JOIN (
-        SELECT
-            annexure_column_id,
-            jsonb_agg(
-                jsonb_build_object(
-                    'id', id,
-                    'option_label', option_label
-                )
-                ORDER BY id
-            ) AS options_json
-        FROM annexure_column_options
-        WHERE deleted_at IS NULL
-        GROUP BY annexure_column_id
-    ) aco
-        ON aco.annexure_column_id = ac.id
-    WHERE ac.deleted_at IS NULL
-    GROUP BY ac.annexure_id
-) ac
-    ON ac.annexure_id = am.id
-LEFT JOIN answers_data ans
-    ON ans.assesment_id = $5
-    AND ans.category_id = $6
-    AND ans.header_id = qhm.id
-    AND ans.question_id = qm.id
-    AND ans.dump_id = $7
-    AND ans.deleted_at IS NULL
-WHERE qsm.is_active = 1
-    AND qsm.deleted_at IS NULL
-    AND qsm.id::text = ANY(string_to_array(COALESCE($1, ''), ','))
-    AND (
-        $2 = ''
-        OR qsm.id::text = ANY(string_to_array($2, ','))
-    )
-ORDER BY
-    qsm.id,
-    qhm.id,
-    qm.id;
+          SELECT
+              qsm.id AS set_id,
+              qsm.name AS set_name,
+              qhm.id AS header_id,
+              qhm.name AS header_name,
+              qm.id AS question_id,
+              qm.question,
+              qm.question_type_id,
+              qm.option_id,
+              qm.parameters,
+              qm.risk_category_id,
+              qm.annexure_id,
+              qm.subset_multi_id,
+              qm.audit_ev_upload,
+              qm.show_instances,
+              rcm.risk_category AS risk_category_name,
+              am.name AS annexure_name,
+              am.risk_defination_id AS annexure_risk_defination_id,
+              ac.columns_json AS annexure_columns,
+              ans.id AS answer_id,
+              ans.answer_given,
+              ans.audit_comment,
+              ans.is_compliance,
+              ans.audit_compulsary_ev_upload,
+              ans.business_risk,
+              ans.control_risk,
+              ans.audit_status_id AS answer_status_id,
+              ans.audit_reviewer_comment
+          FROM question_set_master qsm
+          INNER JOIN question_header_master qhm
+              ON qhm.question_set_id = qsm.id
+              AND qhm.is_active = 1
+              AND qhm.deleted_at IS NULL
+              AND (
+                  $3 = ''
+                  OR qhm.id::text = ANY(string_to_array($3, ','))
+              )
+          INNER JOIN question_master qm
+              ON qm.set_id = qsm.id
+              AND qm.header_id = qhm.id
+              AND qm.is_active = 1
+              AND qm.deleted_at IS NULL
+              AND (
+                  $4 = ''
+                  OR qm.id::text = ANY(string_to_array($4, ','))
+              )
+          LEFT JOIN risk_category_master rcm
+              ON rcm.id = qm.risk_category_id
+          LEFT JOIN annexure_master am
+              ON am.id = qm.annexure_id
+              AND am.deleted_at IS NULL
+          LEFT JOIN (
+              SELECT
+                  ac.annexure_id,
+                  jsonb_agg(
+                      jsonb_build_object(
+                          'id', ac.id,
+                          'name', ac.name,
+                          'column_type_id', ac.column_type_id,
+                          'options', COALESCE(aco.options_json, '[]'::jsonb)
+                      )
+                      ORDER BY ac.id
+                  ) AS columns_json
+              FROM annexure_columns ac
+              LEFT JOIN (
+                  SELECT
+                      annexure_column_id,
+                      jsonb_agg(
+                          jsonb_build_object(
+                              'id', id,
+                              'option_label', option_label
+                          )
+                          ORDER BY id
+                      ) AS options_json
+                  FROM annexure_column_options
+                  WHERE deleted_at IS NULL
+                  GROUP BY annexure_column_id
+              ) aco
+                  ON aco.annexure_column_id = ac.id
+              WHERE ac.deleted_at IS NULL
+              GROUP BY ac.annexure_id
+          ) ac
+              ON ac.annexure_id = am.id
+          LEFT JOIN answers_data ans
+              ON ans.assesment_id = $5
+              AND ans.category_id = $6
+              AND ans.header_id = qhm.id
+              AND ans.question_id = qm.id
+              AND ans.dump_id = $7
+              AND ans.deleted_at IS NULL
+          WHERE qsm.is_active = 1
+              AND qsm.deleted_at IS NULL
+              AND qsm.id::text = ANY(string_to_array(COALESCE($1, ''), ','))
+              AND (
+                  $2 = ''
+                  OR qsm.id::text = ANY(string_to_array($2, ','))
+              )
+          ORDER BY
+              qsm.id,
+              qhm.id,
+              qm.id;
         `,
         [
           category.question_set_ids || '',
@@ -1950,7 +4103,7 @@ ORDER BY
         ],
       );
 
-    const sets =
+    let sets =
       this.groupCategoryQuestions(
         questionResult.rows,
       );
@@ -1967,102 +4120,103 @@ ORDER BY
       const subsetResult =
         await this.db.query(
           `
-SELECT
-    qsm.id AS set_id,
-    qsm.name AS set_name,
-    qhm.id AS header_id,
-    qhm.name AS header_name,
-    qm.id AS question_id,
-    qm.question,
-    qm.question_type_id,
-    qm.option_id,
-    qm.parameters,
-    qm.risk_category_id,
-    qm.annexure_id,
-    qm.subset_multi_id,
-    qm.audit_ev_upload,
-    qm.show_instances,
-    rcm.risk_category AS risk_category_name,
-    am.name AS annexure_name,
-    am.risk_defination_id AS annexure_risk_defination_id,
-    ac.columns_json AS annexure_columns,
-    ans.id AS answer_id,
-    ans.answer_given,
-    ans.audit_comment,
-    ans.is_compliance,
-    ans.audit_compulsary_ev_upload,
-    ans.business_risk,
-    ans.control_risk,
-    ans.audit_status_id AS answer_status_id
-FROM question_set_master qsm
-INNER JOIN question_header_master qhm
-    ON qhm.question_set_id = qsm.id
-    AND qhm.is_active = 1
-    AND qhm.deleted_at IS NULL
-    AND (
-        $2 = ''
-        OR qhm.id::text = ANY(string_to_array($2, ','))
-    )
-INNER JOIN question_master qm
-    ON qm.set_id = qsm.id
-    AND qm.header_id = qhm.id
-    AND qm.is_active = 1
-    AND qm.deleted_at IS NULL
-    AND (
-        $3 = ''
-        OR qm.id::text = ANY(string_to_array($3, ','))
-    )
-LEFT JOIN risk_category_master rcm
-    ON rcm.id = qm.risk_category_id
-LEFT JOIN annexure_master am
-    ON am.id = qm.annexure_id
-    AND am.deleted_at IS NULL
-LEFT JOIN (
-    SELECT
-        ac.annexure_id,
-        jsonb_agg(
-            jsonb_build_object(
-                'id', ac.id,
-                'name', ac.name,
-                'column_type_id', ac.column_type_id,
-                'options', COALESCE(aco.options_json, '[]'::jsonb)
-            )
-            ORDER BY ac.id
-        ) AS columns_json
-    FROM annexure_columns ac
-    LEFT JOIN (
-        SELECT
-            annexure_column_id,
-            jsonb_agg(
-                jsonb_build_object(
-                    'id', id,
-                    'option_label', option_label
-                )
-                ORDER BY id
-            ) AS options_json
-        FROM annexure_column_options
-        WHERE deleted_at IS NULL
-        GROUP BY annexure_column_id
-    ) aco
-        ON aco.annexure_column_id = ac.id
-    WHERE ac.deleted_at IS NULL
-    GROUP BY ac.annexure_id
-) ac
-    ON ac.annexure_id = am.id
-LEFT JOIN answers_data ans
-    ON ans.assesment_id = $4
-    AND ans.category_id = $5
-    AND ans.header_id = qhm.id
-    AND ans.question_id = qm.id
-    AND ans.dump_id = $6
-    AND ans.deleted_at IS NULL
-WHERE qsm.is_active = 1
-    AND qsm.deleted_at IS NULL
-    AND qsm.id::text = ANY(string_to_array($1, ','))
-ORDER BY
-    qsm.id,
-    qhm.id,
-    qm.id;
+          SELECT
+              qsm.id AS set_id,
+              qsm.name AS set_name,
+              qhm.id AS header_id,
+              qhm.name AS header_name,
+              qm.id AS question_id,
+              qm.question,
+              qm.question_type_id,
+              qm.option_id,
+              qm.parameters,
+              qm.risk_category_id,
+              qm.annexure_id,
+              qm.subset_multi_id,
+              qm.audit_ev_upload,
+              qm.show_instances,
+              rcm.risk_category AS risk_category_name,
+              am.name AS annexure_name,
+              am.risk_defination_id AS annexure_risk_defination_id,
+              ac.columns_json AS annexure_columns,
+              ans.id AS answer_id,
+              ans.answer_given,
+              ans.audit_comment,
+              ans.is_compliance,
+              ans.audit_compulsary_ev_upload,
+              ans.business_risk,
+              ans.control_risk,
+              ans.audit_status_id AS answer_status_id,
+              ans.audit_reviewer_comment
+          FROM question_set_master qsm
+          INNER JOIN question_header_master qhm
+              ON qhm.question_set_id = qsm.id
+              AND qhm.is_active = 1
+              AND qhm.deleted_at IS NULL
+              AND (
+                  $2 = ''
+                  OR qhm.id::text = ANY(string_to_array($2, ','))
+              )
+          INNER JOIN question_master qm
+              ON qm.set_id = qsm.id
+              AND qm.header_id = qhm.id
+              AND qm.is_active = 1
+              AND qm.deleted_at IS NULL
+              AND (
+                  $3 = ''
+                  OR qm.id::text = ANY(string_to_array($3, ','))
+              )
+          LEFT JOIN risk_category_master rcm
+              ON rcm.id = qm.risk_category_id
+          LEFT JOIN annexure_master am
+              ON am.id = qm.annexure_id
+              AND am.deleted_at IS NULL
+          LEFT JOIN (
+              SELECT
+                  ac.annexure_id,
+                  jsonb_agg(
+                      jsonb_build_object(
+                          'id', ac.id,
+                          'name', ac.name,
+                          'column_type_id', ac.column_type_id,
+                          'options', COALESCE(aco.options_json, '[]'::jsonb)
+                      )
+                      ORDER BY ac.id
+                  ) AS columns_json
+              FROM annexure_columns ac
+              LEFT JOIN (
+                  SELECT
+                      annexure_column_id,
+                      jsonb_agg(
+                          jsonb_build_object(
+                              'id', id,
+                              'option_label', option_label
+                          )
+                          ORDER BY id
+                      ) AS options_json
+                  FROM annexure_column_options
+                  WHERE deleted_at IS NULL
+                  GROUP BY annexure_column_id
+              ) aco
+                  ON aco.annexure_column_id = ac.id
+              WHERE ac.deleted_at IS NULL
+              GROUP BY ac.annexure_id
+          ) ac
+              ON ac.annexure_id = am.id
+          LEFT JOIN answers_data ans
+              ON ans.assesment_id = $4
+              AND ans.category_id = $5
+              AND ans.header_id = qhm.id
+              AND ans.question_id = qm.id
+              AND ans.dump_id = $6
+              AND ans.deleted_at IS NULL
+          WHERE qsm.is_active = 1
+              AND qsm.deleted_at IS NULL
+              AND qsm.id::text = ANY(string_to_array($1, ','))
+          ORDER BY
+              qsm.id,
+              qhm.id,
+              qm.id;
           `,
           [
             subsetIds.join(','),
@@ -2091,6 +4245,18 @@ ORDER BY
       sets,
       assessmentId,
     );
+
+    if (
+      reAuditScope
+    ) {
+      sets =
+        this.filterReAuditSets(
+          sets,
+          reAuditScope,
+          categoryId,
+          dumpId,
+        );
+    }
 
     const annexureRiskOptions =
       await this.getAnnexureRiskOptions(
@@ -2193,6 +4359,16 @@ ORDER BY
 
         errors[questionId] =
           'Header does not match this question';
+        continue;
+      }
+
+      if (
+        Number(detail.overview.audit_status_id) === 3
+        &&
+        Number(question.answer?.audit_status_id || 0) !== 3
+      ) {
+        errors[questionId] =
+          'Only the Reviewer-rejected annexure row can be updated.';
         continue;
       }
 
@@ -2534,19 +4710,19 @@ ORDER BY
           const result =
             await client.query(
               `
-UPDATE answers_data_annexure
-SET
-    answer_given = $1,
-    audit_emp_id = $2,
-    business_risk = $3,
-    control_risk = $4,
-    risk_cat_id = $5,
-    batch_key = $6
-WHERE id = $7
-    AND answer_id = $8
-    AND assesment_id = $9
-    AND deleted_at IS NULL
-RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
+              UPDATE answers_data_annexure
+              SET
+                  answer_given = $1,
+                  audit_emp_id = $2,
+                  business_risk = $3,
+                  control_risk = $4,
+                  risk_cat_id = $5,
+                  batch_key = $6
+              WHERE id = $7
+                  AND answer_id = $8
+                  AND assesment_id = $9
+                  AND deleted_at IS NULL
+              RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
             `,
               [
                 payload,
@@ -2568,31 +4744,31 @@ RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
           const result =
             await client.query(
               `
-INSERT INTO answers_data_annexure (
-    answer_id,
-    assesment_id,
-    answer_given,
-    audit_comment,
-    audit_emp_id,
-    audit_status_id,
-    audit_reviewer_emp_id,
-    audit_reviewer_comment,
-    audit_commpliance,
-    compliance_evidance_upload,
-    compliance_emp_id,
-    compliance_status_id,
-    compliance_reviewer_emp_id,
-    compliance_reviewer_comment,
-    business_risk,
-    control_risk,
-    risk_cat_id,
-    batch_key
-)
-VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
-)
-RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
+              INSERT INTO answers_data_annexure (
+                  answer_id,
+                  assesment_id,
+                  answer_given,
+                  audit_comment,
+                  audit_emp_id,
+                  audit_status_id,
+                  audit_reviewer_emp_id,
+                  audit_reviewer_comment,
+                  audit_commpliance,
+                  compliance_evidance_upload,
+                  compliance_emp_id,
+                  compliance_status_id,
+                  compliance_reviewer_emp_id,
+                  compliance_reviewer_comment,
+                  business_risk,
+                  control_risk,
+                  risk_cat_id,
+                  batch_key
+              )
+              VALUES (
+                  $1, $2, $3, $4, $5, $6, $7, $8,
+                  $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+              )
+              RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
             `,
               [
                 parentAnswerId,
@@ -2709,14 +4885,14 @@ RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
     const activeEvidence =
       await this.db.findOne(
         `
-SELECT id
-FROM evidence_master
-WHERE answer_id = $1
-    AND annex_id = $2
-    AND assesment_id = $3
-    AND evi_type = 1
-    AND deleted_at IS NULL
-LIMIT 1;
+        SELECT id
+        FROM evidence_master
+        WHERE answer_id = $1
+            AND annex_id = $2
+            AND assesment_id = $3
+            AND evi_type = 1
+            AND deleted_at IS NULL
+        LIMIT 1;
         `,
         [
           answerId,
@@ -2738,12 +4914,12 @@ LIMIT 1;
 
     await this.db.query(
       `
-UPDATE answers_data_annexure
-SET deleted_at = NOW()
-WHERE id = $1
-    AND answer_id = $2
-    AND assesment_id = $3
-    AND deleted_at IS NULL;
+        UPDATE answers_data_annexure
+        SET deleted_at = NOW()
+        WHERE id = $1
+            AND answer_id = $2
+            AND assesment_id = $3
+            AND deleted_at IS NULL;
       `,
       [
         annexureRowId,
@@ -2759,6 +4935,8 @@ WHERE id = $1
         'Annexure row deleted successfully',
     };
   }
+
+  // Evidence Upload
 
   async uploadEvidence(
     assessmentId: number,
@@ -2814,14 +4992,14 @@ WHERE id = $1
     const existing =
       await this.db.findOne(
         `
-SELECT id
-FROM evidence_master
-WHERE answer_id = $1
-    AND annex_id = $2
-    AND assesment_id = $3
-    AND evi_type = 1
-    AND deleted_at IS NULL
-LIMIT 1;
+        SELECT id
+        FROM evidence_master
+        WHERE answer_id = $1
+            AND annex_id = $2
+            AND assesment_id = $3
+            AND evi_type = 1
+            AND deleted_at IS NULL
+        LIMIT 1;
         `,
         [
           target.answerId,
@@ -2865,22 +5043,22 @@ LIMIT 1;
     try {
       await this.db.query(
         `
-INSERT INTO evidence_master (
-    answer_id,
-    annex_id,
-    assesment_id,
-    evi_type,
-    file_name,
-    file_type,
-    description,
-    emp_id,
-    status_id,
-    review_emp_id,
-    deleted_by_emp_id,
-    created_at,
-    updated_at
-)
-VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
+        INSERT INTO evidence_master (
+            answer_id,
+            annex_id,
+            assesment_id,
+            evi_type,
+            file_name,
+            file_type,
+            description,
+            emp_id,
+            status_id,
+            review_emp_id,
+            deleted_by_emp_id,
+            created_at,
+            updated_at
+        )
+        VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
         `,
         [
           target.answerId,
@@ -2992,13 +5170,13 @@ VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
 
     await this.db.query(
       `
-UPDATE evidence_master
-SET
-    deleted_by_emp_id = $1,
-    deleted_at = NOW(),
-    updated_at = NOW()
-WHERE id = $2
-    AND deleted_at IS NULL;
+        UPDATE evidence_master
+        SET
+            deleted_by_emp_id = $1,
+            deleted_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $2
+            AND deleted_at IS NULL;
       `,
       [
         employeeId,
@@ -3025,6 +5203,8 @@ WHERE id = $2
         'Evidence removed successfully.',
     };
   }
+
+  // Annexure Upload
 
   async getAnnexureCsvSample(
     assessmentId: number,
@@ -3274,30 +5454,30 @@ WHERE id = $2
 
           await client.query(
             `
-INSERT INTO answers_data_annexure (
-    answer_id,
-    assesment_id,
-    answer_given,
-    audit_comment,
-    audit_emp_id,
-    audit_status_id,
-    audit_reviewer_emp_id,
-    audit_reviewer_comment,
-    audit_commpliance,
-    compliance_evidance_upload,
-    compliance_emp_id,
-    compliance_status_id,
-    compliance_reviewer_emp_id,
-    compliance_reviewer_comment,
-    business_risk,
-    control_risk,
-    risk_cat_id,
-    batch_key
-)
-VALUES (
-    $1, $2, $3, NULL, $4, $5, 0, NULL,
-    NULL, NULL, 0, 0, 0, NULL, $6, $7, $8, $9
-);
+            INSERT INTO answers_data_annexure (
+                answer_id,
+                assesment_id,
+                answer_given,
+                audit_comment,
+                audit_emp_id,
+                audit_status_id,
+                audit_reviewer_emp_id,
+                audit_reviewer_comment,
+                audit_commpliance,
+                compliance_evidance_upload,
+                compliance_emp_id,
+                compliance_status_id,
+                compliance_reviewer_emp_id,
+                compliance_reviewer_comment,
+                business_risk,
+                control_risk,
+                risk_cat_id,
+                batch_key
+            )
+            VALUES (
+                $1, $2, $3, NULL, $4, $5, 0, NULL,
+                NULL, NULL, 0, 0, 0, NULL, $6, $7, $8, $9
+            );
             `,
             [
               parentAnswerId,
@@ -3446,6 +5626,8 @@ VALUES (
                 row.control_risk,
               audit_status_id:
                 row.answer_status_id,
+              audit_reviewer_comment:
+                row.audit_reviewer_comment,
             }
             : null,
       });
@@ -3515,15 +5697,15 @@ VALUES (
     const existing =
       await this.db.findOne(
         `
-SELECT id
-FROM answers_data
-WHERE assesment_id = $1
-    AND category_id = $2
-    AND header_id = $3
-    AND question_id = $4
-    AND dump_id = $5
-    AND deleted_at IS NULL
-LIMIT 1;
+        SELECT id
+        FROM answers_data
+        WHERE assesment_id = $1
+            AND category_id = $2
+            AND header_id = $3
+            AND question_id = $4
+            AND dump_id = $5
+            AND deleted_at IS NULL
+        LIMIT 1;
         `,
         [
           assessmentId,
@@ -3540,15 +5722,15 @@ LIMIT 1;
 
       await this.db.query(
         `
-UPDATE answers_data
-SET
-    answer_given = $1,
-    audit_emp_id = $2,
-    is_compliance = 1,
-    business_risk = 1,
-    control_risk = 1,
-    batch_key = $3
-WHERE id = $4;
+        UPDATE answers_data
+        SET
+            answer_given = $1,
+            audit_emp_id = $2,
+            is_compliance = 1,
+            business_risk = 1,
+            control_risk = 1,
+            batch_key = $3
+        WHERE id = $4;
         `,
         [
           String(question.annexure_id),
@@ -3564,38 +5746,38 @@ WHERE id = $4;
     const inserted =
       await this.db.findOne(
         `
-INSERT INTO answers_data (
-    section_type_id,
-    assesment_id,
-    menu_id,
-    category_id,
-    header_id,
-    question_id,
-    dump_id,
-    answer_given,
-    audit_comment,
-    audit_emp_id,
-    audit_status_id,
-    audit_reviewer_emp_id,
-    audit_reviewer_comment,
-    is_compliance,
-    audit_commpliance,
-    compliance_evidance_upload,
-    compliance_emp_id,
-    compliance_status_id,
-    compliance_reviewer_emp_id,
-    compliance_reviewer_comment,
-    business_risk,
-    control_risk,
-    instances_count,
-    batch_key
-)
-VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    NULL, $9, 0, 0, NULL, 1, NULL, NULL,
-    0, 0, 0, NULL, 1, 1, 0, $10
-)
-RETURNING id;
+        INSERT INTO answers_data (
+            section_type_id,
+            assesment_id,
+            menu_id,
+            category_id,
+            header_id,
+            question_id,
+            dump_id,
+            answer_given,
+            audit_comment,
+            audit_emp_id,
+            audit_status_id,
+            audit_reviewer_emp_id,
+            audit_reviewer_comment,
+            is_compliance,
+            audit_commpliance,
+            compliance_evidance_upload,
+            compliance_emp_id,
+            compliance_status_id,
+            compliance_reviewer_emp_id,
+            compliance_reviewer_comment,
+            business_risk,
+            control_risk,
+            instances_count,
+            batch_key
+        )
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8,
+            NULL, $9, 0, 0, NULL, 1, NULL, NULL,
+            0, 0, 0, NULL, 1, 1, 0, $10
+        )
+        RETURNING id;
         `,
         [
           detail.category.section_type_id || 0,
@@ -3851,12 +6033,12 @@ RETURNING id;
     const result =
       await this.db.query(
         `
-SELECT id, risk_category
-FROM risk_category_master
-WHERE is_active = 1
-    AND ($1 = true OR id != 10)
-    AND deleted_at IS NULL
-ORDER BY id;
+        SELECT id, risk_category
+        FROM risk_category_master
+        WHERE is_active = 1
+            AND ($1 = true OR id != 10)
+            AND deleted_at IS NULL
+        ORDER BY id;
         `,
         [includeNotApplicable],
       );
@@ -3871,14 +6053,14 @@ ORDER BY id;
     const result =
       await this.db.query(
         `
-SELECT
-    risk_parameter,
-    business_risk_app,
-    control_risk_app
-FROM risk_matrix
-WHERE year_id = $1
-    AND deleted_at IS NULL
-ORDER BY risk_parameter;
+        SELECT
+            risk_parameter,
+            business_risk_app,
+            control_risk_app
+        FROM risk_matrix
+        WHERE year_id = $1
+            AND deleted_at IS NULL
+        ORDER BY risk_parameter;
         `,
         [yearId],
       );
@@ -4362,18 +6544,20 @@ ORDER BY risk_parameter;
     const result =
       await this.db.query(
         `
-SELECT
-    id,
-    answer_id,
-    answer_given,
-    business_risk,
-    control_risk,
-    risk_cat_id
-FROM answers_data_annexure
-WHERE assesment_id = $1
-    AND answer_id = ANY($2::int[])
-    AND deleted_at IS NULL
-ORDER BY id;
+        SELECT
+            id,
+            answer_id,
+            answer_given,
+            business_risk,
+            control_risk,
+            risk_cat_id,
+            audit_status_id,
+            audit_reviewer_comment
+        FROM answers_data_annexure
+        WHERE assesment_id = $1
+            AND answer_id = ANY($2::int[])
+            AND deleted_at IS NULL
+        ORDER BY id;
         `,
         [
           assessmentId,
@@ -4411,6 +6595,10 @@ ORDER BY id;
           row.control_risk,
         risk_cat_id:
           row.risk_cat_id,
+        audit_status_id:
+          row.audit_status_id,
+        audit_reviewer_comment:
+          row.audit_reviewer_comment,
       });
     }
 
@@ -4527,6 +6715,8 @@ ORDER BY id DESC;
       }
     }
   }
+
+  // Evidence 
 
   private async getEvidenceTarget(
     assessmentId: number,
@@ -4890,28 +7080,28 @@ ORDER BY id DESC;
     const result =
       await this.db.findOne(
         `
-SELECT
-    EXISTS (
-        SELECT 1
-        FROM executive_summary_basic_details
-        WHERE assesment_id = $1
-            AND year_id = $2
-            AND deleted_at IS NULL
-    ) AS has_basic_details,
-    EXISTS (
-        SELECT 1
-        FROM executive_summary_branch_position
-        WHERE assesment_id = $1
-            AND year_id = $2
-            AND deleted_at IS NULL
-    ) AS has_branch_position,
-    EXISTS (
-        SELECT 1
-        FROM executive_summary_fresh_accounts
-        WHERE assesment_id = $1
-            AND year_id = $2
-            AND deleted_at IS NULL
-    ) AS has_fresh_accounts;
+        SELECT
+            EXISTS (
+                SELECT 1
+                FROM executive_summary_basic_details
+                WHERE assesment_id = $1
+                    AND year_id = $2
+                    AND deleted_at IS NULL
+            ) AS has_basic_details,
+            EXISTS (
+                SELECT 1
+                FROM executive_summary_branch_position
+                WHERE assesment_id = $1
+                    AND year_id = $2
+                    AND deleted_at IS NULL
+            ) AS has_branch_position,
+            EXISTS (
+                SELECT 1
+                FROM executive_summary_fresh_accounts
+                WHERE assesment_id = $1
+                    AND year_id = $2
+                    AND deleted_at IS NULL
+            ) AS has_fresh_accounts;
         `,
         [
           assessmentId,
@@ -4966,6 +7156,8 @@ SELECT
       }
     }
   }
+
+  // Subsets
 
   private getSubsetIdsFromRows(
     rows: any[],
@@ -5321,6 +7513,8 @@ SELECT
     return assessment;
   }
 
+  // Account Sampling
+
   async getAccountSampling(
     assessmentId: number,
     categoryId: number,
@@ -5459,11 +7653,11 @@ SELECT
 
     await this.db.query(
       `
-UPDATE ${table}
-SET sampling_filter = 1
-WHERE id = ANY($1::int[])
-    AND sampling_filter = 0
-    AND deleted_at IS NULL;
+      UPDATE ${table}
+      SET sampling_filter = 1
+      WHERE id = ANY($1::int[])
+          AND sampling_filter = 0
+          AND deleted_at IS NULL;
       `,
       [
         selectedIds,
@@ -5515,13 +7709,13 @@ WHERE id = ANY($1::int[])
     const answered =
       await this.db.findOne(
         `
-SELECT id
-FROM answers_data
-WHERE assesment_id = $1
-    AND category_id = $2
-    AND dump_id = $3
-    AND deleted_at IS NULL
-LIMIT 1;
+        SELECT id
+        FROM answers_data
+        WHERE assesment_id = $1
+            AND category_id = $2
+            AND dump_id = $3
+            AND deleted_at IS NULL
+        LIMIT 1;
         `,
         [
           assessmentId,
@@ -5545,12 +7739,12 @@ LIMIT 1;
 
     await this.db.query(
       `
-UPDATE ${table}
-SET sampling_filter = 0
-WHERE id = $1
-    AND COALESCE(assesment_period_id, 0) = 0
-    AND sampling_filter = 1
-    AND deleted_at IS NULL;
+      UPDATE ${table}
+      SET sampling_filter = 0
+      WHERE id = $1
+          AND COALESCE(assesment_period_id, 0) = 0
+          AND sampling_filter = 1
+          AND deleted_at IS NULL;
       `,
       [
         dumpId,
@@ -5707,34 +7901,34 @@ WHERE id = $1
     const result =
       await this.db.query(
         `
-SELECT
-    d.id,
-    d.account_no,
-    d.account_holder_name,
-    d.ucic,
-    d.account_opening_date,
-    ${renewalColumn},
-    ${amountColumn} AS ${amountAlias},
-    sm.name AS scheme_name,
-    sm.scheme_code
-FROM ${table} d
-INNER JOIN scheme_master sm
-    ON sm.id = d.scheme_id
-    AND sm.scheme_type_id = $1
-    AND sm.category_id = $2
-    AND sm.is_active = 1
-    AND sm.deleted_at IS NULL
-WHERE d.branch_id = $5
-    AND d.scheme_id::text = ANY(
-        string_to_array($6, ',')
-    )
-    AND ${periodCondition}
-    AND d.sampling_filter = 0
-    AND d.deleted_at IS NULL
-    ${filterClause}
-ORDER BY
-    NULLIF(${amountColumn}::text, '')::numeric DESC NULLS LAST,
-    d.account_no;
+        SELECT
+            d.id,
+            d.account_no,
+            d.account_holder_name,
+            d.ucic,
+            d.account_opening_date,
+            ${renewalColumn},
+            ${amountColumn} AS ${amountAlias},
+            sm.name AS scheme_name,
+            sm.scheme_code
+        FROM ${table} d
+        INNER JOIN scheme_master sm
+            ON sm.id = d.scheme_id
+            AND sm.scheme_type_id = $1
+            AND sm.category_id = $2
+            AND sm.is_active = 1
+            AND sm.deleted_at IS NULL
+        WHERE d.branch_id = $5
+            AND d.scheme_id::text = ANY(
+                string_to_array($6, ',')
+            )
+            AND ${periodCondition}
+            AND d.sampling_filter = 0
+            AND d.deleted_at IS NULL
+            ${filterClause}
+        ORDER BY
+            NULLIF(${amountColumn}::text, '')::numeric DESC NULLS LAST,
+            d.account_no;
         `,
         params,
       );
@@ -5802,35 +7996,35 @@ ORDER BY
     const result =
       await this.db.query(
         `
-SELECT
-    d.id,
-    d.account_no,
-    d.account_holder_name,
-    d.ucic,
-    d.account_opening_date,
-    d.account_status,
-    d.assesment_period_id,
-    sm.name AS scheme_name,
-    sm.scheme_code,
-    CASE
-        WHEN d.assesment_period_id = $1 THEN true
-        ELSE false
-    END AS is_completed
-FROM ${table} d
-INNER JOIN scheme_master sm
-    ON sm.id = d.scheme_id
-    AND sm.scheme_type_id = $2
-    AND sm.category_id = $3
-    AND sm.is_active = 1
-    AND sm.deleted_at IS NULL
-WHERE d.branch_id = $6
-    AND d.scheme_id::text = ANY(
-        string_to_array($7, ',')
-    )
-    AND ${periodCondition}
-    AND d.sampling_filter = 1
-    AND d.deleted_at IS NULL
-ORDER BY d.account_no;
+        SELECT
+            d.id,
+            d.account_no,
+            d.account_holder_name,
+            d.ucic,
+            d.account_opening_date,
+            d.account_status,
+            d.assesment_period_id,
+            sm.name AS scheme_name,
+            sm.scheme_code,
+            CASE
+                WHEN d.assesment_period_id = $1 THEN true
+                ELSE false
+            END AS is_completed
+        FROM ${table} d
+        INNER JOIN scheme_master sm
+            ON sm.id = d.scheme_id
+            AND sm.scheme_type_id = $2
+            AND sm.category_id = $3
+            AND sm.is_active = 1
+            AND sm.deleted_at IS NULL
+        WHERE d.branch_id = $6
+            AND d.scheme_id::text = ANY(
+                string_to_array($7, ',')
+            )
+            AND ${periodCondition}
+            AND d.sampling_filter = 1
+            AND d.deleted_at IS NULL
+        ORDER BY d.account_no;
         `,
         [
           overview.id,
@@ -5961,11 +8155,11 @@ ORDER BY d.account_no;
 
     await this.db.query(
       `
-UPDATE ${table}
-SET assesment_period_id = $1
-WHERE id = $2
-    AND sampling_filter = 1
-    AND deleted_at IS NULL;
+      UPDATE ${table}
+      SET assesment_period_id = $1
+      WHERE id = $2
+          AND sampling_filter = 1
+          AND deleted_at IS NULL;
       `,
       [
         assessmentId,
@@ -5986,40 +8180,40 @@ WHERE id = $2
   ) {
 
     const query = `
-SELECT
-    aam.id,
-    aam.audit_type_id,
-    aam.year_id,
-    aam.audit_unit_id,
-    aam.frequency,
-    aam.audit_status_id,
-    aam.assesment_period_from,
-    aam.assesment_period_to,
-    aam.audit_start_date,
-    aam.audit_end_date,
-    aam.audit_due_date,
-    aam.is_limit_blocked,
-    aam.menu_ids,
-    aam.cat_ids,
-    aam.header_ids,
-    aam.question_ids,
-    aam.advances_scheme_ids,
-    aam.deposits_scheme_ids,
-    aam.batch_key,
-    ym.year,
-    au.name AS audit_unit_name,
-    au.audit_unit_code,
-    asm.name AS section_type_name
-FROM audit_assesment_master aam
-LEFT JOIN year_master ym
-    ON ym.id = aam.year_id
-LEFT JOIN audit_unit_master au
-    ON au.id = aam.audit_unit_id
-LEFT JOIN audit_section_master asm
-    ON asm.id = au.section_type_id
-WHERE aam.id = $1
-    AND aam.deleted_at IS NULL
-LIMIT 1;
+      SELECT
+          aam.id,
+          aam.audit_type_id,
+          aam.year_id,
+          aam.audit_unit_id,
+          aam.frequency,
+          aam.audit_status_id,
+          aam.assesment_period_from,
+          aam.assesment_period_to,
+          aam.audit_start_date,
+          aam.audit_end_date,
+          aam.audit_due_date,
+          aam.is_limit_blocked,
+          aam.menu_ids,
+          aam.cat_ids,
+          aam.header_ids,
+          aam.question_ids,
+          aam.advances_scheme_ids,
+          aam.deposits_scheme_ids,
+          aam.batch_key,
+          ym.year,
+          au.name AS audit_unit_name,
+          au.audit_unit_code,
+          asm.name AS section_type_name
+      FROM audit_assesment_master aam
+      LEFT JOIN year_master ym
+          ON ym.id = aam.year_id
+      LEFT JOIN audit_unit_master au
+          ON au.id = aam.audit_unit_id
+      LEFT JOIN audit_section_master asm
+          ON asm.id = au.section_type_id
+      WHERE aam.id = $1
+          AND aam.deleted_at IS NULL
+      LIMIT 1;
     `;
 
     const result =
@@ -6038,6 +8232,488 @@ LIMIT 1;
     }
 
     return result.rows[0];
+  }
+
+  private async getReAuditScope(
+    assessmentId: number,
+  ) {
+
+    const result =
+      await this.db.query(
+        `
+        SELECT
+            ad.category_id,
+            ad.question_id,
+            ad.dump_id,
+            ad.audit_status_id,
+            EXISTS (
+                SELECT 1
+                FROM answers_data_annexure aa
+                WHERE aa.answer_id = ad.id
+                    AND aa.assesment_id = ad.assesment_id
+                    AND aa.audit_status_id = 3
+                    AND aa.deleted_at IS NULL
+            ) AS has_rejected_annexure
+        FROM answers_data ad
+        WHERE ad.assesment_id = $1
+            AND ad.deleted_at IS NULL
+            AND (
+                ad.audit_status_id = 3
+                OR EXISTS (
+                    SELECT 1
+                    FROM answers_data_annexure aa
+                    WHERE aa.answer_id = ad.id
+                        AND aa.assesment_id = ad.assesment_id
+                        AND aa.audit_status_id = 3
+                        AND aa.deleted_at IS NULL
+                )
+            );
+        `,
+        [assessmentId],
+      );
+
+    const categories =
+      new Set<number>();
+    const questions =
+      new Map<string, any>();
+    const dumps =
+      new Set<string>();
+    const categoryQuestions =
+      new Map<number, Set<number>>();
+
+    for (
+      const row
+      of result.rows
+    ) {
+      const categoryId =
+        Number(row.category_id);
+      const questionId =
+        Number(row.question_id);
+      const dumpId =
+        Number(row.dump_id || 0);
+      const key =
+        `${categoryId}:${dumpId}:${questionId}`;
+
+      categories.add(
+        categoryId,
+      );
+      questions.set(
+        key,
+        {
+          answer_rejected:
+            Number(row.audit_status_id) === 3,
+          annexure_rejected:
+            Boolean(row.has_rejected_annexure),
+        },
+      );
+
+      if (
+        dumpId
+      ) {
+        dumps.add(
+          `${categoryId}:${dumpId}`,
+        );
+      }
+
+      const categorySet =
+        categoryQuestions.get(categoryId)
+        || new Set<number>();
+      categorySet.add(questionId);
+      categoryQuestions.set(
+        categoryId,
+        categorySet,
+      );
+    }
+
+    return {
+      categories,
+      questions,
+      dumps,
+      categoryQuestionCount:
+        new Map(
+          Array.from(
+            categoryQuestions.entries(),
+          ).map(
+            ([categoryId, ids]) => [
+              categoryId,
+              ids.size,
+            ],
+          ),
+        ),
+    };
+  }
+
+  private async getReAuditPendingCorrectionCount(
+    assessmentId: number,
+    batchKey: string,
+  ) {
+
+    const result =
+      await this.db.findOne(
+        `
+SELECT (
+    (
+        SELECT COUNT(*)
+        FROM answers_data ad
+        WHERE ad.assesment_id = $1
+            AND ad.audit_status_id = 3
+            AND ad.batch_key IS DISTINCT FROM $2
+            AND ad.deleted_at IS NULL
+    )
+    +
+    (
+        SELECT COUNT(*)
+        FROM answers_data_annexure aa
+        WHERE aa.assesment_id = $1
+            AND aa.audit_status_id = 3
+            AND aa.batch_key IS DISTINCT FROM $2
+            AND aa.deleted_at IS NULL
+    )
+)::int AS pending_count;
+        `,
+        [
+          assessmentId,
+          batchKey,
+        ],
+      );
+
+    return Number(
+      result?.pending_count || 0,
+    );
+  }
+
+  private filterReAuditSets(
+    sets: any[],
+    scope: any,
+    categoryId: number,
+    dumpId: number,
+  ): any[] {
+
+    return (sets || [])
+      .map(
+        (set: any) => ({
+          ...set,
+          headers:
+            (set.headers || [])
+              .map(
+                (header: any) => ({
+                  ...header,
+                  questions:
+                    (header.questions || [])
+                      .map(
+                        (question: any) => {
+                          const scoped =
+                            scope.questions.get(
+                              `${categoryId}:${dumpId}:${Number(question.id)}`,
+                            );
+                          const subsetSets =
+                            this.filterReAuditSets(
+                              question.subset_sets || [],
+                              scope,
+                              categoryId,
+                              dumpId,
+                            );
+
+                          if (
+                            !scoped
+                            &&
+                            !subsetSets.length
+                          ) {
+                            return null;
+                          }
+
+                          const visibleRows =
+                            scoped?.annexure_rejected
+                              &&
+                              !scoped?.answer_rejected
+                              ? (
+                                question.answer?.annexure_rows || []
+                              ).filter(
+                                (row: any) =>
+                                  Number(row.audit_status_id) === 3,
+                              )
+                              : question.answer?.annexure_rows || [];
+
+                          return {
+                            ...question,
+                            subset_sets:
+                              subsetSets,
+                            re_audit:
+                              Boolean(scoped),
+                            re_audit_annexure_only:
+                              Boolean(
+                                scoped?.annexure_rejected
+                                &&
+                                !scoped?.answer_rejected,
+                              ),
+                            answer:
+                              question.answer
+                                ? {
+                                  ...question.answer,
+                                  annexure_rows:
+                                    visibleRows,
+                                }
+                                : question.answer,
+                          };
+                        },
+                      )
+                      .filter(Boolean),
+                }),
+              )
+              .filter(
+                (header: any) =>
+                  header.questions.length,
+              ),
+        }),
+      )
+      .filter(
+        (set: any) =>
+          set.headers.length,
+      );
+  }
+
+  private async assertReviewer(
+    employeeId: number,
+  ) {
+
+    if (
+      !employeeId
+    ) {
+      throw new BadRequestException(
+        'Reviewer is required.',
+      );
+    }
+
+    const employee =
+      await this.db.findOne(
+        `
+        SELECT id
+        FROM employee_master
+        WHERE id = $1
+            AND user_type_id = 4
+            AND deleted_at IS NULL
+        LIMIT 1;
+        `,
+        [employeeId],
+      );
+
+    if (
+      !employee
+    ) {
+      throw new BadRequestException(
+        'Only a reviewer can open audit review.',
+      );
+    }
+  }
+
+  private async assertCompliance(
+    employeeId: number,
+  ) {
+
+    if (
+      !employeeId
+    ) {
+      throw new BadRequestException(
+        'Manager is required.',
+      );
+    }
+
+    const employee =
+      await this.db.findOne(
+        `
+        SELECT id
+        FROM employee_master
+        WHERE id = $1
+            AND user_type_id = 3
+            AND deleted_at IS NULL
+        LIMIT 1;
+        `,
+        [employeeId],
+      );
+
+    if (
+      !employee
+    ) {
+      throw new BadRequestException(
+        'Only a manager can open compliance.',
+      );
+    }
+  }
+
+  private getReviewerCounts(
+    answers: any[],
+  ) {
+
+    let accepted = 0;
+    let rejected = 0;
+    let pending = 0;
+    let compliance = 0;
+
+    const applyStatus =
+      (status: number) => {
+        if (
+          status === 2
+        ) {
+          accepted++;
+        } else if (
+          status === 3
+        ) {
+          rejected++;
+        } else {
+          pending++;
+        }
+      };
+
+    for (
+      const answer
+      of answers
+    ) {
+      if (
+        Number(answer.is_compliance) === 1
+      ) {
+        compliance++;
+      }
+
+      applyStatus(
+        Number(answer.audit_status_id || 0),
+      );
+
+      for (
+        const annexure
+        of answer.annexure_rows || []
+      ) {
+        applyStatus(
+          Number(annexure.audit_status_id || 0),
+        );
+      }
+    }
+
+    return {
+      total:
+        accepted
+        + rejected
+        + pending,
+      accepted,
+      rejected,
+      pending,
+      compliance,
+    };
+  }
+
+  private getComplianceCounts(
+    answers: any[],
+    batchKey = '',
+    requireCurrentBatch = false,
+  ) {
+
+    let total = 0;
+    let completed = 0;
+
+    const applyResponse =
+      (observation: any) => {
+        if (
+          observation.response_required === false
+        ) {
+          return;
+        }
+
+        total++;
+
+        if (
+          this.cleanString(
+            observation.compliance_response,
+          )
+          &&
+          (
+            !requireCurrentBatch
+            ||
+            String(
+              observation.batch_key || '',
+            ) === batchKey
+          )
+        ) {
+          completed++;
+        }
+      };
+
+    for (
+      const answer
+      of answers
+    ) {
+      applyResponse(
+        answer,
+      );
+
+      for (
+        const annexure
+        of answer.annexure_rows || []
+      ) {
+        applyResponse(
+          annexure,
+        );
+      }
+    }
+
+    return {
+      total,
+      completed,
+      pending:
+        total - completed,
+    };
+  }
+
+  private getReviewerComplianceCounts(
+    answers: any[],
+  ) {
+
+    let accepted = 0;
+    let rejected = 0;
+    let pending = 0;
+
+    const applyStatus =
+      (status: number) => {
+        if (
+          status === 2
+        ) {
+          accepted++;
+        } else if (
+          status === 3
+        ) {
+          rejected++;
+        } else {
+          pending++;
+        }
+      };
+
+    for (
+      const answer
+      of answers
+    ) {
+      applyStatus(
+        Number(answer.compliance_status_id || 0),
+      );
+
+      for (
+        const annexure
+        of answer.annexure_rows || []
+      ) {
+        applyStatus(
+          Number(annexure.compliance_status_id || 0),
+        );
+      }
+    }
+
+    return {
+      total:
+        accepted
+        + rejected
+        + pending,
+      compliance:
+        answers.length,
+      accepted,
+      rejected,
+      pending,
+    };
   }
 
   // Check whether this employee is allowed to access this audit unit.
