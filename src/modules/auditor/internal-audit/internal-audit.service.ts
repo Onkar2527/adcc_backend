@@ -1612,6 +1612,24 @@ ORDER BY
       }
     }
 
+    if (
+      String(
+        overview.menu_ids || '',
+      )
+        .split(',')
+        .map(
+          (id: string) =>
+            id.trim(),
+        )
+        .includes('1')
+    ) {
+      await this.appendExecutiveSummaryIssues(
+        assessmentId,
+        Number(overview.year_id),
+        issues,
+      );
+    }
+
     return {
       can_submit:
         issues.length === 0,
@@ -4863,6 +4881,92 @@ ORDER BY id DESC;
     return complianceCount;
   }
 
+  private async appendExecutiveSummaryIssues(
+    assessmentId: number,
+    yearId: number,
+    issues: any[],
+  ) {
+
+    const result =
+      await this.db.findOne(
+        `
+SELECT
+    EXISTS (
+        SELECT 1
+        FROM executive_summary_basic_details
+        WHERE assesment_id = $1
+            AND year_id = $2
+            AND deleted_at IS NULL
+    ) AS has_basic_details,
+    EXISTS (
+        SELECT 1
+        FROM executive_summary_branch_position
+        WHERE assesment_id = $1
+            AND year_id = $2
+            AND deleted_at IS NULL
+    ) AS has_branch_position,
+    EXISTS (
+        SELECT 1
+        FROM executive_summary_fresh_accounts
+        WHERE assesment_id = $1
+            AND year_id = $2
+            AND deleted_at IS NULL
+    ) AS has_fresh_accounts;
+        `,
+        [
+          assessmentId,
+          yearId,
+        ],
+      );
+
+    const sections = [
+      {
+        complete:
+          result?.has_basic_details,
+        question:
+          'Basic Details',
+      },
+      {
+        complete:
+          result?.has_branch_position,
+        question:
+          'Branch Financial Position',
+      },
+      {
+        complete:
+          result?.has_fresh_accounts,
+        question:
+          'Number of New (Fresh) Accounts',
+      },
+    ];
+
+    for (
+      const section
+      of sections
+    ) {
+      if (
+        !section.complete
+      ) {
+        issues.push({
+          category_id:
+            0,
+          category_name:
+            'Executive Summary',
+          menu_name:
+            'Executive Summary',
+          question_id:
+            0,
+          question:
+            section.question,
+          type:
+            'executive_summary',
+          message:
+            'Complete and save this executive summary section.',
+        });
+      }
+    }
+  }
+
   private getSubsetIdsFromRows(
     rows: any[],
   ) {
@@ -5217,6 +5321,447 @@ ORDER BY id DESC;
     return assessment;
   }
 
+  async getAccountSampling(
+    assessmentId: number,
+    categoryId: number,
+    employeeId: number,
+    filterType = 0,
+    primaryValue = '',
+    secondaryValue = '',
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+      );
+
+    this.assertSamplingAllowed(
+      detail,
+    );
+
+    const candidateData =
+      await this.getSamplingCandidates(
+        detail.category,
+        detail.overview,
+        filterType,
+        primaryValue,
+        secondaryValue,
+      );
+
+    return {
+      filter_types: [
+        {
+          id: 1,
+          name: 'Block Sampling',
+        },
+        {
+          id: 2,
+          name: 'High Value Sampling',
+        },
+        {
+          id: 3,
+          name: 'Systematic Sampling - Below 1 Lakh',
+        },
+        {
+          id: 4,
+          name: 'Systematic Sampling - Between 1 Lakh To 2 Lakhs',
+        },
+        {
+          id: 5,
+          name: 'Systematic Sampling - Above 2 Lakhs',
+        },
+      ],
+      selected_accounts:
+        detail.accounts || [],
+      candidates:
+        candidateData.accounts,
+      matching_count:
+        candidateData.matching_count,
+      displayed_count:
+        candidateData.accounts.length,
+    };
+  }
+
+  async applyAccountSampling(
+    assessmentId: number,
+    categoryId: number,
+    employeeId: number,
+    accountIds: any[],
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+      );
+
+    this.assertSamplingAllowed(
+      detail,
+    );
+
+    const selectedIds =
+      Array.from(
+        new Set(
+          (Array.isArray(accountIds) ? accountIds : [])
+            .map(
+              (id: any) =>
+                Number(id),
+            )
+            .filter(
+              (id: number) =>
+                Number.isInteger(id)
+                &&
+                id > 0,
+            ),
+        ),
+      );
+
+    if (
+      !selectedIds.length
+    ) {
+      throw new BadRequestException(
+        'Select at least one account for sampling.',
+      );
+    }
+
+    const candidates =
+      await this.getSamplingCandidates(
+        detail.category,
+        detail.overview,
+      );
+
+    const eligibleIds =
+      new Set(
+        candidates.accounts.map(
+          (account: any) =>
+            Number(account.id),
+        ),
+      );
+
+    if (
+      selectedIds.some(
+        (id: number) =>
+          !eligibleIds.has(id),
+      )
+    ) {
+      throw new BadRequestException(
+        'One or more selected accounts are no longer available for sampling.',
+      );
+    }
+
+    const table =
+      Number(detail.category.linked_table_id) === 1
+        ? 'dump_deposits'
+        : 'dump_advances';
+
+    await this.db.query(
+      `
+UPDATE ${table}
+SET sampling_filter = 1
+WHERE id = ANY($1::int[])
+    AND sampling_filter = 0
+    AND deleted_at IS NULL;
+      `,
+      [
+        selectedIds,
+      ],
+    );
+
+    return {
+      success:
+        true,
+      message:
+        'Sampled accounts applied successfully.',
+      selected_count:
+        selectedIds.length,
+    };
+  }
+
+  async removeAccountSampling(
+    assessmentId: number,
+    categoryId: number,
+    dumpId: number,
+    employeeId: number,
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+        dumpId,
+      );
+
+    this.assertSamplingAllowed(
+      detail,
+    );
+    this.assertAccountSelection(
+      detail,
+    );
+
+    if (
+      Number(
+        detail.selected_account.assesment_period_id || 0,
+      )
+    ) {
+      throw new BadRequestException(
+        'Completed account sampling cannot be removed.',
+      );
+    }
+
+    const answered =
+      await this.db.findOne(
+        `
+SELECT id
+FROM answers_data
+WHERE assesment_id = $1
+    AND category_id = $2
+    AND dump_id = $3
+    AND deleted_at IS NULL
+LIMIT 1;
+        `,
+        [
+          assessmentId,
+          categoryId,
+          dumpId,
+        ],
+      );
+
+    if (
+      answered?.id
+    ) {
+      throw new BadRequestException(
+        'This sampled account already has audit answers and cannot be removed.',
+      );
+    }
+
+    const table =
+      Number(detail.category.linked_table_id) === 1
+        ? 'dump_deposits'
+        : 'dump_advances';
+
+    await this.db.query(
+      `
+UPDATE ${table}
+SET sampling_filter = 0
+WHERE id = $1
+    AND COALESCE(assesment_period_id, 0) = 0
+    AND sampling_filter = 1
+    AND deleted_at IS NULL;
+      `,
+      [
+        dumpId,
+      ],
+    );
+
+    return {
+      success:
+        true,
+      message:
+        'Sampled account removed successfully.',
+    };
+  }
+
+  private async getSamplingCandidates(
+    category: any,
+    overview: any,
+    filterType = 0,
+    primaryValue = '',
+    secondaryValue = '',
+  ) {
+
+    const linkedTableId =
+      Number(category.linked_table_id);
+
+    if (
+      ![1, 2].includes(
+        linkedTableId,
+      )
+    ) {
+      throw new BadRequestException(
+        'Sampling is available only for account-based categories.',
+      );
+    }
+
+    if (
+      filterType
+      &&
+      ![1, 2, 3, 4, 5].includes(filterType)
+    ) {
+      throw new BadRequestException(
+        'Select a valid sampling filter.',
+      );
+    }
+
+    if (
+      filterType === 1
+      &&
+      (
+        !String(primaryValue).trim()
+        ||
+        !String(secondaryValue).trim()
+      )
+    ) {
+      throw new BadRequestException(
+        'Enter from and to account numbers for block sampling.',
+      );
+    }
+
+    const percentage =
+      Number(primaryValue);
+
+    if (
+      [2, 3, 4, 5].includes(filterType)
+      &&
+      (
+        !Number.isFinite(percentage)
+        ||
+        percentage <= 0
+        ||
+        percentage > 100
+      )
+    ) {
+      throw new BadRequestException(
+        'Enter a sampling percentage between 1 and 100.',
+      );
+    }
+
+    const table =
+      linkedTableId === 1
+        ? 'dump_deposits'
+        : 'dump_advances';
+
+    const amountColumn =
+      linkedTableId === 1
+        ? 'd.principal_amount'
+        : 'd.sanction_amount';
+
+    const amountAlias =
+      linkedTableId === 1
+        ? 'principal_amount'
+        : 'sanction_amount';
+
+    const renewalColumn =
+      linkedTableId === 1
+        ? 'NULL::date AS renewal_date'
+        : 'd.renewal_date';
+
+    const periodCondition =
+      linkedTableId === 1
+        ? 'd.account_opening_date BETWEEN $3 AND $4'
+        : '(d.account_opening_date BETWEEN $3 AND $4 OR d.renewal_date BETWEEN $3 AND $4)';
+
+    const schemeIds =
+      linkedTableId === 1
+        ? overview.deposits_scheme_ids || ''
+        : overview.advances_scheme_ids || '';
+
+    if (
+      !String(schemeIds).trim()
+    ) {
+      return {
+        accounts: [],
+        matching_count: 0,
+      };
+    }
+
+    let filterClause = '';
+    const params: any[] = [
+      linkedTableId,
+      category.id,
+      overview.assesment_period_from,
+      overview.assesment_period_to,
+      overview.audit_unit_id,
+      String(schemeIds),
+    ];
+
+    if (
+      filterType === 1
+    ) {
+      filterClause =
+        ' AND d.account_no BETWEEN $7 AND $8';
+      params.push(
+        String(primaryValue).trim(),
+        String(secondaryValue).trim(),
+      );
+    } else if (
+      filterType === 3
+    ) {
+      filterClause =
+        ` AND ${amountColumn} < 100000`;
+    } else if (
+      filterType === 4
+    ) {
+      filterClause =
+        ` AND ${amountColumn} BETWEEN 100000 AND 200000`;
+    } else if (
+      filterType === 5
+    ) {
+      filterClause =
+        ` AND ${amountColumn} > 200000`;
+    }
+
+    const result =
+      await this.db.query(
+        `
+SELECT
+    d.id,
+    d.account_no,
+    d.account_holder_name,
+    d.ucic,
+    d.account_opening_date,
+    ${renewalColumn},
+    ${amountColumn} AS ${amountAlias},
+    sm.name AS scheme_name,
+    sm.scheme_code
+FROM ${table} d
+INNER JOIN scheme_master sm
+    ON sm.id = d.scheme_id
+    AND sm.scheme_type_id = $1
+    AND sm.category_id = $2
+    AND sm.is_active = 1
+    AND sm.deleted_at IS NULL
+WHERE d.branch_id = $5
+    AND d.scheme_id::text = ANY(
+        string_to_array($6, ',')
+    )
+    AND ${periodCondition}
+    AND d.sampling_filter = 0
+    AND d.deleted_at IS NULL
+    ${filterClause}
+ORDER BY
+    NULLIF(${amountColumn}::text, '')::numeric DESC NULLS LAST,
+    d.account_no;
+        `,
+        params,
+      );
+
+    const matchingCount =
+      result.rows.length;
+
+    const accounts =
+      [2, 3, 4, 5].includes(filterType)
+        ? result.rows.slice(
+          0,
+          Math.max(
+            1,
+            Math.ceil(
+              matchingCount * percentage / 100,
+            ),
+          ),
+        )
+        : result.rows;
+
+    return {
+      accounts,
+      matching_count:
+        matchingCount,
+    };
+  }
+
   private async getSampledAccounts(
     category: any,
     overview: any,
@@ -5316,6 +5861,33 @@ ORDER BY d.account_no;
     ) {
       throw new BadRequestException(
         'Select a sampled account before saving audit data.',
+      );
+    }
+  }
+
+  private assertSamplingAllowed(
+    detail: any,
+  ) {
+
+    if (
+      ![1, 2].includes(
+        Number(
+          detail?.category?.linked_table_id,
+        ),
+      )
+    ) {
+      throw new BadRequestException(
+        'Sampling is available only for account-based categories.',
+      );
+    }
+
+    if (
+      Number(
+        detail?.overview?.audit_status_id || 0,
+      ) !== 1
+    ) {
+      throw new BadRequestException(
+        'Account sampling can be updated only during the initial audit.',
       );
     }
   }

@@ -194,6 +194,80 @@ export class InternalAuditController {
     );
   }
 
+  @Get(':assessmentId/category/:categoryId/sampling')
+  getAccountSampling(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Query('employee_id')
+    employeeId?: string,
+
+    @Query('filter_type')
+    filterType?: string,
+
+    @Query('primary_value')
+    primaryValue?: string,
+
+    @Query('secondary_value')
+    secondaryValue?: string,
+  ) {
+
+    return this.service.getAccountSampling(
+      assessmentId,
+      categoryId,
+      Number(employeeId || 0),
+      Number(filterType || 0),
+      primaryValue || '',
+      secondaryValue || '',
+    );
+  }
+
+  @Post(':assessmentId/category/:categoryId/sampling/apply')
+  applyAccountSampling(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.applyAccountSampling(
+      assessmentId,
+      categoryId,
+      Number(body?.employee_id || 0),
+      body?.account_ids || [],
+    );
+  }
+
+  @Post(':assessmentId/category/:categoryId/account/:dumpId/remove-sampling')
+  removeAccountSampling(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Param('dumpId', ParseIntPipe)
+    dumpId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.removeAccountSampling(
+      assessmentId,
+      categoryId,
+      dumpId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
   @Post(':assessmentId/category/:categoryId/account/:dumpId/complete')
   completeAccountAssessment(
     @Param('assessmentId', ParseIntPipe)

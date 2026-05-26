@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 
@@ -82,11 +83,15 @@ export class AuditDashboardController {
   getExecutiveSummary(
     @Param('assessment_id')
     assessment_id: number,
+
+    @Query('employee_id')
+    employeeId?: string,
   ) {
 
     return this.service
       .getExecutiveSummary(
         Number(assessment_id),
+        Number(employeeId || 0),
       );
 
   }
@@ -98,19 +103,19 @@ export class AuditDashboardController {
 
     return this.service.saveExecutiveSummary(
       body,
-      req.admin_id,
+      Number(body?.employee_id || req.admin_id || 0),
     );
 
   }
   @Get('branch-financial-position/:branch_id')
-async getBranchFinancialPosition(
+  async getBranchFinancialPosition(
     @Param('branch_id')
     branch_id: number,
-) {
+  ) {
 
     return this.service.getBranchFinancialPosition(
-        Number(branch_id),
+      Number(branch_id),
     );
 
-}
+  }
 }

@@ -12,6 +12,42 @@ import {
     OpenAssessmentDto,
 } from './dto/audit-dashboard.dto';
 
+const EXECUTIVE_BRANCH_POSITION_LINES = [
+    { type_id: 1, group: 'Deposits', name: 'CASA Deposit' },
+    { type_id: 2, group: 'Deposits', name: 'Term Deposit' },
+    { type_id: 3, group: 'Advances', name: 'Clean Loan' },
+    { type_id: 4, group: 'Advances', name: 'Vehicle Loan' },
+    { type_id: 5, group: 'Advances', name: 'Gold Loan' },
+    { type_id: 6, group: 'Advances', name: 'Other Term Loan' },
+    { type_id: 7, group: 'Advances', name: 'Cash Credit Loan' },
+    { type_id: 8, group: 'Advances', name: 'Decreed Loan' },
+    { type_id: 9, group: 'NPA', name: 'Clean Loan' },
+    { type_id: 10, group: 'NPA', name: 'Vehicle Loan' },
+    { type_id: 11, group: 'NPA', name: 'Gold Loan' },
+    { type_id: 12, group: 'NPA', name: 'Other Term Loan' },
+    { type_id: 13, group: 'NPA', name: 'Cash Credit Loan' },
+    { type_id: 14, group: 'NPA', name: 'Decreed Loan' },
+];
+
+const EXECUTIVE_FRESH_ACCOUNT_LINES = [
+    { type_id: 1, group: 'Deposits', name: 'CASA Deposit' },
+    { type_id: 2, group: 'Deposits', name: 'Term Deposit (New)' },
+    { type_id: 3, group: 'Deposits', name: 'Term Deposits (Through Auto-Renewals)' },
+    { type_id: 4, group: 'Advances', name: 'Clean Loan' },
+    { type_id: 5, group: 'Advances', name: 'Vehicle Loan' },
+    { type_id: 6, group: 'Advances', name: 'Gold Loan' },
+    { type_id: 7, group: 'Advances', name: 'Loan Against Fixed Deposits' },
+    { type_id: 8, group: 'Advances', name: 'Other Term Loan' },
+    { type_id: 9, group: 'Advances', name: 'Cash Credit Loans (New)' },
+    { type_id: 10, group: 'Advances', name: 'Cash Credit Loans (Renewals)' },
+    { type_id: 11, group: 'NPA', name: 'Clean Loan' },
+    { type_id: 12, group: 'NPA', name: 'Vehicle Loan' },
+    { type_id: 13, group: 'NPA', name: 'Gold Loan' },
+    { type_id: 14, group: 'NPA', name: 'Other Term Loan' },
+    { type_id: 15, group: 'NPA', name: 'Cash Credit Loan' },
+    { type_id: 16, group: 'NPA', name: 'Decreed Accounts' },
+];
+
 @Injectable()
 export class AuditDashboardService {
 
@@ -946,6 +982,7 @@ LIMIT 1;
     }
      async getExecutiveSummary(
         assessment_id: number,
+        employeeId: number,
     ) {
 
         const assessment =
@@ -954,6 +991,7 @@ LIMIT 1;
 SELECT 
     aam.id,
     aam.year_id,
+    aam.audit_unit_id,
     aam.frequency,
 
     aam.assesment_period_from,
@@ -1075,6 +1113,100 @@ LIMIT 1
        const data =
     assessment.rows[0];
 
+        if (
+            !await this.hasAuditUnitAuthority(
+                employeeId,
+                Number(data.audit_unit_id),
+            )
+        ) {
+            throw new BadRequestException(
+                'You are not authorized for this audit unit.',
+            );
+        }
+
+        const [
+            branchPositions,
+            freshAccounts,
+            marchPositions,
+        ] =
+            await Promise.all([
+                this.db.query(
+                    `
+SELECT
+    type_id,
+    amount
+FROM executive_summary_branch_position
+WHERE assesment_id = $1
+    AND year_id = $2
+    AND deleted_at IS NULL;
+                    `,
+                    [
+                        assessment_id,
+                        data.year_id,
+                    ],
+                ),
+                this.db.query(
+                    `
+SELECT
+    type_id,
+    accounts
+FROM executive_summary_fresh_accounts
+WHERE assesment_id = $1
+    AND year_id = $2
+    AND deleted_at IS NULL;
+                    `,
+                    [
+                        assessment_id,
+                        data.year_id,
+                    ],
+                ),
+                this.db.query(
+                    `
+SELECT
+    gl_type_id,
+    march_position
+FROM exe_summary
+WHERE audit_unit_id = $1
+    AND year_id = $2
+    AND deleted_at IS NULL;
+                    `,
+                    [
+                        data.audit_unit_id,
+                        data.year_id,
+                    ],
+                ),
+            ]);
+
+        const branchPositionMap =
+            new Map(
+                branchPositions.rows.map(
+                    (row: any) => [
+                        Number(row.type_id),
+                        row.amount,
+                    ],
+                ),
+            );
+
+        const freshAccountMap =
+            new Map(
+                freshAccounts.rows.map(
+                    (row: any) => [
+                        Number(row.type_id),
+                        row.accounts,
+                    ],
+                ),
+            );
+
+        const marchPositionMap =
+            new Map(
+                marchPositions.rows.map(
+                    (row: any) => [
+                        Number(row.gl_type_id),
+                        row.march_position,
+                    ],
+                ),
+            );
+
         return {
             year_id:
                 data.year_id,
@@ -1113,6 +1245,26 @@ LIMIT 1
 
             current_financial_year:
                 this.getFinancialYear(),
+
+            branch_positions:
+                EXECUTIVE_BRANCH_POSITION_LINES.map(
+                    (line) => ({
+                        ...line,
+                        amount:
+                            branchPositionMap.get(line.type_id) ?? '',
+                        march_position:
+                            marchPositionMap.get(line.type_id) ?? 0,
+                    }),
+                ),
+
+            fresh_accounts:
+                EXECUTIVE_FRESH_ACCOUNT_LINES.map(
+                    (line) => ({
+                        ...line,
+                        accounts:
+                            freshAccountMap.get(line.type_id) ?? '',
+                    }),
+                ),
 
           summary_detail: [
 
@@ -1296,123 +1448,357 @@ LIMIT 1
     admin_id: number,
 ) {
 
-    const existing =
-        await this.db.query(
+    const assessmentId =
+        Number(body?.assessment_id || 0);
+
+    const assessment =
+        await this.db.findOne(
             `
-            SELECT id
-            FROM executive_summary_basic_details
-            WHERE assesment_id = $1
-            LIMIT 1
+SELECT id, year_id, audit_unit_id, audit_status_id, batch_key
+FROM audit_assesment_master
+WHERE id = $1
+    AND deleted_at IS NULL
+LIMIT 1;
             `,
             [
-                body.assessment_id,
+                assessmentId,
             ],
         );
 
-    // UPDATE
     if (
-        existing.rows.length > 0
+        !assessment
     ) {
-
-        await this.db.query(
-            `
-            UPDATE executive_summary_basic_details
-
-            SET
-
-                report_submitted_date = $1,
-
-                staff_count = $2,
-
-                manual_challans_per_day = $3,
-
-                updated_at = NOW()
-
-            WHERE assesment_id = $4
-            `,
-            [
-
-                body.audit_report_submitted_date,
-
-                body.staff_count,
-
-                body.manual_challans_per_day,
-
-                body.assessment_id,
-
-            ],
+        throw new NotFoundException(
+            'Assessment not found',
         );
-
-        return {
-            message:
-                'Executive Summary Updated Successfully',
-        };
-
     }
 
-    // INSERT
-    await this.db.query(
-        `
-        INSERT INTO executive_summary_basic_details
-        (
-
-            year_id,
-
-            assesment_id,
-
-            report_submitted_date,
-
-            staff_count,
-
-            manual_challans_per_day,
-
+    if (
+        !await this.hasAuditUnitAuthority(
             admin_id,
-
-            created_at
-
+            Number(assessment.audit_unit_id),
         )
+    ) {
+        throw new BadRequestException(
+            'You are not authorized for this audit unit.',
+        );
+    }
 
-        VALUES
-        (
+    if (
+        Number(assessment.audit_status_id) !== 1
+    ) {
+        throw new BadRequestException(
+            'Executive summary can be updated only during the initial audit.',
+        );
+    }
 
-            $1,
+    const reportDate =
+        String(body?.audit_report_submitted_date || '').trim();
+    const staffCount =
+        Number(body?.staff_count);
+    const challanCount =
+        Number(body?.manual_challans_per_day);
 
-            $2,
+    if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(reportDate)
+        ||
+        !Number.isInteger(staffCount)
+        ||
+        staffCount < 0
+        ||
+        !Number.isInteger(challanCount)
+        ||
+        challanCount < 0
+    ) {
+        throw new BadRequestException(
+            'Enter report submitted date, staff count and manual challans per day.',
+        );
+    }
 
-            $3,
+    const branchPositions =
+        this.validateExecutiveRows(
+            body?.branch_positions,
+            EXECUTIVE_BRANCH_POSITION_LINES,
+            'amount',
+            false,
+        );
 
-            $4,
+    const freshAccounts =
+        this.validateExecutiveRows(
+            body?.fresh_accounts,
+            EXECUTIVE_FRESH_ACCOUNT_LINES,
+            'accounts',
+            true,
+        );
 
-            $5,
+    const employeeId =
+        Number(admin_id || 0);
 
-            $6,
+    await this.db.transaction(
+        async (client) => {
+            const existing =
+                await client.query(
+                    `
+SELECT id
+FROM executive_summary_basic_details
+WHERE assesment_id = $1
+    AND year_id = $2
+    AND deleted_at IS NULL
+LIMIT 1;
+                    `,
+                    [
+                        assessmentId,
+                        assessment.year_id,
+                    ],
+                );
 
-            NOW()
+            if (
+                existing.rows.length
+            ) {
+                await client.query(
+                    `
+UPDATE executive_summary_basic_details
+SET
+    report_submitted_date = $1,
+    staff_count = $2,
+    manual_challans_per_day = $3,
+    admin_id = $4,
+    updated_at = NOW()
+WHERE id = $5;
+                    `,
+                    [
+                        reportDate,
+                        staffCount,
+                        challanCount,
+                        employeeId,
+                        existing.rows[0].id,
+                    ],
+                );
+            } else {
+                await client.query(
+                    `
+INSERT INTO executive_summary_basic_details (
+    year_id,
+    assesment_id,
+    report_submitted_date,
+    staff_count,
+    manual_challans_per_day,
+    admin_id,
+    created_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, NOW());
+                    `,
+                    [
+                        assessment.year_id,
+                        assessmentId,
+                        reportDate,
+                        staffCount,
+                        challanCount,
+                        employeeId,
+                    ],
+                );
+            }
 
-        )
-        `,
-        [
+            for (
+                const row
+                of branchPositions
+            ) {
+                const updated =
+                    await client.query(
+                    `
+UPDATE executive_summary_branch_position
+SET
+    amount = $1,
+    audit_emp_id = $2,
+    batch_key = $3,
+    updated_at = NOW()
+WHERE assesment_id = $4
+    AND year_id = $5
+    AND type_id = $6
+    AND deleted_at IS NULL;
+                    `,
+                    [
+                        row.amount,
+                        employeeId,
+                        assessment.batch_key,
+                        assessmentId,
+                        assessment.year_id,
+                        row.type_id,
+                    ],
+                );
 
-            body.year_id,
+                if (
+                    !updated.rowCount
+                ) {
+                    await client.query(
+                        `
+INSERT INTO executive_summary_branch_position (
+    year_id, assesment_id, type_id, amount,
+    business_risk, control_risk, risk_type,
+    audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+    compliance_emp_id, compliance_status_id,
+    compliance_reviewer_emp_id, batch_key
+)
+VALUES (
+    $1, $2, $3, $4,
+    4, 4, 1,
+    1, $5, 0,
+    0, 0, 0, $6
+);
+                        `,
+                        [
+                            assessment.year_id,
+                            assessmentId,
+                            row.type_id,
+                            row.amount,
+                            employeeId,
+                            assessment.batch_key,
+                        ],
+                    );
+                }
+            }
 
-            body.assessment_id,
+            for (
+                const row
+                of freshAccounts
+            ) {
+                const updated =
+                    await client.query(
+                    `
+UPDATE executive_summary_fresh_accounts
+SET
+    accounts = $1,
+    audit_emp_id = $2,
+    batch_key = $3,
+    updated_at = NOW()
+WHERE assesment_id = $4
+    AND year_id = $5
+    AND type_id = $6
+    AND deleted_at IS NULL;
+                    `,
+                    [
+                        row.accounts,
+                        employeeId,
+                        assessment.batch_key,
+                        assessmentId,
+                        assessment.year_id,
+                        row.type_id,
+                    ],
+                );
 
-            body.audit_report_submitted_date,
-
-            body.staff_count,
-
-            body.manual_challans_per_day,
-
-            body.admin_id,
-
-        ],
+                if (
+                    !updated.rowCount
+                ) {
+                    await client.query(
+                        `
+INSERT INTO executive_summary_fresh_accounts (
+    year_id, assesment_id, type_id, accounts,
+    business_risk, control_risk, risk_type,
+    audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+    compliance_emp_id, compliance_status_id,
+    compliance_reviewer_emp_id, batch_key
+)
+VALUES (
+    $1, $2, $3, $4,
+    4, 4, 1,
+    1, $5, 0,
+    0, 0, 0, $6
+);
+                        `,
+                        [
+                            assessment.year_id,
+                            assessmentId,
+                            row.type_id,
+                            row.accounts,
+                            employeeId,
+                            assessment.batch_key,
+                        ],
+                    );
+                }
+            }
+        },
     );
 
     return {
+        success:
+            true,
         message:
             'Executive Summary Saved Successfully',
     };
 
+}
+
+private validateExecutiveRows(
+    values: any,
+    lines: Array<{
+        type_id: number;
+    }>,
+    valueKey: string,
+    integerOnly: boolean,
+) {
+
+    const rows =
+        Array.isArray(values)
+            ? values
+            : [];
+
+    const expectedIds =
+        new Set(
+            lines.map(
+                (line) =>
+                    line.type_id,
+            ),
+        );
+
+    if (
+        rows.length !== lines.length
+    ) {
+        throw new BadRequestException(
+            'Complete all executive summary rows before saving.',
+        );
+    }
+
+    return rows.map(
+        (row: any) => {
+            const typeId =
+                Number(row?.type_id);
+            const numberValue =
+                Number(row?.[valueKey]);
+
+            if (
+                !expectedIds.has(typeId)
+                ||
+                row?.[valueKey] === ''
+                ||
+                row?.[valueKey] === null
+                ||
+                row?.[valueKey] === undefined
+                ||
+                !Number.isFinite(numberValue)
+                ||
+                numberValue < 0
+                ||
+                (
+                    integerOnly
+                    &&
+                    !Number.isInteger(numberValue)
+                )
+            ) {
+                throw new BadRequestException(
+                    'Complete all executive summary rows with valid values.',
+                );
+            }
+
+            expectedIds.delete(typeId);
+
+            return {
+                type_id:
+                    typeId,
+                [valueKey]:
+                    numberValue,
+            };
+        },
+    );
 }
 async getBranchFinancialPosition(
     branch_id: number,
