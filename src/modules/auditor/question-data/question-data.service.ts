@@ -1,5 +1,6 @@
 import {
     Injectable,
+    NotFoundException,
 } from '@nestjs/common';
 
 import { DatabaseService }
@@ -187,5 +188,8 @@ export class QuestionDataService {
         return result.rows;
 
     }
+
+    
+
 
 }
