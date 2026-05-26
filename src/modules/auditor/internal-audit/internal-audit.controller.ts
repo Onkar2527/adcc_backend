@@ -160,12 +160,16 @@ export class InternalAuditController {
 
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('dump_id')
+    dumpId?: string,
   ) {
 
     return this.service.getCategory(
       assessmentId,
       categoryId,
       Number(employeeId || 0),
+      Number(dumpId || 0),
     );
   }
 
@@ -186,6 +190,30 @@ export class InternalAuditController {
       categoryId,
       Number(body?.employee_id || 0),
       body?.answers || [],
+      Number(body?.dump_id || 0),
+    );
+  }
+
+  @Post(':assessmentId/category/:categoryId/account/:dumpId/complete')
+  completeAccountAssessment(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Param('dumpId', ParseIntPipe)
+    dumpId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.completeAccountAssessment(
+      assessmentId,
+      categoryId,
+      dumpId,
+      Number(body?.employee_id || 0),
     );
   }
 
@@ -210,6 +238,7 @@ export class InternalAuditController {
       questionId,
       Number(body?.employee_id || 0),
       body || {},
+      Number(body?.dump_id || 0),
     );
   }
 
@@ -226,6 +255,9 @@ export class InternalAuditController {
 
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('dump_id')
+    dumpId?: string,
   ) {
 
     return this.service.getAnnexureCsvSample(
@@ -233,6 +265,7 @@ export class InternalAuditController {
       categoryId,
       questionId,
       Number(employeeId || 0),
+      Number(dumpId || 0),
     );
   }
 
@@ -285,6 +318,7 @@ export class InternalAuditController {
           part.mimetype,
         buffer,
       },
+      Number(fields.dump_id || 0),
     );
   }
 
@@ -312,6 +346,7 @@ export class InternalAuditController {
       questionId,
       annexureRowId,
       Number(body?.employee_id || 0),
+      Number(body?.dump_id || 0),
     );
   }
 
@@ -380,6 +415,9 @@ export class InternalAuditController {
     @Query('employee_id')
     employeeId: string,
 
+    @Query('dump_id')
+    dumpId: string,
+
     @Res()
     reply: FastifyReply,
   ) {
@@ -387,10 +425,11 @@ export class InternalAuditController {
     const evidence =
       await this.service.getEvidenceFile(
         assessmentId,
-        categoryId,
-        evidenceId,
-        Number(employeeId || 0),
-      );
+      categoryId,
+      evidenceId,
+      Number(employeeId || 0),
+      Number(dumpId || 0),
+    );
 
     reply.header(
       'Content-Type',
@@ -426,6 +465,7 @@ export class InternalAuditController {
       categoryId,
       evidenceId,
       Number(body?.employee_id || 0),
+      Number(body?.dump_id || 0),
     );
   }
 
@@ -523,6 +563,7 @@ export class InternalAuditController {
         buffer:
           await part.toBuffer(),
       },
+      Number(fields.dump_id || 0),
     );
   }
 }

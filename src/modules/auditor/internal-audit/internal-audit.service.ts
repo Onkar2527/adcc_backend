@@ -1386,6 +1386,40 @@ ORDER BY
       }
     }
 
+    for (
+      const menu
+      of menuMap.values()
+    ) {
+      for (
+        const category
+        of menu.categories || []
+      ) {
+        if (
+          ![1, 2].includes(
+            Number(category.linked_table_id),
+          )
+        ) {
+          continue;
+        }
+
+        const accounts =
+          await this.getSampledAccounts(
+            category,
+            overview,
+          );
+
+        category.account_based =
+          true;
+        category.account_count =
+          accounts.length;
+        category.completed_account_count =
+          accounts.filter(
+            (account: any) =>
+              account.is_completed,
+          ).length;
+      }
+    }
+
     return {
 
       overview,
@@ -1466,27 +1500,115 @@ ORDER BY
         of menu.categories || []
       ) {
 
-        const detail =
-          await this.getCategory(
-            assessmentId,
-            Number(category.id),
-            employeeId,
-          );
+        if (
+          [1, 2].includes(
+            Number(category.linked_table_id),
+          )
+        ) {
+          const context =
+            await this.getCategory(
+              assessmentId,
+              Number(category.id),
+              employeeId,
+            );
 
-        complianceCount +=
-          this.validateSubmissionSets(
-            detail.sets || [],
-            {
-              id:
+          if (
+            !context.accounts.length
+          ) {
+            issues.push({
+              category_id:
                 category.id,
-              name:
+              category_name:
                 category.name,
               menu_name:
                 menu.name,
-            },
-            issues,
-            compliancePoints,
-          );
+              question_id:
+                0,
+              question:
+                'Sampled accounts',
+              type:
+                'account',
+              message:
+                'No sampled account is available for assessment.',
+            });
+            continue;
+          }
+
+          for (
+            const account
+            of context.accounts
+          ) {
+            const detail =
+              await this.getCategory(
+                assessmentId,
+                Number(category.id),
+                employeeId,
+                Number(account.id),
+              );
+
+            complianceCount +=
+              this.validateSubmissionSets(
+                detail.sets || [],
+                {
+                  id:
+                    category.id,
+                  name:
+                    `${category.name} - ${account.account_no}`,
+                  menu_name:
+                    menu.name,
+                  dump_id:
+                    Number(account.id),
+                },
+                issues,
+                compliancePoints,
+              );
+
+            if (
+              !account.is_completed
+            ) {
+              issues.push({
+                category_id:
+                  category.id,
+                category_name:
+                  category.name,
+                menu_name:
+                  menu.name,
+                dump_id:
+                  account.id,
+                question_id:
+                  0,
+                question:
+                  account.account_no,
+                type:
+                  'account',
+                message:
+                  'Account assessment is not marked complete.',
+              });
+            }
+          }
+        } else {
+          const detail =
+            await this.getCategory(
+              assessmentId,
+              Number(category.id),
+              employeeId,
+            );
+
+          complianceCount +=
+            this.validateSubmissionSets(
+              detail.sets || [],
+              {
+                id:
+                  category.id,
+                name:
+                  category.name,
+                menu_name:
+                  menu.name,
+              },
+              issues,
+              compliancePoints,
+            );
+        }
       }
     }
 
@@ -1609,6 +1731,7 @@ ORDER BY
     assessmentId: number,
     categoryId: number,
     employeeId: number,
+    dumpId = 0,
   ) {
 
     const overview =
@@ -1666,6 +1789,29 @@ LIMIT 1;
 
       throw new NotFoundException(
         'Category not found for this assessment',
+      );
+    }
+
+    const accounts =
+      [1, 2].includes(
+        Number(category.linked_table_id),
+      )
+        ? await this.getSampledAccounts(
+          category,
+          overview,
+        )
+        : [];
+
+    if (
+      dumpId
+      &&
+      !accounts.some(
+        (account: any) =>
+          Number(account.id) === dumpId,
+      )
+    ) {
+      throw new BadRequestException(
+        'Selected sampled account is not available for this category.',
       );
     }
 
@@ -1759,6 +1905,7 @@ LEFT JOIN answers_data ans
     AND ans.category_id = $6
     AND ans.header_id = qhm.id
     AND ans.question_id = qm.id
+    AND ans.dump_id = $7
     AND ans.deleted_at IS NULL
 WHERE qsm.is_active = 1
     AND qsm.deleted_at IS NULL
@@ -1781,6 +1928,7 @@ ORDER BY
           overview.question_ids || '',
           assessmentId,
           categoryId,
+          dumpId,
         ],
       );
 
@@ -1888,6 +2036,7 @@ LEFT JOIN answers_data ans
     AND ans.category_id = $5
     AND ans.header_id = qhm.id
     AND ans.question_id = qm.id
+    AND ans.dump_id = $6
     AND ans.deleted_at IS NULL
 WHERE qsm.is_active = 1
     AND qsm.deleted_at IS NULL
@@ -1903,6 +2052,7 @@ ORDER BY
             overview.question_ids || '',
             assessmentId,
             categoryId,
+            dumpId,
           ],
         );
 
@@ -1932,6 +2082,14 @@ ORDER BY
     return {
       overview,
       category,
+      accounts,
+      selected_account:
+        accounts.find(
+          (account: any) =>
+            Number(account.id) === dumpId,
+        ) || null,
+      dump_id:
+        dumpId,
       sets,
       annexure_risk_options:
         annexureRiskOptions,
@@ -1950,6 +2108,7 @@ ORDER BY
     categoryId: number,
     employeeId: number,
     answers: any[],
+    dumpId = 0,
   ) {
 
     if (
@@ -1968,7 +2127,12 @@ ORDER BY
         assessmentId,
         categoryId,
         employeeId,
+        dumpId,
       );
+
+    this.assertAccountSelection(
+      detail,
+    );
 
     const questionMap =
       new Map<number, any>();
@@ -2043,7 +2207,7 @@ ORDER BY
         question_id:
           questionId,
         dump_id:
-          0,
+          dumpId,
         answer_given:
           this.cleanString(
             answer?.answer_given,
@@ -2241,6 +2405,7 @@ ORDER BY
     questionId: number,
     employeeId: number,
     body: any,
+    dumpId = 0,
   ) {
 
     const detail =
@@ -2248,7 +2413,12 @@ ORDER BY
         assessmentId,
         categoryId,
         employeeId,
+        dumpId,
       );
+
+    this.assertAccountSelection(
+      detail,
+    );
 
     const questionMap =
       new Map<number, any>();
@@ -2467,6 +2637,7 @@ RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
     questionId: number,
     annexureRowId: number,
     employeeId: number,
+    dumpId = 0,
   ) {
 
     const detail =
@@ -2474,7 +2645,12 @@ RETURNING id, answer_given, business_risk, control_risk, risk_cat_id;
         assessmentId,
         categoryId,
         employeeId,
+        dumpId,
       );
+
+    this.assertAccountSelection(
+      detail,
+    );
 
     const questionMap =
       new Map<number, any>();
@@ -2577,6 +2753,7 @@ WHERE id = $1
       mimetype: string;
       buffer: Buffer;
     },
+    dumpId = 0,
   ) {
 
     const evidenceType =
@@ -2613,6 +2790,7 @@ WHERE id = $1
         questionId,
         annexureRowId,
         employeeId,
+        dumpId,
       );
 
     const existing =
@@ -2721,6 +2899,7 @@ VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
     categoryId: number,
     evidenceId: number,
     employeeId: number,
+    dumpId = 0,
   ) {
 
     const evidence =
@@ -2729,6 +2908,7 @@ VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
         categoryId,
         evidenceId,
         employeeId,
+        dumpId,
       );
 
     const filePath =
@@ -2769,6 +2949,7 @@ VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
     categoryId: number,
     evidenceId: number,
     employeeId: number,
+    dumpId = 0,
   ) {
 
     const evidence =
@@ -2777,6 +2958,7 @@ VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
         categoryId,
         evidenceId,
         employeeId,
+        dumpId,
       );
 
     if (
@@ -2831,6 +3013,7 @@ WHERE id = $2
     categoryId: number,
     questionId: number,
     employeeId: number,
+    dumpId = 0,
   ) {
 
     const {
@@ -2842,6 +3025,7 @@ WHERE id = $2
         categoryId,
         questionId,
         employeeId,
+        dumpId,
       );
 
     const sample =
@@ -2872,6 +3056,7 @@ WHERE id = $2
       mimetype?: string;
       buffer: Buffer;
     },
+    dumpId = 0,
   ) {
 
     if (
@@ -2919,6 +3104,7 @@ WHERE id = $2
         categoryId,
         questionId,
         employeeId,
+        dumpId,
       );
 
     const parsedRows =
@@ -3301,6 +3487,13 @@ VALUES (
     const categoryId =
       Number(detail.category.id);
 
+    this.assertAccountSelection(
+      detail,
+    );
+
+    const dumpId =
+      Number(detail.dump_id || 0);
+
     const existing =
       await this.db.findOne(
         `
@@ -3310,7 +3503,7 @@ WHERE assesment_id = $1
     AND category_id = $2
     AND header_id = $3
     AND question_id = $4
-    AND dump_id = 0
+    AND dump_id = $5
     AND deleted_at IS NULL
 LIMIT 1;
         `,
@@ -3319,6 +3512,7 @@ LIMIT 1;
           categoryId,
           question.header_id,
           question.id,
+          dumpId,
         ],
       );
 
@@ -3379,9 +3573,9 @@ INSERT INTO answers_data (
     batch_key
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6, 0, $7,
-    NULL, $8, 0, 0, NULL, 1, NULL, NULL,
-    0, 0, 0, NULL, 1, 1, 0, $9
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    NULL, $9, 0, 0, NULL, 1, NULL, NULL,
+    0, 0, 0, NULL, 1, 1, 0, $10
 )
 RETURNING id;
         `,
@@ -3392,6 +3586,7 @@ RETURNING id;
           categoryId,
           question.header_id,
           question.id,
+          dumpId,
           String(question.annexure_id),
           employeeId,
           detail.overview.batch_key,
@@ -3469,6 +3664,7 @@ RETURNING id;
     categoryId: number,
     questionId: number,
     employeeId: number,
+    dumpId = 0,
   ) {
 
     const detail =
@@ -3476,7 +3672,12 @@ RETURNING id;
         assessmentId,
         categoryId,
         employeeId,
+        dumpId,
       );
+
+    this.assertAccountSelection(
+      detail,
+    );
 
     const questionMap =
       new Map<number, any>();
@@ -4315,6 +4516,7 @@ ORDER BY id DESC;
     questionId: number,
     annexureRowId: number,
     employeeId: number,
+    dumpId = 0,
   ) {
 
     const detail =
@@ -4322,7 +4524,12 @@ ORDER BY id DESC;
         assessmentId,
         categoryId,
         employeeId,
+        dumpId,
       );
+
+    this.assertAccountSelection(
+      detail,
+    );
 
     const questionMap =
       new Map<number, any>();
@@ -4388,6 +4595,7 @@ ORDER BY id DESC;
     categoryId: number,
     evidenceId: number,
     employeeId: number,
+    dumpId = 0,
   ) {
 
     const detail =
@@ -4395,7 +4603,12 @@ ORDER BY id DESC;
         assessmentId,
         categoryId,
         employeeId,
+        dumpId,
       );
+
+    this.assertAccountSelection(
+      detail,
+    );
 
     const questionMap =
       new Map<number, any>();
@@ -4468,6 +4681,7 @@ ORDER BY id DESC;
       id: number;
       name: string;
       menu_name: string;
+      dump_id?: number;
     },
     issues: any[],
     compliancePoints: any[],
@@ -4498,6 +4712,8 @@ ORDER BY id DESC;
               category.name,
             menu_name:
               category.menu_name,
+            dump_id:
+              category.dump_id || 0,
             question_id:
               question.id,
             question:
@@ -4999,6 +5215,198 @@ ORDER BY id DESC;
     }
 
     return assessment;
+  }
+
+  private async getSampledAccounts(
+    category: any,
+    overview: any,
+  ) {
+
+    const linkedTableId =
+      Number(category.linked_table_id);
+
+    if (
+      ![1, 2].includes(
+        linkedTableId,
+      )
+    ) {
+      return [];
+    }
+
+    const table =
+      linkedTableId === 1
+        ? 'dump_deposits'
+        : 'dump_advances';
+
+    const schemeIds =
+      linkedTableId === 1
+        ? overview.deposits_scheme_ids || ''
+        : overview.advances_scheme_ids || '';
+
+    if (
+      !String(schemeIds).trim()
+    ) {
+      return [];
+    }
+
+    const periodCondition =
+      linkedTableId === 1
+        ? 'd.account_opening_date BETWEEN $4 AND $5'
+        : '(d.account_opening_date BETWEEN $4 AND $5 OR d.renewal_date BETWEEN $4 AND $5)';
+
+    const result =
+      await this.db.query(
+        `
+SELECT
+    d.id,
+    d.account_no,
+    d.account_holder_name,
+    d.ucic,
+    d.account_opening_date,
+    d.account_status,
+    d.assesment_period_id,
+    sm.name AS scheme_name,
+    sm.scheme_code,
+    CASE
+        WHEN d.assesment_period_id = $1 THEN true
+        ELSE false
+    END AS is_completed
+FROM ${table} d
+INNER JOIN scheme_master sm
+    ON sm.id = d.scheme_id
+    AND sm.scheme_type_id = $2
+    AND sm.category_id = $3
+    AND sm.is_active = 1
+    AND sm.deleted_at IS NULL
+WHERE d.branch_id = $6
+    AND d.scheme_id::text = ANY(
+        string_to_array($7, ',')
+    )
+    AND ${periodCondition}
+    AND d.sampling_filter = 1
+    AND d.deleted_at IS NULL
+ORDER BY d.account_no;
+        `,
+        [
+          overview.id,
+          linkedTableId,
+          category.id,
+          overview.assesment_period_from,
+          overview.assesment_period_to,
+          overview.audit_unit_id,
+          String(schemeIds),
+        ],
+      );
+
+    return result.rows;
+  }
+
+  private assertAccountSelection(
+    detail: any,
+  ) {
+
+    if (
+      [1, 2].includes(
+        Number(
+          detail?.category?.linked_table_id,
+        ),
+      )
+      &&
+      !detail?.selected_account
+    ) {
+      throw new BadRequestException(
+        'Select a sampled account before saving audit data.',
+      );
+    }
+  }
+
+  async completeAccountAssessment(
+    assessmentId: number,
+    categoryId: number,
+    dumpId: number,
+    employeeId: number,
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+        dumpId,
+      );
+
+    this.assertAccountSelection(
+      detail,
+    );
+
+    if (
+      ![1, 2].includes(
+        Number(detail.category.linked_table_id),
+      )
+      ||
+      !detail.selected_account
+    ) {
+      throw new BadRequestException(
+        'Account assessment not found.',
+      );
+    }
+
+    const issues: any[] = [];
+    const compliancePoints: any[] = [];
+
+    this.validateSubmissionSets(
+      detail.sets || [],
+      {
+        id:
+          categoryId,
+        name:
+          `${detail.category.name} - ${detail.selected_account.account_no}`,
+        menu_name:
+          detail.category.menu_name,
+        dump_id:
+          dumpId,
+      },
+      issues,
+      compliancePoints,
+    );
+
+    if (
+      issues.length
+    ) {
+      return {
+        success:
+          false,
+        message:
+          'Complete all required account questions before marking it complete.',
+        issues,
+      };
+    }
+
+    const table =
+      Number(detail.category.linked_table_id) === 1
+        ? 'dump_deposits'
+        : 'dump_advances';
+
+    await this.db.query(
+      `
+UPDATE ${table}
+SET assesment_period_id = $1
+WHERE id = $2
+    AND sampling_filter = 1
+    AND deleted_at IS NULL;
+      `,
+      [
+        assessmentId,
+        dumpId,
+      ],
+    );
+
+    return {
+      success:
+        true,
+      message:
+        'Account assessment marked complete.',
+    };
   }
 
   private async findAssessment(
