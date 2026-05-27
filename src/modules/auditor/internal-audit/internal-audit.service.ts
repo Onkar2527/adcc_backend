@@ -7094,14 +7094,7 @@ ORDER BY id DESC;
                 WHERE assesment_id = $1
                     AND year_id = $2
                     AND deleted_at IS NULL
-            ) AS has_branch_position,
-            EXISTS (
-                SELECT 1
-                FROM executive_summary_fresh_accounts
-                WHERE assesment_id = $1
-                    AND year_id = $2
-                    AND deleted_at IS NULL
-            ) AS has_fresh_accounts;
+            ) AS has_branch_position;
         `,
         [
           assessmentId,
@@ -7121,12 +7114,6 @@ ORDER BY id DESC;
           result?.has_branch_position,
         question:
           'Branch Financial Position',
-      },
-      {
-        complete:
-          result?.has_fresh_accounts,
-        question:
-          'Number of New (Fresh) Accounts',
       },
     ];
 
