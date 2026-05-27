@@ -4737,6 +4737,14 @@ ORDER BY id DESC;
               ],
             );
 
+          if (
+            !result.rows.length
+          ) {
+            throw new BadRequestException(
+              'Annexure row not found or cannot be updated.',
+            );
+          }
+
           savedRow =
             result.rows[0];
         } else {
