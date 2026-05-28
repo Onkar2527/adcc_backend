@@ -54,6 +54,12 @@ const STATUS_LABELS: Record<number, string> = {
 
 @Injectable()
 export class InternalAuditService {
+  private annexureRiskOptionsCache =
+    new Map<number, any>();
+
+  private riskCategoriesCache =
+    new Map<string, any[]>();
+
   constructor(
     private readonly db:
       DatabaseService,
@@ -4108,6 +4114,12 @@ ORDER BY id DESC;
         questionResult.rows,
       );
 
+    let hasAnnexureQuestions =
+      questionResult.rows.some(
+        (row: any) =>
+          Number(row.annexure_id || 0) > 0,
+      );
+
     const subsetIds =
       this.getSubsetIdsFromRows(
         questionResult.rows,
@@ -4234,6 +4246,14 @@ ORDER BY id DESC;
           subsetResult.rows,
         ),
       );
+
+      hasAnnexureQuestions =
+        hasAnnexureQuestions
+        ||
+        subsetResult.rows.some(
+          (row: any) =>
+            Number(row.annexure_id || 0) > 0,
+        );
     }
 
     await this.attachAnnexureRows(
@@ -4259,9 +4279,15 @@ ORDER BY id DESC;
     }
 
     const annexureRiskOptions =
-      await this.getAnnexureRiskOptions(
-        Number(overview.year_id),
-      );
+      hasAnnexureQuestions
+        ? await this.getAnnexureRiskOptions(
+          Number(overview.year_id),
+        )
+        : {
+          business_risks: [],
+          control_risks: [],
+          risk_categories: [],
+        };
 
     return {
       overview,
@@ -6037,6 +6063,20 @@ ORDER BY id DESC;
   private async getRiskCategories(
     includeNotApplicable = false,
   ) {
+    const cacheKey =
+      includeNotApplicable
+        ? 'with-na'
+        : 'without-na';
+
+    if (
+      this.riskCategoriesCache.has(
+        cacheKey,
+      )
+    ) {
+      return this.riskCategoriesCache.get(
+        cacheKey,
+      );
+    }
 
     const result =
       await this.db.query(
@@ -6051,12 +6091,26 @@ ORDER BY id DESC;
         [includeNotApplicable],
       );
 
+    this.riskCategoriesCache.set(
+      cacheKey,
+      result.rows,
+    );
+
     return result.rows;
   }
 
   private async getAnnexureRiskOptions(
     yearId: number,
   ) {
+    if (
+      this.annexureRiskOptionsCache.has(
+        yearId,
+      )
+    ) {
+      return this.annexureRiskOptionsCache.get(
+        yearId,
+      );
+    }
 
     const result =
       await this.db.query(
@@ -6101,7 +6155,7 @@ ORDER BY id DESC;
           ),
       );
 
-    return {
+    const options = {
       business_risks:
         businessRisks.length
           ? businessRisks
@@ -6113,6 +6167,13 @@ ORDER BY id DESC;
       risk_categories:
         await this.getRiskCategories(true),
     };
+
+    this.annexureRiskOptionsCache.set(
+      yearId,
+      options,
+    );
+
+    return options;
   }
 
   private riskParameterOptions() {
