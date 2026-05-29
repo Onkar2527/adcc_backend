@@ -276,6 +276,92 @@ export class InternalAuditController {
     );
   }
 
+  @Get('compliance/:assessmentId/compliance-evidence/:evidenceId/view')
+  async viewComplianceUploadedEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('evidenceId', ParseIntPipe)
+    evidenceId: number,
+
+    @Query('employee_id')
+    employeeId: string,
+
+    @Res()
+    reply: FastifyReply,
+  ) {
+
+    const evidence =
+      await this.service.getComplianceUploadedEvidenceFile(
+        assessmentId,
+        evidenceId,
+        Number(employeeId || 0),
+      );
+
+    reply.header(
+      'Content-Type',
+      evidence.mimetype,
+    );
+    reply.header(
+      'Content-Disposition',
+      `inline; filename="${evidence.filename}"`,
+    );
+
+    return reply.send(
+      fs.createReadStream(evidence.path),
+    );
+  }
+
+  @Post('compliance/:assessmentId/observation/:targetType/:observationId/evidence/upload')
+  async uploadComplianceEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('targetType')
+    targetType: string,
+
+    @Param('observationId', ParseIntPipe)
+    observationId: number,
+
+    @Req()
+    req: FastifyRequest,
+  ) {
+
+    const part =
+      await req.file();
+
+    if (!part) {
+      return {
+        success:
+          false,
+        message:
+          'Please select evidence file.',
+      };
+    }
+
+    const fields: any = {};
+
+    for (const key in part.fields) {
+      fields[key] =
+        (part.fields as any)[key]?.value;
+    }
+
+    return this.service.uploadComplianceEvidence(
+      assessmentId,
+      targetType,
+      observationId,
+      Number(fields.employee_id || 0),
+      {
+        filename:
+          part.filename,
+        mimetype:
+          part.mimetype,
+        buffer:
+          await part.toBuffer(),
+      },
+    );
+  }
+
   @Post('compliance/:assessmentId/observation/:targetType/:observationId/response')
   saveComplianceResponse(
     @Param('assessmentId', ParseIntPipe)

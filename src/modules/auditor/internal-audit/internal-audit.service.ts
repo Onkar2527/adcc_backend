@@ -1010,16 +1010,6 @@ export class InternalAuditService {
         employeeId,
       );
 
-    if (
-      !overview.can_continue
-    ) {
-
-      return {
-        overview,
-        menus: [],
-      };
-    }
-
     const reAuditScope =
       Number(overview.audit_status_id) === 3
         ? await this.getReAuditScope(
@@ -1393,6 +1383,8 @@ export class InternalAuditService {
     const compliancePoints: any[] = [];
     let complianceCount = 0;
 
+    const normalCategories: any[] = [];
+
     for (
       const menu
       of menuData.menus || []
@@ -1407,15 +1399,14 @@ export class InternalAuditService {
             Number(category.linked_table_id),
           )
         ) {
-          const context =
-            await this.getCategory(
-              assessmentId,
-              Number(category.id),
-              employeeId,
+          const accounts =
+            await this.getSampledAccounts(
+              category,
+              overview,
             );
 
           if (
-            !context.accounts.length
+            !accounts.length
           ) {
             issues.push({
               category_id:
@@ -1438,33 +1429,8 @@ export class InternalAuditService {
 
           for (
             const account
-            of context.accounts
+            of accounts
           ) {
-            const detail =
-              await this.getCategory(
-                assessmentId,
-                Number(category.id),
-                employeeId,
-                Number(account.id),
-              );
-
-            complianceCount +=
-              this.validateSubmissionSets(
-                detail.sets || [],
-                {
-                  id:
-                    category.id,
-                  name:
-                    `${category.name} - ${account.account_no}`,
-                  menu_name:
-                    menu.name,
-                  dump_id:
-                    Number(account.id),
-                },
-                issues,
-                compliancePoints,
-              );
-
             if (
               !account.is_completed
             ) {
@@ -1488,17 +1454,12 @@ export class InternalAuditService {
               });
             }
           }
-        } else {
-          const detail =
-            await this.getCategory(
-              assessmentId,
-              Number(category.id),
-              employeeId,
-            );
 
           complianceCount +=
-            this.validateSubmissionSets(
-              detail.sets || [],
+            await this.appendAccountCompliancePoints(
+              assessmentId,
+              Number(category.id),
+              accounts,
               {
                 id:
                   category.id,
@@ -1507,12 +1468,26 @@ export class InternalAuditService {
                 menu_name:
                   menu.name,
               },
-              issues,
               compliancePoints,
             );
+        } else {
+          normalCategories.push({
+            ...category,
+            menu_name:
+              menu.name,
+          });
         }
       }
     }
+
+    complianceCount +=
+      await this.appendNormalCategoryPreviewIssues(
+        assessmentId,
+        overview,
+        normalCategories,
+        issues,
+        compliancePoints,
+      );
 
     if (
       String(
@@ -1761,7 +1736,8 @@ export class InternalAuditService {
             cm.name AS category_name,
             qhm.name AS header_name,
             qm.question,
-            qm.option_id
+            qm.option_id,
+            qm.compliance_ev_upload AS compliance_evidence_upload
         FROM answers_data ad
         LEFT JOIN menu_master mm
             ON mm.id = ad.menu_id
@@ -1825,13 +1801,14 @@ export class InternalAuditService {
               id,
               answer_id,
               annex_id,
+              evi_type,
               file_name,
               file_type,
               description
           FROM evidence_master
           WHERE assesment_id = $1
               AND answer_id = ANY($2::int[])
-              AND evi_type = 1
+              AND evi_type IN (1, 2)
               AND deleted_at IS NULL
           ORDER BY id DESC;
           `,
@@ -1847,7 +1824,9 @@ export class InternalAuditService {
 
     const annexureMap =
       new Map<number, any[]>();
-    const evidenceMap =
+    const auditEvidenceMap =
+      new Map<string, any>();
+    const complianceEvidenceMap =
       new Map<string, any>();
 
     for (
@@ -1858,9 +1837,22 @@ export class InternalAuditService {
         `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`;
 
       if (
-        !evidenceMap.has(key)
+        Number(row.evi_type) === 2
+        &&
+        !complianceEvidenceMap.has(key)
       ) {
-        evidenceMap.set(
+        complianceEvidenceMap.set(
+          key,
+          row,
+        );
+      }
+
+      if (
+        Number(row.evi_type) === 1
+        &&
+        !auditEvidenceMap.has(key)
+      ) {
+        auditEvidenceMap.set(
           key,
           row,
         );
@@ -1884,7 +1876,11 @@ export class InternalAuditService {
             row.answer_given,
           ),
         evidence:
-          evidenceMap.get(
+          auditEvidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || null,
+        compliance_evidence:
+          complianceEvidenceMap.get(
             `${answerId}:${Number(row.id)}`,
           ) || null,
       });
@@ -1899,7 +1895,11 @@ export class InternalAuditService {
         (row: any) => ({
           ...row,
           evidence:
-            evidenceMap.get(
+            auditEvidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || null,
+          compliance_evidence:
+            complianceEvidenceMap.get(
               `${Number(row.id)}:0`,
             ) || null,
           annexure_rows:
@@ -1957,7 +1957,7 @@ export class InternalAuditService {
             AND ad.deleted_at IS NULL
         WHERE em.id = $1
             AND em.assesment_id = $2
-            AND em.evi_type = 1
+            AND em.evi_type IN (1, 2)
             AND em.deleted_at IS NULL
         LIMIT 1;
         `,
@@ -2442,7 +2442,8 @@ export class InternalAuditService {
             cm.name AS category_name,
             qhm.name AS header_name,
             qm.question,
-            qm.option_id
+            qm.option_id,
+            qm.compliance_ev_upload AS compliance_evidence_upload
         FROM answers_data ad
         LEFT JOIN menu_master mm
             ON mm.id = ad.menu_id
@@ -3203,13 +3204,14 @@ SELECT
     id,
     answer_id,
     annex_id,
+    evi_type,
     file_name,
     file_type,
     description
 FROM evidence_master
 WHERE assesment_id = $1
     AND answer_id = ANY($2::int[])
-    AND evi_type = 1
+    AND evi_type IN (1, 2)
     AND deleted_at IS NULL
 ORDER BY id DESC;
           `,
@@ -3225,7 +3227,9 @@ ORDER BY id DESC;
 
     const annexureMap =
       new Map<number, any[]>();
-    const evidenceMap =
+    const auditEvidenceMap =
+      new Map<string, any>();
+    const complianceEvidenceMap =
       new Map<string, any>();
 
     for (
@@ -3236,9 +3240,22 @@ ORDER BY id DESC;
         `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`;
 
       if (
-        !evidenceMap.has(key)
+        Number(row.evi_type) === 2
+        &&
+        !complianceEvidenceMap.has(key)
       ) {
-        evidenceMap.set(
+        complianceEvidenceMap.set(
+          key,
+          row,
+        );
+      }
+
+      if (
+        Number(row.evi_type) === 1
+        &&
+        !auditEvidenceMap.has(key)
+      ) {
+        auditEvidenceMap.set(
           key,
           row,
         );
@@ -3262,7 +3279,11 @@ ORDER BY id DESC;
             row.answer_given,
           ),
         evidence:
-          evidenceMap.get(
+          auditEvidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || null,
+        compliance_evidence:
+          complianceEvidenceMap.get(
             `${answerId}:${Number(row.id)}`,
           ) || null,
       });
@@ -3281,7 +3302,11 @@ ORDER BY id DESC;
             ||
             Number(row.compliance_status_id) === 3,
           evidence:
-            evidenceMap.get(
+            auditEvidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || null,
+          compliance_evidence:
+            complianceEvidenceMap.get(
               `${Number(row.id)}:0`,
             ) || null,
           annexure_rows:
@@ -3417,7 +3442,274 @@ ORDER BY id DESC;
       mimetype:
         this.getEvidenceMimetype(
           Number(evidence.file_type),
+      ),
+    };
+  }
+
+  async getComplianceUploadedEvidenceFile(
+    assessmentId: number,
+    evidenceId: number,
+    employeeId: number,
+  ) {
+
+    await this.assertCompliance(
+      employeeId,
+    );
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    if (
+      ![4, 6].includes(
+        Number(assessment.audit_status_id),
+      )
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance.',
+      );
+    }
+
+    const evidence =
+      await this.db.findOne(
+        `
+        SELECT
+            em.file_name,
+            em.file_type,
+            em.description
+        FROM evidence_master em
+        INNER JOIN answers_data ad
+            ON ad.id = em.answer_id
+            AND ad.assesment_id = em.assesment_id
+            AND ad.is_compliance = 1
+            AND ad.audit_status_id = 2
+            AND ad.deleted_at IS NULL
+        WHERE em.id = $1
+            AND em.assesment_id = $2
+            AND em.evi_type = 2
+            AND em.deleted_at IS NULL
+            AND (
+                $3::int = 4
+                OR ad.compliance_status_id = 3
+                OR EXISTS (
+                    SELECT 1
+                    FROM answers_data_annexure aa
+                    WHERE aa.answer_id = ad.id
+                        AND aa.assesment_id = ad.assesment_id
+                        AND aa.compliance_status_id = 3
+                        AND aa.deleted_at IS NULL
+                )
+            )
+        LIMIT 1;
+        `,
+        [
+          evidenceId,
+          assessmentId,
+          Number(assessment.audit_status_id),
+        ],
+      );
+
+    if (
+      !evidence
+    ) {
+      throw new NotFoundException(
+        'Evidence document not found.',
+      );
+    }
+
+    const filePath =
+      this.getEvidenceStoragePath(
+        assessmentId,
+        evidence.file_name,
+      );
+
+    if (
+      !fs.existsSync(filePath)
+    ) {
+      throw new NotFoundException(
+        'Evidence file not found.',
+      );
+    }
+
+    return {
+      path:
+        filePath,
+      filename:
+        path.basename(
+          String(
+            evidence.description
+            || evidence.file_name,
+          ),
+        ).replace(
+          /["\r\n]/g,
+          '_',
         ),
+      mimetype:
+        this.getEvidenceMimetype(
+          Number(evidence.file_type),
+        ),
+    };
+  }
+
+  async uploadComplianceEvidence(
+    assessmentId: number,
+    targetType: string,
+    observationId: number,
+    employeeId: number,
+    file: {
+      filename: string;
+      mimetype: string;
+      buffer: Buffer;
+    },
+  ) {
+
+    await this.assertCompliance(
+      employeeId,
+    );
+
+    if (
+      !['answer', 'annexure'].includes(
+        targetType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid observation type.',
+      );
+    }
+
+    const evidenceType =
+      EVIDENCE_FILE_TYPES[file?.mimetype];
+
+    if (
+      !evidenceType
+    ) {
+      return {
+        success:
+          false,
+        message:
+          'Only JPG, JPEG, PNG and PDF evidence files are allowed.',
+      };
+    }
+
+    if (
+      !file?.buffer?.length
+      ||
+      file.buffer.length > EVIDENCE_MAX_SIZE
+    ) {
+      return {
+        success:
+          false,
+        message:
+          'Evidence file size must be less than or equal to 5 MB.',
+      };
+    }
+
+    const target =
+      await this.getComplianceEvidenceTarget(
+        assessmentId,
+        targetType,
+        observationId,
+      );
+
+    const existing =
+      await this.db.findOne(
+        `
+        SELECT id
+        FROM evidence_master
+        WHERE answer_id = $1
+            AND annex_id = $2
+            AND assesment_id = $3
+            AND evi_type = 2
+            AND deleted_at IS NULL
+        LIMIT 1;
+        `,
+        [
+          target.answerId,
+          target.annexureRowId,
+          assessmentId,
+        ],
+      );
+
+    if (
+      existing?.id
+    ) {
+      return {
+        success:
+          false,
+        message:
+          'Compliance evidence already uploaded.',
+      };
+    }
+
+    const storedName =
+      `${randomUUID()}${evidenceType.extension}`;
+
+    const storagePath =
+      this.getEvidenceStoragePath(
+        assessmentId,
+        storedName,
+      );
+
+    fs.mkdirSync(
+      path.dirname(storagePath),
+      {
+        recursive: true,
+      },
+    );
+
+    fs.writeFileSync(
+      storagePath,
+      file.buffer,
+    );
+
+    try {
+      await this.db.query(
+        `
+        INSERT INTO evidence_master (
+            answer_id,
+            annex_id,
+            assesment_id,
+            evi_type,
+            file_name,
+            file_type,
+            description,
+            emp_id,
+            status_id,
+            review_emp_id,
+            deleted_by_emp_id,
+            created_at,
+            updated_at
+        )
+        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
+        `,
+        [
+          target.answerId,
+          target.annexureRowId,
+          assessmentId,
+          storedName,
+          evidenceType.id,
+          file.filename || null,
+          employeeId,
+        ],
+      );
+    } catch (
+    error
+    ) {
+      if (
+        fs.existsSync(storagePath)
+      ) {
+        fs.unlinkSync(storagePath);
+      }
+
+      throw error;
+    }
+
+    return {
+      success:
+        true,
+      message:
+        'Compliance evidence uploaded successfully.',
     };
   }
 
@@ -6601,6 +6893,116 @@ ORDER BY id DESC;
 
   // Evidence 
 
+  private async getComplianceEvidenceTarget(
+    assessmentId: number,
+    targetType: string,
+    observationId: number,
+  ) {
+
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    const complianceStatus =
+      Number(assessment.audit_status_id);
+
+    if (
+      ![4, 6].includes(
+        complianceStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance.',
+      );
+    }
+
+    if (
+      targetType === 'answer'
+    ) {
+      const answer =
+        await this.db.findOne(
+          `
+          SELECT id
+          FROM answers_data
+          WHERE id = $1
+              AND assesment_id = $2
+              AND is_compliance = 1
+              AND audit_status_id = 2
+              AND deleted_at IS NULL
+              AND (
+                  $3::int = 4
+                  OR compliance_status_id = 3
+              )
+          LIMIT 1;
+          `,
+          [
+            observationId,
+            assessmentId,
+            complianceStatus,
+          ],
+        );
+
+      if (
+        !answer?.id
+      ) {
+        throw new NotFoundException(
+          'Compliance point not found for this assessment.',
+        );
+      }
+
+      return {
+        answerId:
+          Number(answer.id),
+        annexureRowId:
+          0,
+      };
+    }
+
+    const annexure =
+      await this.db.findOne(
+        `
+        SELECT aa.id, aa.answer_id
+        FROM answers_data_annexure aa
+        INNER JOIN answers_data ad
+            ON ad.id = aa.answer_id
+            AND ad.assesment_id = aa.assesment_id
+            AND ad.is_compliance = 1
+            AND ad.audit_status_id = 2
+            AND ad.deleted_at IS NULL
+        WHERE aa.id = $1
+            AND aa.assesment_id = $2
+            AND aa.audit_status_id = 2
+            AND aa.deleted_at IS NULL
+            AND (
+                $3::int = 4
+                OR aa.compliance_status_id = 3
+            )
+        LIMIT 1;
+        `,
+        [
+          observationId,
+          assessmentId,
+          complianceStatus,
+        ],
+      );
+
+    if (
+      !annexure?.id
+    ) {
+      throw new NotFoundException(
+        'Compliance point not found for this assessment.',
+      );
+    }
+
+    return {
+      answerId:
+        Number(annexure.answer_id),
+      annexureRowId:
+        Number(annexure.id),
+    };
+  }
+
   private async getEvidenceTarget(
     assessmentId: number,
     categoryId: number,
@@ -6915,6 +7317,280 @@ ORDER BY id DESC;
             }
           }
         }
+      }
+    }
+
+    return complianceCount;
+  }
+
+  private async appendAccountCompliancePoints(
+    assessmentId: number,
+    categoryId: number,
+    accounts: any[],
+    category: {
+      id: number;
+      name: string;
+      menu_name: string;
+    },
+    compliancePoints: any[],
+  ) {
+
+    const completedAccounts =
+      (accounts || [])
+        .filter(
+          (account: any) =>
+            account.is_completed,
+        );
+
+    if (
+      !completedAccounts.length
+    ) {
+      return 0;
+    }
+
+    const accountMap =
+      new Map<number, any>(
+        completedAccounts.map(
+          (account: any) => [
+            Number(account.id),
+            account,
+          ],
+        ),
+      );
+
+    const result =
+      await this.db.query(
+        `
+        SELECT
+            ad.dump_id,
+            ad.question_id,
+            ad.answer_given,
+            ad.audit_comment,
+            qm.question,
+            qm.option_id,
+            qm.annexure_id
+        FROM answers_data ad
+        INNER JOIN question_master qm
+            ON qm.id = ad.question_id
+            AND qm.deleted_at IS NULL
+        WHERE ad.assesment_id = $1
+            AND ad.category_id = $2
+            AND ad.dump_id = ANY($3::int[])
+            AND ad.is_compliance = 1
+            AND ad.deleted_at IS NULL
+        ORDER BY
+            ad.dump_id,
+            ad.question_id;
+        `,
+        [
+          assessmentId,
+          categoryId,
+          completedAccounts.map(
+            (account: any) =>
+              Number(account.id),
+          ),
+        ],
+      );
+
+    for (
+      const row
+      of result.rows || []
+    ) {
+      const account =
+        accountMap.get(
+          Number(row.dump_id),
+        );
+
+      const isAnnexureAnswer =
+        Number(row.option_id) === 4
+        &&
+        row.annexure_id
+        &&
+        String(row.answer_given || '')
+        === String(row.annexure_id);
+
+      compliancePoints.push({
+        category_id:
+          category.id,
+        category_name:
+          `${category.name} - ${account?.account_no || row.dump_id}`,
+        menu_name:
+          category.menu_name,
+        dump_id:
+          Number(row.dump_id || 0),
+        question_id:
+          row.question_id,
+        question:
+          row.question,
+        answer_given:
+          isAnnexureAnswer
+            ? 'As per annexure'
+            : String(row.answer_given || ''),
+        audit_comment:
+          row.audit_comment || '',
+      });
+    }
+
+    return result.rows?.length || 0;
+  }
+
+  private async appendNormalCategoryPreviewIssues(
+    assessmentId: number,
+    overview: any,
+    categories: any[],
+    issues: any[],
+    compliancePoints: any[],
+  ) {
+
+    const categoryIds =
+      (categories || [])
+        .map(
+          (category: any) =>
+            Number(category.id),
+        )
+        .filter(Boolean);
+
+    if (
+      !categoryIds.length
+    ) {
+      return 0;
+    }
+
+    const result =
+      await this.db.query(
+        `
+        SELECT
+            cm.id AS category_id,
+            cm.name AS category_name,
+            mm.name AS menu_name,
+            qm.id AS question_id,
+            qm.question,
+            qm.option_id,
+            qm.annexure_id,
+            ad.id AS answer_id,
+            ad.answer_given,
+            ad.audit_comment,
+            ad.is_compliance,
+            CASE
+                WHEN ad.id IS NULL THEN 'answer'
+                WHEN qm.option_id = 4
+                    AND qm.annexure_id IS NOT NULL
+                    AND ad.answer_given::text = qm.annexure_id::text
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM answers_data_annexure ada
+                        WHERE ada.answer_id = ad.id
+                            AND ada.assesment_id = ad.assesment_id
+                            AND ada.deleted_at IS NULL
+                    )
+                    THEN 'annexure'
+                ELSE NULL
+            END AS issue_type
+        FROM category_master cm
+        INNER JOIN menu_master mm
+            ON mm.id = cm.menu_id
+            AND mm.deleted_at IS NULL
+        INNER JOIN question_set_master qsm
+            ON qsm.id::text = ANY(string_to_array(COALESCE(cm.question_set_ids, ''), ','))
+            AND qsm.is_active = 1
+            AND qsm.deleted_at IS NULL
+        INNER JOIN question_header_master qhm
+            ON qhm.question_set_id = qsm.id
+            AND qhm.is_active = 1
+            AND qhm.deleted_at IS NULL
+            AND (
+                $3 = ''
+                OR qhm.id::text = ANY(string_to_array($3, ','))
+            )
+        INNER JOIN question_master qm
+            ON qm.set_id = qsm.id
+            AND qm.header_id = qhm.id
+            AND qm.is_active = 1
+            AND qm.deleted_at IS NULL
+            AND (
+                $4 = ''
+                OR qm.id::text = ANY(string_to_array($4, ','))
+            )
+        LEFT JOIN answers_data ad
+            ON ad.assesment_id = $1
+            AND ad.category_id = cm.id
+            AND ad.header_id = qhm.id
+            AND ad.question_id = qm.id
+            AND ad.dump_id = 0
+            AND ad.deleted_at IS NULL
+        WHERE cm.id = ANY($2::int[])
+            AND cm.is_active = 1
+            AND cm.deleted_at IS NULL
+        ORDER BY
+            cm.id,
+            qsm.id,
+            qhm.id,
+            qm.id;
+        `,
+        [
+          assessmentId,
+          categoryIds,
+          overview.header_ids || '',
+          overview.question_ids || '',
+        ],
+      );
+
+    let complianceCount = 0;
+
+    for (
+      const row
+      of result.rows || []
+    ) {
+      const issueBase = {
+        category_id:
+          row.category_id,
+        category_name:
+          row.category_name,
+        menu_name:
+          row.menu_name,
+        dump_id:
+          0,
+        question_id:
+          row.question_id,
+        question:
+          row.question,
+      };
+
+      if (
+        row.issue_type
+      ) {
+        issues.push({
+          ...issueBase,
+          type:
+            row.issue_type,
+          message:
+            row.issue_type === 'annexure'
+              ? 'At least one annexure row is required.'
+              : 'Answer is pending.',
+        });
+      }
+
+      if (
+        Number(row.is_compliance || 0) === 1
+      ) {
+        const isAnnexureAnswer =
+          Number(row.option_id) === 4
+          &&
+          row.annexure_id
+          &&
+          String(row.answer_given || '')
+          === String(row.annexure_id);
+
+        complianceCount++;
+        compliancePoints.push({
+          ...issueBase,
+          answer_given:
+            isAnnexureAnswer
+              ? 'As per annexure'
+              : String(row.answer_given || ''),
+          audit_comment:
+            row.audit_comment || '',
+        });
       }
     }
 
