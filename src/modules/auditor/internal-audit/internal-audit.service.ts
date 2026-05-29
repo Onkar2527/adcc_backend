@@ -6866,41 +6866,8 @@ ORDER BY id DESC;
               });
             }
 
-            if (
-              Number(answer.audit_compulsary_ev_upload || 0) === 1
-            ) {
-              for (
-                const row
-                of rows
-              ) {
-                if (
-                  !row.evidence?.id
-                ) {
-                  issues.push({
-                    ...issueBase,
-                    annexure_row_id:
-                      row.id,
-                    type:
-                      'evidence',
-                    message:
-                      'Evidence is pending for an annexure row.',
-                  });
-                }
-              }
-            }
-          } else if (
-            Number(answer.audit_compulsary_ev_upload || 0) === 1
-            &&
-            !answer.evidence?.id
-          ) {
-            issues.push({
-              ...issueBase,
-              type:
-                'evidence',
-              message:
-                'Audit evidence is required.',
-            });
-          }
+            
+          } 
 
           if (
             Number(question.option_id) === 5

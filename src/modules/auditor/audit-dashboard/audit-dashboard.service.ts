@@ -222,16 +222,7 @@ async getAuthorizedAuditUnits(
 
         AND am.deleted_at IS NULL
 
-        AND am.year_id = (
-
-            SELECT ym.id
-
-            FROM year_master ym
-
-            ORDER BY ym.id DESC
-
-            LIMIT 1
-        )
+       
 
     CROSS JOIN employee_units eu
 
