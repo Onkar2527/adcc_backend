@@ -1038,19 +1038,11 @@ export class InternalAuditService {
           cm.name AS category_name,
           cm.linked_table_id,
 
-          qsm.id AS question_set_id,
-          qsm.name AS question_set_name,
-
-          qhm.id AS header_id,
-          qhm.name AS header_name,
-
           COUNT(DISTINCT qm.id)
               AS question_count,
 
           COUNT(DISTINCT ans.id)
-              AS answered_count,
-
-          q.questions
+              AS answered_count
 
       FROM menu_master mm
 
@@ -1107,127 +1099,6 @@ export class InternalAuditService {
           AND ans.question_id = qm.id
           AND ans.deleted_at IS NULL
 
-      LEFT JOIN
-      (
-
-          SELECT
-
-              qm.header_id,
-              qm.set_id,
-
-              jsonb_agg(
-
-                  jsonb_build_object(
-
-                      'question_id', qm.id,
-                      'question', qm.question,
-                      'question_type_id', qm.question_type_id,
-                      'option_id', qm.option_id,
-
-                      'parameters',
-
-                      CASE
-                          WHEN qm.parameters IS NULL
-                              OR qm.parameters = ''
-                          THEN '[]'::jsonb
-                          ELSE qm.parameters::jsonb
-                      END,
-
-                      'risk_category_id', qm.risk_category_id,
-                      'annexure_id', qm.annexure_id,
-                      'area_of_audit_id', qm.area_of_audit_id,
-                      'applicable_id', qm.applicable_id,
-                      'control_risk_id', qm.control_risk_id,
-                      'key_aspect_id', qm.key_aspect_id,
-                      'residual_risk_id', qm.residual_risk_id,
-                      'show_instances', qm.show_instances,
-                      'audit_ev_upload', qm.audit_ev_upload,
-                      'compliance_ev_upload', qm.compliance_ev_upload,
-
-                      'annexure',
-
-                      jsonb_build_object(
-
-                          'annexure_id', am.id,
-                          'annexure_name', am.name,
-                          'risk_defination_id', am.risk_defination_id,
-
-                          'columns',
-
-                          COALESCE(
-                              ac.columns_json,
-                              '[]'::jsonb
-                          )
-
-                      )
-
-                  )
-
-              ) AS questions
-
-          FROM question_master qm
-
-          LEFT JOIN annexure_master am
-              ON am.id = qm.annexure_id
-
-          LEFT JOIN
-          (
-
-              SELECT
-
-                  ac.annexure_id,
-
-                  jsonb_agg(
-
-                      jsonb_build_object(
-
-                          'id', ac.id,
-                          'column_name', ac.name,
-                          'column_type_id', ac.column_type_id,
-                          'options', COALESCE(aco.options_json, '[]'::jsonb)
-
-                      )
-                      ORDER BY ac.id
-
-                  ) AS columns_json
-
-              FROM annexure_columns ac
-
-              LEFT JOIN (
-                  SELECT
-                      annexure_column_id,
-                      jsonb_agg(
-                          jsonb_build_object(
-                              'id', id,
-                              'option_label', option_label
-                          )
-                          ORDER BY id
-                      ) AS options_json
-                  FROM annexure_column_options
-                  WHERE deleted_at IS NULL
-                  GROUP BY annexure_column_id
-              ) aco
-                  ON aco.annexure_column_id = ac.id
-
-              WHERE ac.deleted_at IS NULL
-
-              GROUP BY ac.annexure_id
-
-          ) ac
-              ON ac.annexure_id = am.id
-
-          WHERE
-              qm.deleted_at IS NULL
-              AND qm.is_active = 1
-
-          GROUP BY
-              qm.header_id,
-              qm.set_id
-
-      ) q
-          ON q.header_id = qhm.id
-        AND q.set_id = qsm.id
-
       WHERE
           mm.is_active = 1
           AND mm.deleted_at IS NULL
@@ -1245,21 +1116,12 @@ export class InternalAuditService {
 
           cm.id,
           cm.name,
-          cm.linked_table_id,
-
-          qsm.id,
-          qsm.name,
-
-          qhm.id,
-          qhm.name,
-          q.questions
+          cm.linked_table_id
         
       ORDER BY
 
           mm.id,
-          cm.id,
-          qsm.id,
-          qhm.id
+          cm.id
 
     `;
 
@@ -1367,103 +1229,55 @@ export class InternalAuditService {
         );
       }
 
-      if (
-        row.question_set_id
-        &&
-        category
-      ) {
-
-        let questionSet =
-          category.question_sets.find(
-            (q: any) =>
-              q.id ===
-              row.question_set_id,
-          );
-
-        if (
-          !questionSet
-        ) {
-
-          questionSet = {
-
-            id:
-              row.question_set_id,
-
-            name:
-              row.question_set_name,
-
-            headers:
-              [],
-          };
-
-          category.question_sets.push(
-            questionSet,
-          );
-        }
-
-        if (
-          row.header_id
-        ) {
-
-          questionSet.headers.push({
-
-            id:
-              row.header_id,
-
-            name:
-              row.header_name,
-
-            questions:
-              row.questions || [],
-
-          });
-        }
-      }
     }
 
-    for (
-      const menu
-      of menuMap.values()
-    ) {
-      for (
-        const category
-        of menu.categories || []
-      ) {
-        if (
-          ![1, 2].includes(
-            Number(category.linked_table_id),
-          )
-        ) {
-          continue;
-        }
+    const accountCategoryTasks =
+      Array.from(
+        menuMap.values(),
+      )
+        .flatMap(
+          (menu: any) =>
+            menu.categories || [],
+        )
+        .filter(
+          (category: any) =>
+            [1, 2].includes(
+              Number(category.linked_table_id),
+            ),
+        )
+        .map(
+          async (category: any) => {
+            const accounts =
+              await this.getSampledAccounts(
+                category,
+                overview,
+              );
 
-        const accounts =
-          await this.getSampledAccounts(
-            category,
-            overview,
-          );
+            const visibleAccounts =
+              reAuditScope
+                ? accounts.filter(
+                  (account: any) =>
+                    reAuditScope.dumps.has(
+                      `${Number(category.id)}:${Number(account.id)}`,
+                    ),
+                )
+                : accounts;
 
-        const visibleAccounts =
-          reAuditScope
-            ? accounts.filter(
-              (account: any) =>
-                reAuditScope.dumps.has(
-                  `${Number(category.id)}:${Number(account.id)}`,
-                ),
-            )
-            : accounts;
+            category.account_based =
+              true;
+            category.account_count =
+              visibleAccounts.length;
+            category.completed_account_count =
+              visibleAccounts.filter(
+                (account: any) =>
+                  account.is_completed,
+              ).length;
+          },
+        );
 
-        category.account_based =
-          true;
-        category.account_count =
-          visibleAccounts.length;
-        category.completed_account_count =
-          visibleAccounts.filter(
-            (account: any) =>
-              account.is_completed,
-          ).length;
-      }
-    }
+    await Promise.all(
+      accountCategoryTasks,
+    );
 
     return {
 
