@@ -1175,6 +1175,8 @@ export class InternalAuditService {
         (
           !reAuditScope
           ||
+          reAuditScope.categories.size === 0
+          ||
           reAuditScope.categories.has(
             Number(row.category_id),
           )
@@ -1193,7 +1195,7 @@ export class InternalAuditService {
             row.linked_table_id,
 
           question_count:
-            reAuditScope
+            reAuditScope && reAuditScope.categories.size > 0
               ? reAuditScope.categoryQuestionCount.get(
                 Number(row.category_id),
               ) || 0
@@ -1202,7 +1204,7 @@ export class InternalAuditService {
               ),
 
           answered_count:
-            reAuditScope
+            reAuditScope && reAuditScope.categories.size > 0
               ? reAuditScope.categoryQuestionCount.get(
                 Number(row.category_id),
               ) || 0
@@ -1244,7 +1246,7 @@ export class InternalAuditService {
               );
 
             const visibleAccounts =
-              reAuditScope
+              reAuditScope && reAuditScope.categories.size > 0
                 ? accounts.filter(
                   (account: any) =>
                     reAuditScope.dumps.has(
@@ -3993,6 +3995,7 @@ ORDER BY id DESC;
     categoryId: number,
     employeeId: number,
     dumpId = 0,
+    allowLocked = false,
   ) {
 
     const overview =
@@ -4002,6 +4005,7 @@ ORDER BY id DESC;
       );
 
     if (
+      !allowLocked &&
       !overview.can_continue
     ) {
 
@@ -4072,6 +4076,8 @@ ORDER BY id DESC;
 
     if (
       reAuditScope
+      &&
+      reAuditScope.categories.size > 0
       &&
       accounts.length
     ) {
@@ -4374,6 +4380,8 @@ ORDER BY id DESC;
 
     if (
       reAuditScope
+      &&
+      reAuditScope.categories.size > 0
     ) {
       sets =
         this.filterReAuditSets(

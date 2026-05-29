@@ -565,6 +565,7 @@ export class InternalAuditController {
       categoryId,
       Number(employeeId || 0),
       Number(dumpId || 0),
+      true,
     );
   }
 
