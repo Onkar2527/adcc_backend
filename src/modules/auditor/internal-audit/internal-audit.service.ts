@@ -3444,7 +3444,7 @@ ORDER BY id DESC;
       mimetype:
         this.getEvidenceMimetype(
           Number(evidence.file_type),
-      ),
+        ),
     };
   }
 
@@ -4226,6 +4226,10 @@ ORDER BY id DESC;
         questionResult.rows,
       );
 
+    await this.attachSubsetOptions(
+      sets,
+    );
+
     let hasAnnexureQuestions =
       questionResult.rows.some(
         (row: any) =>
@@ -4420,6 +4424,255 @@ ORDER BY id DESC;
     };
   }
 
+  private async attachSubsetOptions(
+    sets: any[],
+  ) {
+    const subsetIds = new Set<string>();
+
+    for (const set of sets || []) {
+      for (const header of set.headers || []) {
+        for (const question of header.questions || []) {
+          if (
+            Number(question.option_id) !== 5 ||
+            !question.subset_multi_id
+          ) {
+            continue;
+          }
+
+          String(question.subset_multi_id)
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean)
+            .forEach((id) => subsetIds.add(id));
+        }
+      }
+    }
+
+    if (!subsetIds.size) {
+      return;
+    }
+
+    const result = await this.db.query(
+      `
+    SELECT
+        id,
+        name
+    FROM question_set_master
+    WHERE id::text = ANY($1)
+        AND is_active = 1
+        AND deleted_at IS NULL
+    ORDER BY id;
+    `,
+      [
+        Array.from(subsetIds),
+      ],
+    );
+
+    const optionMap = new Map<string, string>();
+
+    for (const row of result.rows) {
+      optionMap.set(
+        String(row.id),
+        row.name,
+      );
+    }
+
+    for (const set of sets || []) {
+      for (const header of set.headers || []) {
+        for (const question of header.questions || []) {
+          if (
+            Number(question.option_id) !== 5 ||
+            !question.subset_multi_id
+          ) {
+            continue;
+          }
+
+          question.subset_options =
+            String(question.subset_multi_id)
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean)
+              .map((id) => ({
+                id,
+                name: optionMap.get(id) || `Subset ${id}`,
+              }));
+        }
+      }
+    }
+  }
+
+  async getCategorySubsetSet(
+    assessmentId: number,
+    categoryId: number,
+    subsetSetId: number,
+    employeeId: number,
+    dumpId = 0,
+  ) {
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+        dumpId,
+      );
+
+    this.assertAccountSelection(
+      detail,
+    );
+
+    const allowedSubsetIds = new Set<string>();
+
+    for (const set of detail.sets || []) {
+      for (const header of set.headers || []) {
+        for (const question of header.questions || []) {
+          if (
+            Number(question.option_id) !== 5 ||
+            !question.subset_multi_id
+          ) {
+            continue;
+          }
+
+          String(question.subset_multi_id)
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean)
+            .forEach((id) => allowedSubsetIds.add(id));
+        }
+      }
+    }
+
+    if (
+      !allowedSubsetIds.has(
+        String(subsetSetId),
+      )
+    ) {
+      throw new BadRequestException(
+        'Selected subset is not linked with this category.',
+      );
+    }
+
+    const result = await this.db.query(
+      `
+    SELECT
+        qsm.id AS set_id,
+        qsm.name AS set_name,
+        qhm.id AS header_id,
+        qhm.name AS header_name,
+        qm.id AS question_id,
+        qm.question,
+        qm.question_type_id,
+        qm.option_id,
+        qm.parameters,
+        qm.risk_category_id,
+        qm.annexure_id,
+        qm.subset_multi_id,
+        qm.audit_ev_upload,
+        qm.show_instances,
+        rcm.risk_category AS risk_category_name,
+        am.name AS annexure_name,
+        am.risk_defination_id AS annexure_risk_defination_id,
+        ac.columns_json AS annexure_columns,
+        ans.id AS answer_id,
+        ans.answer_given,
+        ans.audit_comment,
+        ans.is_compliance,
+        ans.audit_compulsary_ev_upload,
+        ans.business_risk,
+        ans.control_risk,
+        ans.audit_status_id AS answer_status_id,
+        ans.audit_reviewer_comment
+    FROM question_set_master qsm
+    INNER JOIN question_header_master qhm
+        ON qhm.question_set_id = qsm.id
+        AND qhm.is_active = 1
+        AND qhm.deleted_at IS NULL
+    INNER JOIN question_master qm
+        ON qm.set_id = qsm.id
+        AND qm.header_id = qhm.id
+        AND qm.is_active = 1
+        AND qm.deleted_at IS NULL
+    LEFT JOIN risk_category_master rcm
+        ON rcm.id = qm.risk_category_id
+    LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
+    LEFT JOIN (
+        SELECT
+            ac.annexure_id,
+            jsonb_agg(
+                jsonb_build_object(
+                    'id', ac.id,
+                    'name', ac.name,
+                    'column_type_id', ac.column_type_id,
+                    'options', COALESCE(aco.options_json, '[]'::jsonb)
+                )
+                ORDER BY ac.id
+            ) AS columns_json
+        FROM annexure_columns ac
+        LEFT JOIN (
+            SELECT
+                annexure_column_id,
+                jsonb_agg(
+                    jsonb_build_object(
+                        'id', id,
+                        'option_label', option_label
+                    )
+                    ORDER BY id
+                ) AS options_json
+            FROM annexure_column_options
+            WHERE deleted_at IS NULL
+            GROUP BY annexure_column_id
+        ) aco
+            ON aco.annexure_column_id = ac.id
+        WHERE ac.deleted_at IS NULL
+        GROUP BY ac.annexure_id
+    ) ac
+        ON ac.annexure_id = am.id
+    LEFT JOIN answers_data ans
+        ON ans.assesment_id = $2
+        AND ans.category_id = $3
+        AND ans.header_id = qhm.id
+        AND ans.question_id = qm.id
+        AND ans.dump_id = $4
+        AND ans.deleted_at IS NULL
+    WHERE qsm.id = $1
+        AND qsm.is_active = 1
+        AND qsm.deleted_at IS NULL
+    ORDER BY
+        qsm.id,
+        qhm.id,
+        qm.id;
+    `,
+      [
+        subsetSetId,
+        assessmentId,
+        categoryId,
+        dumpId,
+      ],
+    );
+
+    const sets =
+      this.groupCategoryQuestions(
+        result.rows,
+      );
+
+    await this.attachAnnexureRows(
+      sets,
+      assessmentId,
+    );
+
+    await this.attachEvidenceRows(
+      sets,
+      assessmentId,
+    );
+
+    return {
+      success: true,
+      subset_set:
+        sets[0] || null,
+    };
+  }
+
   private getSetIdsFromQuestionScope(
     questionSetIds: string,
   ) {
@@ -4464,6 +4717,14 @@ ORDER BY id DESC;
     this.collectQuestions(
       detail.sets,
       questionMap,
+    );
+
+    await this.addLinkedSubsetQuestionsToMap(
+      detail.sets,
+      questionMap,
+      assessmentId,
+      categoryId,
+      dumpId,
     );
 
     const errors: Record<string, string> = {};
@@ -4731,6 +4992,144 @@ ORDER BY id DESC;
       saved:
         rowsToSave.length,
     };
+  }
+
+  private async addLinkedSubsetQuestionsToMap(
+    sets: any[],
+    questionMap: Map<number, any>,
+    assessmentId: number,
+    categoryId: number,
+    dumpId: number,
+  ) {
+    const subsetIds = new Set<string>();
+
+    for (const set of sets || []) {
+      for (const header of set.headers || []) {
+        for (const question of header.questions || []) {
+          if (
+            Number(question.option_id) !== 5 ||
+            !question.subset_multi_id
+          ) {
+            continue;
+          }
+
+          String(question.subset_multi_id)
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean)
+            .forEach((id) => subsetIds.add(id));
+        }
+      }
+    }
+
+    if (!subsetIds.size) {
+      return;
+    }
+
+    const result = await this.db.query(
+      `
+    SELECT
+        qhm.id AS header_id,
+        qm.id AS question_id,
+        qm.question,
+        qm.question_type_id,
+        qm.option_id,
+        qm.parameters,
+        qm.risk_category_id,
+        qm.annexure_id,
+        qm.subset_multi_id,
+        qm.audit_ev_upload,
+        qm.show_instances,
+        ans.id AS answer_id,
+        ans.answer_given,
+        ans.audit_comment,
+        ans.is_compliance,
+        ans.audit_compulsary_ev_upload,
+        ans.business_risk,
+        ans.control_risk,
+        ans.audit_status_id AS answer_status_id,
+        ans.audit_reviewer_comment
+    FROM question_set_master qsm
+    INNER JOIN question_header_master qhm
+        ON qhm.question_set_id = qsm.id
+        AND qhm.is_active = 1
+        AND qhm.deleted_at IS NULL
+    INNER JOIN question_master qm
+        ON qm.set_id = qsm.id
+        AND qm.header_id = qhm.id
+        AND qm.is_active = 1
+        AND qm.deleted_at IS NULL
+    LEFT JOIN answers_data ans
+        ON ans.assesment_id = $2
+        AND ans.category_id = $3
+        AND ans.header_id = qhm.id
+        AND ans.question_id = qm.id
+        AND ans.dump_id = $4
+        AND ans.deleted_at IS NULL
+    WHERE qsm.id::text = ANY($1)
+        AND qsm.is_active = 1
+        AND qsm.deleted_at IS NULL;
+    `,
+      [
+        Array.from(subsetIds),
+        assessmentId,
+        categoryId,
+        dumpId,
+      ],
+    );
+
+    for (const row of result.rows) {
+      questionMap.set(
+        Number(row.question_id),
+        {
+          id:
+            row.question_id,
+          header_id:
+            row.header_id,
+          question:
+            row.question,
+          question_type_id:
+            row.question_type_id,
+          option_id:
+            row.option_id,
+          parameters:
+            row.parameters || [],
+          risk_category_id:
+            row.risk_category_id,
+          annexure_id:
+            row.annexure_id,
+          subset_multi_id:
+            row.subset_multi_id,
+          audit_ev_upload:
+            row.audit_ev_upload,
+          show_instances:
+            row.show_instances,
+          answer:
+            row.answer_id
+              ? {
+                id:
+                  row.answer_id,
+                answer_given:
+                  row.answer_given,
+                audit_comment:
+                  row.audit_comment,
+                is_compliance:
+                  row.is_compliance,
+                audit_compulsary_ev_upload:
+                  row.audit_compulsary_ev_upload,
+                business_risk:
+                  row.business_risk,
+                control_risk:
+                  row.control_risk,
+                audit_status_id:
+                  row.answer_status_id,
+                audit_reviewer_comment:
+                  row.audit_reviewer_comment,
+              }
+              : null,
+        },
+      );
+    }
   }
 
   async saveAnnexureRow(
@@ -7276,8 +7675,8 @@ ORDER BY id DESC;
               });
             }
 
-            
-          } 
+
+          }
 
           if (
             Number(question.option_id) === 5

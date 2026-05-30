@@ -545,6 +545,32 @@ export class InternalAuditController {
     );
   }
 
+  @Get(':assessmentId/category/:categoryId/subset/:subsetSetId')
+  getCategorySubsetSet(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Param('subsetSetId', ParseIntPipe)
+    subsetSetId: number,
+
+    @Query('employee_id')
+    employeeId?: string,
+
+    @Query('dump_id')
+    dumpId?: string,
+  ) {
+    return this.service.getCategorySubsetSet(
+      assessmentId,
+      categoryId,
+      subsetSetId,
+      Number(employeeId || 0),
+      Number(dumpId || 0),
+    );
+  }
+
   @Get(':assessmentId/category/:categoryId')
   getCategory(
     @Param('assessmentId', ParseIntPipe)
@@ -895,11 +921,11 @@ export class InternalAuditController {
     const evidence =
       await this.service.getEvidenceFile(
         assessmentId,
-      categoryId,
-      evidenceId,
-      Number(employeeId || 0),
-      Number(dumpId || 0),
-    );
+        categoryId,
+        evidenceId,
+        Number(employeeId || 0),
+        Number(dumpId || 0),
+      );
 
     reply.header(
       'Content-Type',
