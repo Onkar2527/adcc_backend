@@ -1294,15 +1294,21 @@ export class InternalAuditService {
     assessmentId: number,
     employeeId: number,
   ) {
+    return this.getAssessmentSubmissionPreview(
+      assessmentId,
+      employeeId,
+    );
+  }
 
-    const menuData =
-      await this.getMenu(
+  private async getAssessmentSubmissionPreview(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+    const overview =
+      await this.getOverview(
         assessmentId,
         employeeId,
       );
-
-    const overview =
-      menuData.overview;
 
     if (
       !overview.can_continue
@@ -1332,6 +1338,7 @@ export class InternalAuditService {
         await this.getReAuditScope(
           assessmentId,
         );
+
       const pendingCorrections =
         await this.getReAuditPendingCorrectionCount(
           assessmentId,
@@ -1381,120 +1388,320 @@ export class InternalAuditService {
       };
     }
 
-    const issues: any[] = [];
-    const compliancePoints: any[] = [];
-    let complianceCount = 0;
-
-    const normalCategories: any[] = [];
-
-    for (
-      const menu
-      of menuData.menus || []
-    ) {
-      for (
-        const category
-        of menu.categories || []
-      ) {
-
-        if (
-          [1, 2].includes(
-            Number(category.linked_table_id),
-          )
-        ) {
-          const accounts =
-            await this.getSampledAccounts(
-              category,
-              overview,
-            );
-
-          if (
-            !accounts.length
-          ) {
-            issues.push({
-              category_id:
-                category.id,
-              category_name:
-                category.name,
-              menu_name:
-                menu.name,
-              question_id:
-                0,
-              question:
-                'Sampled accounts',
-              type:
-                'account',
-              message:
-                'No sampled account is available for assessment.',
-            });
-            continue;
-          }
-
-          for (
-            const account
-            of accounts
-          ) {
-            if (
-              !account.is_completed
-            ) {
-              issues.push({
-                category_id:
-                  category.id,
-                category_name:
-                  category.name,
-                menu_name:
-                  menu.name,
-                dump_id:
-                  account.id,
-                question_id:
-                  0,
-                question:
-                  account.account_no,
-                type:
-                  'account',
-                message:
-                  'Account assessment is not marked complete.',
-              });
-            }
-          }
-
-          complianceCount +=
-            await this.appendAccountCompliancePoints(
-              assessmentId,
-              Number(category.id),
-              accounts,
-              {
-                id:
-                  category.id,
-                name:
-                  category.name,
-                menu_name:
-                  menu.name,
-              },
-              compliancePoints,
-            );
-        } else {
-          normalCategories.push({
-            ...category,
-            menu_name:
-              menu.name,
-          });
-        }
-      }
-    }
-
-    complianceCount +=
-      await this.appendNormalCategoryPreviewIssues(
-        assessmentId,
-        overview,
-        normalCategories,
-        issues,
-        compliancePoints,
+    const pendingResult =
+      await this.db.query(
+        `
+      WITH category_scope AS (
+          SELECT
+              cm.id AS category_id,
+              cm.name AS category_name,
+              cm.menu_id,
+              cm.linked_table_id,
+              mm.name AS menu_name,
+              cm.question_set_ids
+          FROM category_master cm
+          INNER JOIN menu_master mm
+              ON mm.id = cm.menu_id
+              AND mm.is_active = 1
+              AND mm.deleted_at IS NULL
+          WHERE cm.is_active = 1
+              AND cm.deleted_at IS NULL
+              AND (
+                  $2 = ''
+                  OR cm.id::text = ANY(string_to_array($2, ','))
+              )
+              AND (
+                  $1 = ''
+                  OR mm.id::text = ANY(string_to_array($1, ','))
+              )
+      ),
+      normal_questions AS (
+          SELECT
+              cs.menu_id,
+              cs.menu_name,
+              cs.category_id,
+              cs.category_name,
+              qhm.id AS header_id,
+              qm.id AS question_id,
+              qm.question
+          FROM category_scope cs
+          INNER JOIN question_set_master qsm
+              ON qsm.id::text = ANY(
+                  string_to_array(
+                      COALESCE(cs.question_set_ids, ''),
+                      ','
+                  )
+              )
+              AND qsm.is_active = 1
+              AND qsm.deleted_at IS NULL
+          INNER JOIN question_header_master qhm
+              ON qhm.question_set_id = qsm.id
+              AND qhm.is_active = 1
+              AND qhm.deleted_at IS NULL
+              AND (
+                  $3 = ''
+                  OR qhm.id::text = ANY(string_to_array($3, ','))
+              )
+          INNER JOIN question_master qm
+              ON qm.header_id = qhm.id
+              AND qm.set_id = qsm.id
+              AND qm.is_active = 1
+              AND qm.deleted_at IS NULL
+              AND (
+                  $4 = ''
+                  OR qm.id::text = ANY(string_to_array($4, ','))
+              )
+          WHERE COALESCE(cs.linked_table_id, 0) NOT IN (1, 2)
+      )
+      SELECT
+          nq.menu_id,
+          nq.menu_name,
+          nq.category_id,
+          nq.category_name,
+          nq.header_id,
+          nq.question_id,
+          nq.question,
+          ad.id AS answer_id,
+          ad.answer_given
+      FROM normal_questions nq
+      LEFT JOIN answers_data ad
+          ON ad.assesment_id = $5
+          AND ad.category_id = nq.category_id
+          AND ad.header_id = nq.header_id
+          AND ad.question_id = nq.question_id
+          AND COALESCE(ad.dump_id, 0) = 0
+          AND ad.deleted_at IS NULL
+      WHERE ad.id IS NULL
+          OR COALESCE(TRIM(ad.answer_given), '') = ''
+      ORDER BY
+          nq.menu_id,
+          nq.category_id,
+          nq.header_id,
+          nq.question_id;
+      `,
+        [
+          overview.menu_ids || '',
+          overview.cat_ids || '',
+          overview.header_ids || '',
+          overview.question_ids || '',
+          assessmentId,
+        ],
       );
 
-    if (
-      String(
-        overview.menu_ids || '',
+    const annexurePendingResult =
+      await this.db.query(
+        `
+    SELECT
+        ad.menu_id,
+        mm.name AS menu_name,
+        ad.category_id,
+        cm.name AS category_name,
+        ad.header_id,
+        ad.question_id,
+        qm.question,
+        ad.dump_id,
+        'Annexure rows are required for selected annexure answer.' AS message
+    FROM answers_data ad
+    INNER JOIN question_master qm
+        ON qm.id = ad.question_id
+    LEFT JOIN menu_master mm
+        ON mm.id = ad.menu_id
+    LEFT JOIN category_master cm
+        ON cm.id = ad.category_id
+    WHERE ad.assesment_id = $1
+        AND ad.deleted_at IS NULL
+        AND qm.option_id = 4
+        AND COALESCE(ad.answer_given, '') = qm.annexure_id::text
+        AND NOT EXISTS (
+            SELECT 1
+            FROM answers_data_annexure ada
+            WHERE ada.answer_id = ad.id
+                AND ada.deleted_at IS NULL
+        )
+    ORDER BY
+        ad.menu_id,
+        ad.category_id,
+        ad.header_id,
+        ad.question_id;
+    `,
+        [
+          assessmentId,
+        ],
+      );
+
+    const complianceResult =
+      await this.db.query(
+        `
+      SELECT
+          ad.id,
+          ad.menu_id,
+          mm.name AS menu_name,
+          ad.category_id,
+          cm.name AS category_name,
+          ad.header_id,
+          qhm.name AS header_name,
+          ad.question_id,
+          qm.question,
+          ad.dump_id,
+          ad.answer_given,
+          ad.audit_comment
+      FROM answers_data ad
+      LEFT JOIN menu_master mm
+          ON mm.id = ad.menu_id
+      LEFT JOIN category_master cm
+          ON cm.id = ad.category_id
+      LEFT JOIN question_header_master qhm
+          ON qhm.id = ad.header_id
+      LEFT JOIN question_master qm
+          ON qm.id = ad.question_id
+      WHERE ad.assesment_id = $1
+          AND ad.is_compliance = 1
+          AND ad.deleted_at IS NULL
+      ORDER BY
+          ad.menu_id,
+          ad.category_id,
+          ad.dump_id,
+          ad.header_id,
+          ad.question_id;
+      `,
+        [
+          assessmentId,
+        ],
+      );
+
+    const accountPendingResult =
+      await this.db.query(
+        `
+      WITH account_categories AS (
+          SELECT
+              cm.id AS category_id,
+              cm.name AS category_name,
+              cm.linked_table_id,
+              mm.name AS menu_name
+          FROM category_master cm
+          INNER JOIN menu_master mm
+              ON mm.id = cm.menu_id
+              AND mm.deleted_at IS NULL
+          WHERE cm.deleted_at IS NULL
+              AND cm.is_active = 1
+              AND cm.linked_table_id IN (1, 2)
+              AND (
+                  $2 = ''
+                  OR cm.id::text = ANY(string_to_array($2, ','))
+              )
       )
+      SELECT
+          ac.category_id,
+          ac.category_name,
+          ac.menu_name,
+          d.id AS dump_id,
+          d.account_no,
+          d.account_holder_name,
+          'Account assessment is not marked complete.' AS message
+      FROM account_categories ac
+      INNER JOIN dump_deposits d
+          ON ac.linked_table_id = 1
+          AND d.sampling_filter = 1
+          AND d.deleted_at IS NULL
+          AND COALESCE(d.assesment_period_id, 0) <> $1
+      UNION ALL
+      SELECT
+          ac.category_id,
+          ac.category_name,
+          ac.menu_name,
+          a.id AS dump_id,
+          a.account_no,
+          a.account_holder_name,
+          'Account assessment is not marked complete.' AS message
+      FROM account_categories ac
+      INNER JOIN dump_advances a
+          ON ac.linked_table_id = 2
+          AND a.sampling_filter = 1
+          AND a.deleted_at IS NULL
+          AND COALESCE(a.assesment_period_id, 0) <> $1
+      ORDER BY
+          category_id,
+          dump_id;
+      `,
+        [
+          assessmentId,
+          overview.cat_ids || '',
+        ],
+      );
+
+    const issues: any[] = [
+      ...pendingResult.rows.map(
+        (row: any) => ({
+          category_id:
+            row.category_id,
+          category_name:
+            row.category_name,
+          menu_name:
+            row.menu_name,
+          header_id:
+            row.header_id,
+          question_id:
+            row.question_id,
+          question:
+            row.question,
+          type:
+            'question',
+          message:
+            'Answer is pending.',
+        }),
+      ),
+
+      ...annexurePendingResult.rows.map(
+        (row: any) => ({
+          category_id:
+            row.category_id,
+          category_name:
+            row.category_name,
+          menu_name:
+            row.menu_name,
+          header_id:
+            row.header_id,
+          question_id:
+            row.question_id,
+          question:
+            row.question,
+          dump_id:
+            row.dump_id,
+          type:
+            'annexure',
+          message:
+            row.message,
+        }),
+      ),
+
+      ...accountPendingResult.rows.map(
+        (row: any) => ({
+          category_id:
+            row.category_id,
+          category_name:
+            row.category_name,
+          menu_name:
+            row.menu_name,
+          dump_id:
+            row.dump_id,
+          account_no:
+            row.account_no,
+          account_holder_name:
+            row.account_holder_name,
+          question_id:
+            0,
+          question:
+            row.account_no,
+          type:
+            'account',
+          message:
+            row.message,
+        }),
+      ),
+    ];
+
+    if (
+      String(overview.menu_ids || '')
         .split(',')
         .map(
           (id: string) =>
@@ -1515,9 +1722,9 @@ export class InternalAuditService {
       pending_count:
         issues.length,
       compliance_count:
-        complianceCount,
+        complianceResult.rows.length,
       compliance_points:
-        compliancePoints,
+        complianceResult.rows,
       message:
         issues.length
           ? 'Complete the pending audit points before submitting for review.'
