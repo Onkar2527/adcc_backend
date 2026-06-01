@@ -1875,23 +1875,36 @@ export class InternalAuditService {
                 WHEN aam.audit_status_id = 5 THEN 'Compliance Review'
                 ELSE 'Audit Review'
             END AS review_stage
-        FROM audit_assesment_master aam
-        INNER JOIN audit_unit_master au
-            ON au.id = aam.audit_unit_id
-        LEFT JOIN year_master ym
-            ON ym.id = aam.year_id
-        LEFT JOIN answers_data ad
-            ON ad.assesment_id = aam.id
-            AND ad.deleted_at IS NULL
-        WHERE aam.audit_status_id IN (2, 5)
-            AND aam.deleted_at IS NULL
+            FROM audit_assesment_master aam
+            INNER JOIN audit_unit_master au
+                ON au.id = aam.audit_unit_id
+            LEFT JOIN year_master ym
+                ON ym.id = aam.year_id
+            LEFT JOIN answers_data ad
+                ON ad.assesment_id = aam.id
+                AND ad.deleted_at IS NULL
+            WHERE aam.audit_status_id IN (2, 5)
+              AND aam.deleted_at IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM employee_master em
+                  WHERE em.id = $1
+                      AND em.user_type_id = 4
+                      AND em.deleted_at IS NULL
+                      AND em.audit_unit_authority IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1
+                          FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
+                          WHERE trim(unit_id) = aam.audit_unit_id::text
+                  )
+        )
         GROUP BY
             aam.id,
             au.audit_unit_code,
             au.name,
             ym.year
         ORDER BY aam.audit_status_id, aam.audit_end_date DESC NULLS LAST, aam.id DESC;
-        `,
+        `, [employeeId]
       );
 
     return {
@@ -1900,12 +1913,55 @@ export class InternalAuditService {
     };
   }
 
+  private async assertReviewerAuthority(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+    await this.assertReviewer(
+      employeeId,
+    );
+
+    const allowed =
+      await this.db.findOne(
+        `
+      SELECT aam.id
+      FROM audit_assesment_master aam
+      INNER JOIN employee_master em
+          ON em.id = $2
+          AND em.user_type_id = 4
+          AND em.deleted_at IS NULL
+          AND em.audit_unit_authority IS NOT NULL
+          AND EXISTS (
+              SELECT 1
+              FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
+              WHERE trim(unit_id) = aam.audit_unit_id::text
+          )
+      WHERE aam.id = $1
+          AND aam.deleted_at IS NULL
+      LIMIT 1;
+      `,
+        [
+          assessmentId,
+          employeeId,
+        ],
+      );
+
+    if (
+      !allowed
+    ) {
+      throw new BadRequestException(
+        'Reviewer is not authorized for this audit unit.',
+      );
+    }
+  }
+
   async getReviewerComplianceAssessment(
     assessmentId: number,
     employeeId: number,
   ) {
 
-    await this.assertReviewer(
+    await this.assertReviewerAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -2134,7 +2190,8 @@ export class InternalAuditService {
     employeeId: number,
   ) {
 
-    await this.assertReviewer(
+    await this.assertReviewerAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -2227,7 +2284,8 @@ export class InternalAuditService {
     comment: string,
   ) {
 
-    await this.assertReviewer(
+    await this.assertReviewerAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -2433,7 +2491,8 @@ export class InternalAuditService {
     employeeId: number,
   ) {
 
-    await this.assertReviewer(
+    await this.assertReviewerAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -2613,7 +2672,8 @@ export class InternalAuditService {
     employeeId: number,
   ) {
 
-    await this.assertReviewer(
+    await this.assertReviewerAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -2814,7 +2874,8 @@ export class InternalAuditService {
     employeeId: number,
   ) {
 
-    await this.assertReviewer(
+    await this.assertReviewerAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -2906,7 +2967,8 @@ export class InternalAuditService {
     comment: string,
   ) {
 
-    await this.assertReviewer(
+    await this.assertReviewerAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -2992,7 +3054,8 @@ export class InternalAuditService {
     employeeId: number,
   ) {
 
-    await this.assertReviewer(
+    await this.assertReviewerAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -3257,13 +3320,30 @@ export class InternalAuditService {
             AND aa.deleted_at IS NULL
         WHERE aam.audit_status_id IN (4, 6)
             AND aam.deleted_at IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM employee_master em
+              WHERE em.id = $1
+                  AND em.deleted_at IS NULL
+                  AND em.audit_unit_authority IS NOT NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM unnest(
+                          string_to_array(
+                              COALESCE(em.audit_unit_authority, ''),
+                              ','
+                          )
+                      ) unit_id
+                      WHERE trim(unit_id) = aam.audit_unit_id::text
+                  )
+          )
         GROUP BY
             aam.id,
             au.audit_unit_code,
             au.name,
             ym.year
         ORDER BY aam.compliance_start_date DESC NULLS LAST, aam.id DESC;
-        `,
+        `, [employeeId]
       );
 
     return {
@@ -3272,12 +3352,54 @@ export class InternalAuditService {
     };
   }
 
+  private async assertComplianceAuthority(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+    await this.assertCompliance(
+      employeeId,
+    );
+
+    const allowed =
+      await this.db.findOne(
+        `
+      SELECT aam.id
+      FROM audit_assesment_master aam
+      INNER JOIN employee_master em
+          ON em.id = $2
+          AND em.deleted_at IS NULL
+          AND em.audit_unit_authority IS NOT NULL
+          AND EXISTS (
+              SELECT 1
+              FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
+              WHERE trim(unit_id) = aam.audit_unit_id::text
+          )
+      WHERE aam.id = $1
+          AND aam.deleted_at IS NULL
+      LIMIT 1;
+      `,
+        [
+          assessmentId,
+          employeeId,
+        ],
+      );
+
+    if (
+      !allowed
+    ) {
+      throw new BadRequestException(
+        'Compliance user is not authorized for this audit unit.',
+      );
+    }
+  }
+
   async getComplianceAssessment(
     assessmentId: number,
     employeeId: number,
   ) {
 
-    await this.assertCompliance(
+    await this.assertComplianceAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -3555,7 +3677,8 @@ ORDER BY id DESC;
     employeeId: number,
   ) {
 
-    await this.assertCompliance(
+    await this.assertComplianceAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -3661,7 +3784,8 @@ ORDER BY id DESC;
     employeeId: number,
   ) {
 
-    await this.assertCompliance(
+    await this.assertComplianceAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -3773,7 +3897,8 @@ ORDER BY id DESC;
     },
   ) {
 
-    await this.assertCompliance(
+    await this.assertComplianceAuthority(
+      assessmentId,
       employeeId,
     );
 
@@ -3930,7 +4055,8 @@ ORDER BY id DESC;
     rawResponse: string,
   ) {
 
-    await this.assertCompliance(
+    await this.assertComplianceAuthority(
+      assessmentId,
       employeeId,
     );
 
