@@ -1999,10 +1999,21 @@ export class InternalAuditService {
             ad.compliance_reviewer_comment,
             mm.name AS menu_name,
             cm.name AS category_name,
+            cm.linked_table_id,
             qhm.name AS header_name,
             qm.question,
             qm.option_id,
-            qm.compliance_ev_upload AS compliance_evidence_upload
+            qm.annexure_id,
+            qm.compliance_ev_upload AS compliance_evidence_upload,
+            ac.columns_json AS annexure_columns,
+            COALESCE(dd.account_no, da.account_no) AS account_no,
+            COALESCE(dd.account_holder_name, da.account_holder_name) AS account_holder_name,
+            COALESCE(dd.ucic, da.ucic) AS ucic,
+            COALESCE(dd.account_opening_date, da.account_opening_date) AS account_opening_date,
+            da.renewal_date,
+            COALESCE(dd.principal_amount, da.sanction_amount) AS account_amount,
+            sm.name AS scheme_name,
+            sm.scheme_code
         FROM answers_data ad
         LEFT JOIN menu_master mm
             ON mm.id = ad.menu_id
@@ -2012,6 +2023,33 @@ export class InternalAuditService {
             ON qhm.id = ad.header_id
         LEFT JOIN question_master qm
             ON qm.id = ad.question_id
+        LEFT JOIN (
+            SELECT
+                ac.annexure_id,
+                jsonb_agg(
+                    jsonb_build_object(
+                        'id', ac.id,
+                        'name', ac.name,
+                        'column_type_id', ac.column_type_id
+                    )
+                    ORDER BY ac.id
+                ) AS columns_json
+            FROM annexure_columns ac
+            WHERE ac.deleted_at IS NULL
+            GROUP BY ac.annexure_id
+        ) ac
+            ON ac.annexure_id = qm.annexure_id
+        LEFT JOIN dump_deposits dd
+            ON cm.linked_table_id = 1
+            AND dd.id = ad.dump_id
+            AND dd.deleted_at IS NULL
+        LEFT JOIN dump_advances da
+            ON cm.linked_table_id = 2
+            AND da.id = ad.dump_id
+            AND da.deleted_at IS NULL
+        LEFT JOIN scheme_master sm
+            ON sm.id = COALESCE(dd.scheme_id, da.scheme_id)
+            AND sm.deleted_at IS NULL
         WHERE ad.assesment_id = $1
             AND ad.is_compliance = 1
             AND ad.deleted_at IS NULL
@@ -2709,10 +2747,21 @@ export class InternalAuditService {
             ad.audit_reviewer_comment,
             mm.name AS menu_name,
             cm.name AS category_name,
+            cm.linked_table_id,
             qhm.name AS header_name,
             qm.question,
             qm.option_id,
-            qm.compliance_ev_upload AS compliance_evidence_upload
+            qm.annexure_id,
+            qm.compliance_ev_upload AS compliance_evidence_upload,
+            ac.columns_json AS annexure_columns,
+            COALESCE(dd.account_no, da.account_no) AS account_no,
+            COALESCE(dd.account_holder_name, da.account_holder_name) AS account_holder_name,
+            COALESCE(dd.ucic, da.ucic) AS ucic,
+            COALESCE(dd.account_opening_date, da.account_opening_date) AS account_opening_date,
+            da.renewal_date,
+            COALESCE(dd.principal_amount, da.sanction_amount) AS account_amount,
+            sm.name AS scheme_name,
+            sm.scheme_code
         FROM answers_data ad
         LEFT JOIN menu_master mm
             ON mm.id = ad.menu_id
@@ -2722,6 +2771,33 @@ export class InternalAuditService {
             ON qhm.id = ad.header_id
         LEFT JOIN question_master qm
             ON qm.id = ad.question_id
+        LEFT JOIN (
+            SELECT
+                ac.annexure_id,
+                jsonb_agg(
+                    jsonb_build_object(
+                        'id', ac.id,
+                        'name', ac.name,
+                        'column_type_id', ac.column_type_id
+                    )
+                    ORDER BY ac.id
+                ) AS columns_json
+            FROM annexure_columns ac
+            WHERE ac.deleted_at IS NULL
+            GROUP BY ac.annexure_id
+        ) ac
+            ON ac.annexure_id = qm.annexure_id
+        LEFT JOIN dump_deposits dd
+            ON cm.linked_table_id = 1
+            AND dd.id = ad.dump_id
+            AND dd.deleted_at IS NULL
+        LEFT JOIN dump_advances da
+            ON cm.linked_table_id = 2
+            AND da.id = ad.dump_id
+            AND da.deleted_at IS NULL
+        LEFT JOIN scheme_master sm
+            ON sm.id = COALESCE(dd.scheme_id, da.scheme_id)
+            AND sm.deleted_at IS NULL
         WHERE ad.assesment_id = $1
             AND ad.deleted_at IS NULL
         ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id;
