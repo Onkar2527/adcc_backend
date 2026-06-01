@@ -1107,7 +1107,7 @@ export class InternalAuditService {
           cm.id,
           cm.name,
           cm.linked_table_id
-        
+
       ORDER BY
 
           mm.id,
@@ -7631,7 +7631,7 @@ ORDER BY id DESC;
     }
   }
 
-  // Evidence 
+  // Evidence
 
   private async getComplianceEvidenceTarget(
     assessmentId: number,
@@ -9425,6 +9425,85 @@ ORDER BY id DESC;
         true,
       message:
         'Account assessment marked complete.',
+    };
+  }
+
+  async completeRemainingAccountAssessments(
+    assessmentId: number,
+    categoryId: number,
+    employeeId: number,
+  ) {
+
+    const detail =
+      await this.getCategory(
+        assessmentId,
+        categoryId,
+        employeeId,
+        0,
+      );
+
+    if (
+      ![1, 2].includes(
+        Number(detail.category.linked_table_id),
+      )
+    ) {
+      throw new BadRequestException(
+        'Account assessment not found.',
+      );
+    }
+
+    const remainingAccounts =
+      (detail.accounts || [])
+        .filter(
+          (account: any) =>
+            !account.is_completed,
+        );
+
+    if (
+      !remainingAccounts.length
+    ) {
+      return {
+        success:
+          true,
+        message:
+          'No remaining sampled accounts are pending for completion.',
+        completed_count:
+          0,
+      };
+    }
+
+    const table =
+      Number(detail.category.linked_table_id) === 1
+        ? 'dump_deposits'
+        : 'dump_advances';
+
+    const accountIds =
+      remainingAccounts.map(
+        (account: any) =>
+          Number(account.id),
+      );
+
+    await this.db.query(
+      `
+      UPDATE ${table}
+      SET assesment_period_id = $1
+      WHERE id = ANY($2::int[])
+          AND sampling_filter = 1
+          AND deleted_at IS NULL;
+      `,
+      [
+        assessmentId,
+        accountIds,
+      ],
+    );
+
+    return {
+      success:
+        true,
+      message:
+        `${accountIds.length} remaining account assessment(s) marked complete.`,
+      completed_count:
+        accountIds.length,
     };
   }
 

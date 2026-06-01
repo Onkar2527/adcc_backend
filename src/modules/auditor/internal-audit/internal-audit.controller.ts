@@ -713,6 +713,25 @@ export class InternalAuditController {
     );
   }
 
+  @Post(':assessmentId/category/:categoryId/accounts/complete-remaining')
+  completeRemainingAccountAssessments(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('categoryId', ParseIntPipe)
+    categoryId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.completeRemainingAccountAssessments(
+      assessmentId,
+      categoryId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
   @Post(':assessmentId/category/:categoryId/question/:questionId/annexure')
   saveAnnexureRow(
     @Param('assessmentId', ParseIntPipe)
