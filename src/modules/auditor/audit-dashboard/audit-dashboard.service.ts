@@ -204,6 +204,7 @@ async getAuthorizedAuditUnits(
         FROM employee_master
 
         WHERE id = $1
+
     )
 
     SELECT DISTINCT
@@ -216,14 +217,6 @@ async getAuthorizedAuditUnits(
 
     FROM audit_unit_master au
 
-    INNER JOIN audit_assesment_master am
-
-        ON am.audit_unit_id = au.id
-
-        AND am.deleted_at IS NULL
-
-       
-
     CROSS JOIN employee_units eu
 
     WHERE
@@ -235,6 +228,7 @@ async getAuthorizedAuditUnits(
         AND au.id = ANY(eu.unit_ids)
 
     ORDER BY
+
         au.audit_unit_code;
 
     `;
