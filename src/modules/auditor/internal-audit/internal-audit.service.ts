@@ -205,7 +205,7 @@ export class InternalAuditService {
                 (assessment: any) =>
                   Number(
                     assessment.audit_status_id,
-                  ) <= 3,
+                  ) !== 7,
               )
               &&
               !assessments.some(
@@ -235,9 +235,18 @@ export class InternalAuditService {
     date: Date,
   ) {
 
-    return date
-      .toISOString()
-      .split('T')[0];
+    const year =
+      date.getFullYear();
+    const month =
+      String(
+        date.getMonth() + 1,
+      ).padStart(2, '0');
+    const day =
+      String(
+        date.getDate(),
+      ).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
   }
 
   async getStartAssessmentPreview(
@@ -333,6 +342,8 @@ export class InternalAuditService {
 
     let fyRemainMonths = 12;
     let pendingAssessment = false;
+    let latestAssessmentPeriodTo =
+      unit.last_audit_date;
 
     for (
       const assessment
@@ -343,11 +354,15 @@ export class InternalAuditService {
         Number(
           assessment.audit_status_id,
         )
-        === 1
+        !== 7
       ) {
 
         pendingAssessment = true;
       }
+
+      latestAssessmentPeriodTo =
+        assessment.assesment_period_to
+        || latestAssessmentPeriodTo;
 
       if (
         this.formatDbDate(
@@ -374,7 +389,7 @@ export class InternalAuditService {
       this.formatDate(
         this.firstDayOfNextMonth(
           new Date(
-            unit.last_audit_date,
+            latestAssessmentPeriodTo,
           ),
         ),
       );
@@ -607,6 +622,14 @@ export class InternalAuditService {
         const assessmentId =
           assessmentResult.rows[0].id;
 
+        const carryForwardCount =
+          await this.createCarryForwardPoints(
+            client,
+            assessmentId,
+            data,
+            employeeId,
+          );
+
         await client.query(
           `
           INSERT INTO audit_assesment_timeline (
@@ -634,6 +657,8 @@ export class InternalAuditService {
             assessmentId,
           audit_unit_id:
             auditUnitId,
+          carry_forward_count:
+            carryForwardCount,
           action:
             'continue',
           message:
@@ -641,6 +666,328 @@ export class InternalAuditService {
         };
       },
     );
+  }
+
+  private async createCarryForwardPoints(
+    client: any,
+    assessmentId: number,
+    data: any,
+    employeeId: number,
+  ) {
+    const previousAssessments =
+      await client.query(
+        `
+        SELECT id
+        FROM audit_assesment_master
+        WHERE audit_type_id = $1
+            AND audit_unit_id = $2
+            AND audit_status_id = 7
+            AND COALESCE(compliance_carry_forward_count, 0) > 0
+            AND id <> $3
+            AND deleted_at IS NULL;
+        `,
+        [
+          data.audit_type_id,
+          data.audit_unit_id,
+          assessmentId,
+        ],
+      );
+
+    const previousIds =
+      previousAssessments.rows.map(
+        (row: any) =>
+          Number(row.id),
+      );
+
+    if (
+      !previousIds.length
+    ) {
+      return 0;
+    }
+
+    const carried =
+      await client.query(
+        `
+        WITH cf_answers AS (
+            SELECT
+                ad.id AS old_answer_id,
+                0::bigint AS old_annexure_id,
+                ad.assesment_id AS old_assessment_id,
+                ad.question_id,
+                ad.dump_id,
+                ad.answer_given,
+                ad.audit_comment,
+                ad.audit_commpliance,
+                ad.compliance_reviewer_comment,
+                ad.business_risk,
+                ad.control_risk,
+                qm.risk_category_id,
+                mm.name AS menu_name,
+                cm.name AS category_name,
+                cm.linked_table_id,
+                qhm.name AS header_name,
+                qm.question
+            FROM answers_data ad
+            LEFT JOIN menu_master mm ON mm.id = ad.menu_id
+            LEFT JOIN category_master cm ON cm.id = ad.category_id
+            LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
+            LEFT JOIN question_master qm ON qm.id = ad.question_id
+            WHERE ad.assesment_id = ANY($1::int[])
+                AND ad.is_compliance = 1
+                AND ad.compliance_status_id = 5
+                AND ad.deleted_at IS NULL
+                AND COALESCE(ad.cf_asses_id, 0) = 0
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM answers_data_annexure aa
+                    WHERE aa.answer_id = ad.id
+                        AND aa.assesment_id = ad.assesment_id
+                        AND aa.compliance_status_id = 5
+                        AND aa.deleted_at IS NULL
+                        AND COALESCE(aa.cf_asses_id, 0) = 0
+                )
+        ),
+        cf_annexure AS (
+            SELECT
+                ad.id AS old_answer_id,
+                aa.id AS old_annexure_id,
+                ad.assesment_id AS old_assessment_id,
+                ad.question_id,
+                ad.dump_id,
+                aa.answer_given,
+                aa.audit_comment,
+                aa.audit_commpliance,
+                aa.compliance_reviewer_comment,
+                aa.business_risk,
+                aa.control_risk,
+                aa.risk_cat_id AS risk_category_id,
+                mm.name AS menu_name,
+                cm.name AS category_name,
+                cm.linked_table_id,
+                qhm.name AS header_name,
+                qm.question
+            FROM answers_data_annexure aa
+            INNER JOIN answers_data ad
+                ON ad.id = aa.answer_id
+                AND ad.assesment_id = aa.assesment_id
+                AND ad.is_compliance = 1
+                AND ad.deleted_at IS NULL
+            LEFT JOIN menu_master mm ON mm.id = ad.menu_id
+            LEFT JOIN category_master cm ON cm.id = ad.category_id
+            LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
+            LEFT JOIN question_master qm ON qm.id = ad.question_id
+            WHERE aa.assesment_id = ANY($1::int[])
+                AND aa.compliance_status_id = 5
+                AND aa.deleted_at IS NULL
+                AND COALESCE(aa.cf_asses_id, 0) = 0
+        )
+        SELECT *
+        FROM cf_answers
+        UNION ALL
+        SELECT *
+        FROM cf_annexure
+        ORDER BY old_assessment_id, old_answer_id, old_annexure_id;
+        `,
+        [
+          previousIds,
+        ],
+      );
+
+    if (
+      !carried.rows.length
+    ) {
+      return 0;
+    }
+
+    const parent =
+      await client.query(
+        `
+        INSERT INTO answers_data (
+            section_type_id,
+            assesment_id,
+            menu_id,
+            category_id,
+            header_id,
+            question_id,
+            dump_id,
+            answer_given,
+            audit_emp_id,
+            audit_status_id,
+            is_compliance,
+            compliance_status_id,
+            business_risk,
+            control_risk,
+            batch_key
+        )
+        VALUES ($1, $2, 0, 0, 0, 0, 0, 'CF', $3, 0, 1, 0, 1, 1, $4)
+        RETURNING id;
+        `,
+        [
+          data.audit_type_id,
+          assessmentId,
+          employeeId,
+          data.batch_key,
+        ],
+      );
+
+    const parentId =
+      Number(parent.rows[0].id);
+
+    for (
+      const row
+      of carried.rows
+    ) {
+      const payload = {
+        assessment:
+          `Assessment #${row.old_assessment_id}`,
+        path:
+          `Menu: ${row.menu_name || '-'}, Category: ${row.category_name || '-'}, Header: ${row.header_name || '-'}`,
+        question:
+          row.question || '-',
+        answer:
+          row.answer_given || '-',
+        old_audit_comment:
+          row.audit_comment || '',
+        old_audit_compliance:
+          row.audit_commpliance || '',
+        old_compliance_reviewer_comment:
+          row.compliance_reviewer_comment || '',
+        old_answer_id:
+          Number(row.old_answer_id || 0),
+        old_annexure_id:
+          Number(row.old_annexure_id || 0),
+      };
+
+      await client.query(
+        `
+        INSERT INTO answers_data_annexure (
+            answer_id,
+            assesment_id,
+            answer_given,
+            audit_emp_id,
+            audit_status_id,
+            compliance_status_id,
+            business_risk,
+            control_risk,
+            risk_cat_id,
+            batch_key
+        )
+        VALUES ($1, $2, $3, $4, 1, 0, $5, $6, $7, $8);
+        `,
+        [
+          parentId,
+          assessmentId,
+          JSON.stringify(payload),
+          employeeId,
+          Number(row.business_risk || 1),
+          Number(row.control_risk || 1),
+          Number(row.risk_category_id || 1),
+          data.batch_key,
+        ],
+      );
+    }
+
+    await client.query(
+      `
+      UPDATE answers_data
+      SET cf_asses_id = $2,
+          cf_transfer_date = CURRENT_DATE
+      WHERE id = ANY($1::int[]);
+      `,
+      [
+        carried.rows
+          .filter((row: any) => !Number(row.old_annexure_id || 0))
+          .map((row: any) => Number(row.old_answer_id)),
+        assessmentId,
+      ],
+    );
+
+    await client.query(
+      `
+      UPDATE answers_data_annexure
+      SET cf_asses_id = $2,
+          cf_transfer_date = CURRENT_DATE
+      WHERE id = ANY($1::int[]);
+      `,
+      [
+        carried.rows
+          .filter((row: any) => Number(row.old_annexure_id || 0))
+          .map((row: any) => Number(row.old_annexure_id)),
+        assessmentId,
+      ],
+    );
+
+    await client.query(
+      `
+      UPDATE audit_assesment_master
+      SET menu_ids = CASE
+          WHEN COALESCE(menu_ids, '') = '' THEN 'CF'
+          WHEN 'CF' = ANY(string_to_array(menu_ids, ',')) THEN menu_ids
+          ELSE CONCAT(menu_ids, ',CF')
+      END
+      WHERE id = $1;
+      `,
+      [
+        assessmentId,
+      ],
+    );
+
+    return carried.rows.length;
+  }
+
+  async rebuildCarryForwardPoints(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    await this.assertAuthority(
+      assessment.audit_unit_id,
+      employeeId,
+    );
+
+    const existing =
+      await this.getCarryForwardCount(
+        assessmentId,
+      );
+
+    if (
+      existing > 0
+    ) {
+      return {
+        success:
+          true,
+        carry_forward_count:
+          existing,
+        message:
+          'Carry-forward points are already available for this assessment.',
+      };
+    }
+
+    const count =
+      await this.db.transaction(
+        async (client) =>
+          this.createCarryForwardPoints(
+            client,
+            assessmentId,
+            assessment,
+            employeeId,
+          ),
+      );
+
+    return {
+      success:
+        true,
+      carry_forward_count:
+        count,
+      message:
+        count > 0
+          ? 'Carry-forward points rebuilt successfully.'
+          : 'No carry-forward points were found for this assessment.',
+    };
   }
 
   async getOverview(
@@ -1270,6 +1617,42 @@ export class InternalAuditService {
     await Promise.all(
       accountCategoryTasks,
     );
+
+    const carryForwardCount =
+      await this.getCarryForwardCount(
+        assessmentId,
+      );
+
+    if (
+      carryForwardCount > 0
+    ) {
+      menuMap.set(
+        -1,
+        {
+          id:
+            -1,
+          name:
+            'Carry Forward',
+          categories:
+            [
+              {
+                id:
+                  0,
+                name:
+                  'Carry Forward Points',
+                linked_table_id:
+                  0,
+                question_count:
+                  carryForwardCount,
+                answered_count:
+                  carryForwardCount,
+                carry_forward:
+                  true,
+              },
+            ],
+        },
+      );
+    }
 
     return {
 
@@ -2338,10 +2721,10 @@ export class InternalAuditService {
     }
 
     if (
-      ![2, 3].includes(action)
+      ![2, 3, 5].includes(action)
     ) {
       throw new BadRequestException(
-        'Choose Accepted or Re-Compliance Needed.',
+        'Choose Accepted, Re-Compliance Needed, or Carry Forward.',
       );
     }
 
@@ -2520,7 +2903,91 @@ export class InternalAuditService {
       message:
         action === 2
           ? 'Compliance response accepted.'
-          : 'Compliance response marked for re-compliance.',
+          : action === 5
+            ? 'Compliance response marked as carry forward.'
+            : 'Compliance response marked for re-compliance.',
+    };
+  }
+
+  private async getCarryForwardCount(
+    assessmentId: number,
+  ) {
+    const result =
+      await this.db.query(
+        `
+        SELECT COUNT(*)::int AS total
+        FROM answers_data ad
+        INNER JOIN answers_data_annexure aa
+            ON aa.answer_id = ad.id
+            AND aa.assesment_id = ad.assesment_id
+            AND aa.deleted_at IS NULL
+        WHERE ad.assesment_id = $1
+            AND ad.answer_given = 'CF'
+            AND ad.deleted_at IS NULL;
+        `,
+        [
+          assessmentId,
+        ],
+      );
+
+    return Number(
+      result.rows[0]?.total || 0,
+    );
+  }
+
+  async getCarryForwardPoints(
+    assessmentId: number,
+    employeeId: number,
+  ) {
+    const overview =
+      await this.getOverview(
+        assessmentId,
+        employeeId,
+      );
+
+    const result =
+      await this.db.query(
+        `
+        SELECT
+            aa.id,
+            aa.answer_given,
+            aa.business_risk,
+            aa.control_risk,
+            aa.risk_cat_id
+        FROM answers_data ad
+        INNER JOIN answers_data_annexure aa
+            ON aa.answer_id = ad.id
+            AND aa.assesment_id = ad.assesment_id
+            AND aa.deleted_at IS NULL
+        WHERE ad.assesment_id = $1
+            AND ad.answer_given = 'CF'
+            AND ad.deleted_at IS NULL
+        ORDER BY aa.id;
+        `,
+        [
+          assessmentId,
+        ],
+      );
+
+    return {
+      overview,
+      points:
+        result.rows.map(
+          (row: any) => ({
+            id:
+              row.id,
+            data:
+              this.parseJsonObject(
+                row.answer_given,
+              ),
+            business_risk:
+              row.business_risk,
+            control_risk:
+              row.control_risk,
+            risk_cat_id:
+              row.risk_cat_id,
+          }),
+        ),
     };
   }
 
@@ -2559,7 +3026,7 @@ export class InternalAuditService {
                 compliance_reviewer_emp_id = $2
             WHERE assesment_id = $1
                 AND is_compliance = 1
-                AND COALESCE(compliance_status_id, 0) NOT IN (2, 3)
+                AND COALESCE(compliance_status_id, 0) NOT IN (2, 3, 5)
                 AND deleted_at IS NULL;
             `,
             [
@@ -2575,7 +3042,7 @@ export class InternalAuditService {
                 compliance_status_id = 2,
                 compliance_reviewer_emp_id = $2
             WHERE aa.assesment_id = $1
-                AND COALESCE(aa.compliance_status_id, 0) NOT IN (2, 3)
+                AND COALESCE(aa.compliance_status_id, 0) NOT IN (2, 3, 5)
                 AND aa.deleted_at IS NULL
                 AND EXISTS (
                     SELECT 1
@@ -2620,10 +3087,42 @@ export class InternalAuditService {
               `,
               [assessmentId],
             );
+          const carryForwardSummary =
+            await client.query(
+              `
+              SELECT (
+                  (SELECT COUNT(*)
+                      FROM answers_data
+                      WHERE assesment_id = $1
+                          AND is_compliance = 1
+                          AND compliance_status_id = 5
+                          AND deleted_at IS NULL)
+                  +
+                  (SELECT COUNT(*)
+                      FROM answers_data_annexure aa
+                      WHERE aa.assesment_id = $1
+                          AND aa.compliance_status_id = 5
+                          AND aa.deleted_at IS NULL
+                          AND EXISTS (
+                              SELECT 1
+                              FROM answers_data ad
+                              WHERE ad.id = aa.answer_id
+                                  AND ad.assesment_id = aa.assesment_id
+                                  AND ad.is_compliance = 1
+                                  AND ad.deleted_at IS NULL
+                          ))
+              )::int AS carry_forward_count;
+              `,
+              [assessmentId],
+            );
 
           const rejectedCount =
             Number(
               reviewSummary.rows[0]?.rejected_count || 0,
+            );
+          const carryForwardCount =
+            Number(
+              carryForwardSummary.rows[0]?.carry_forward_count || 0,
             );
           const nextStatus =
             rejectedCount > 0
@@ -2638,6 +3137,10 @@ export class InternalAuditService {
                   audit_status_id = $2::bigint,
                   compliance_review_emp_id = $3,
                   compliance_review_date = CURRENT_DATE,
+                  compliance_carry_forward_count = CASE
+                      WHEN $2::bigint = 7 THEN $4::bigint
+                      ELSE compliance_carry_forward_count
+                  END,
                   batch_key = CASE
                       WHEN $2::bigint = 6
                       THEN CONCAT('C-', TO_CHAR(CLOCK_TIMESTAMP(), 'YYYYMMDDHH24MISSMS'))
@@ -2652,6 +3155,7 @@ export class InternalAuditService {
                 assessmentId,
                 nextStatus,
                 employeeId,
+                carryForwardCount,
               ],
             );
 
@@ -2687,6 +3191,7 @@ export class InternalAuditService {
           return {
             rejectedCount,
             nextStatus,
+            carryForwardCount,
           };
         },
       );
@@ -2698,6 +3203,8 @@ export class InternalAuditService {
         result.nextStatus,
       rejected_count:
         result.rejectedCount,
+      carry_forward_count:
+        result.carryForwardCount,
       message:
         result.nextStatus === 6
           ? 'Compliance review submitted. Rejected responses returned to Manager.'
@@ -8843,6 +9350,45 @@ ORDER BY id DESC;
     } catch {
 
       return [];
+    }
+  }
+
+  private parseJsonObject(
+    value: any,
+  ) {
+
+    if (
+      value
+      &&
+      typeof value === 'object'
+      &&
+      !Array.isArray(value)
+    ) {
+      return value;
+    }
+
+    if (
+      !value
+    ) {
+      return {};
+    }
+
+    try {
+      const parsed =
+        JSON.parse(
+          String(value),
+        );
+
+      return parsed
+        &&
+        typeof parsed === 'object'
+        &&
+        !Array.isArray(parsed)
+        ? parsed
+        : {};
+    } catch {
+
+      return {};
     }
   }
 

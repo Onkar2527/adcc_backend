@@ -545,6 +545,34 @@ export class InternalAuditController {
     );
   }
 
+  @Get(':assessmentId/carry-forward')
+  getCarryForwardPoints(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Query('employee_id')
+    employeeId?: string,
+  ) {
+    return this.service.getCarryForwardPoints(
+      assessmentId,
+      Number(employeeId || 0),
+    );
+  }
+
+  @Post(':assessmentId/carry-forward/rebuild')
+  rebuildCarryForwardPoints(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Body()
+    body: any,
+  ) {
+    return this.service.rebuildCarryForwardPoints(
+      assessmentId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
   @Get(':assessmentId/category/:categoryId/subset/:subsetSetId')
   getCategorySubsetSet(
     @Param('assessmentId', ParseIntPipe)
