@@ -80,6 +80,7 @@ export class AdvanceAccountsController {
 
     async validateUpload(
         @Req() req: any,
+        @Query() query: any,
     ) {
 
         const file =
@@ -96,13 +97,16 @@ export class AdvanceAccountsController {
                 {
 
                     upload_date:
-                        fields.upload_date?.value,
+                        query.upload_date
+                        || fields?.upload_date?.value,
 
                     period_from:
-                        fields.period_from?.value,
+                        query.period_from
+                        || fields?.period_from?.value,
 
                     period_to:
-                        fields.period_to?.value,
+                        query.period_to
+                        || fields?.period_to?.value,
                 },
             );
     }
