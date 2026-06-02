@@ -951,7 +951,12 @@ export class DepositAccountsService {
         const existingAccounts =
             await this.db.query(
                 `
-            SELECT account_no
+            SELECT
+                branch_id,
+                scheme_id,
+                account_no,
+                ucic,
+                account_opening_date
             FROM dump_deposits
             WHERE deleted_at IS NULL
             `,
@@ -963,9 +968,13 @@ export class DepositAccountsService {
                 existingAccounts.rows.map(
                     (x: any) =>
 
-                        String(
-                            x.account_no,
-                        ).trim(),
+                        [
+                            Number(x.branch_id || 0),
+                            Number(x.scheme_id || 0),
+                            String(x.account_no || '').trim(),
+                            this.toUpper(x.ucic),
+                            this.formatCsvDate(x.account_opening_date),
+                        ].join('|'),
                 ),
             );
 
@@ -986,6 +995,8 @@ export class DepositAccountsService {
         const duplicateAccounts: string[] = [];
         const duplicateAccountSet =
             new Set<string>();
+        const duplicateRows =
+            new Set<number>();
         const uploadDumpKey =
             `UP${Date.now()}`;
 
@@ -1189,10 +1200,18 @@ export class DepositAccountsService {
                     String(
                         row.account_no,
                     ).trim();
+                const accountKey =
+                    [
+                        Number(branchId),
+                        Number(schemeId),
+                        accountNo,
+                        this.toUpper(row.ucic),
+                        this.formatCsvDate(row.account_opening_date),
+                    ].join('|');
 
                 if (
                     existingAccountSet.has(
-                        accountNo,
+                        accountKey,
                     )
                 ) {
 
@@ -1201,7 +1220,11 @@ export class DepositAccountsService {
                     );
 
                     duplicateAccountSet.add(
-                        accountNo,
+                        accountKey,
+                    );
+
+                    duplicateRows.add(
+                        i + 1,
                     );
 
                     continue;
@@ -1270,7 +1293,7 @@ export class DepositAccountsService {
                 // =====================================
 
                 existingAccountSet.add(
-                    accountNo,
+                    accountKey,
                 );
 
             } catch (err: any) {
@@ -1314,11 +1337,9 @@ export class DepositAccountsService {
 
                     status:
 
-                        duplicateAccountSet.has(
-                            String(c_data[2]).trim(),
-                        )
+                        duplicateRows.has(index + 1)
 
-                            ? 'DUPLICATE ACCOUNT NUMBER'
+                            ? 'DUPLICATE ACCOUNT DETAILS'
 
                             : (
 
