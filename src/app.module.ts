@@ -12,28 +12,28 @@ import { AuthModule } from './modules/auth/auth.module';
 import { LoanTypesModule } from './modules/loan-types/loan-types.module';
 import { ParticipantsModule } from './modules/participants/participants.module';
 import { DocumentsModule } from './modules/documents/documents.module';
-import { EmployeesModule } from './modules/employee-master/employees.module';
-import { PasswordPolicyModule } from './modules/password-policy/password-policy.module';
-import { UnitsModule } from './modules/units/units.module';
-import { AuditSectionsModule } from './modules/audit-section-master/audit-sections.module';
-import { MenuMasterModule } from './modules/menu-master/menu-master.module';
-import { AuditUnitsModule } from './modules/audit-unit-master/audit-units.module';
-import { AuditSchemesModule } from './modules/audit-scheme-master/audit-schemes.module';
-import { AuditQuestionsModule } from './modules/audit-question-master/audit-questions.module';
-import { BorderAreaMasterModule } from './modules/border-area-master/border-arear-master.module';
-import { ManageAssementMasterModule } from './modules/manage-assement-master/manage-assement-master.module';
-import { AuditCategoriesModule } from './modules/audit-category-master/audit-categories.module';
-import { AuditAnnexureModule } from './modules/audit-annexure-master/audit-annexure.module';
-import { RiskCategoryModule } from './modules/risk-masters/risk-category/risk-category.module';
-import { RiskControlModule } from './modules/risk-masters/risk-control/risk-control.module';
-import { RiskCompositeModule } from './modules/risk-masters/risk-composite/risk-composite.module';
-import { RiskMatrixModule } from './modules/risk-masters/risk-matrix/risk-matrix.module';
-import { BranchRatingModule } from './modules/risk-masters/risk-branch-rating/risk-branch-rating.module';
-import { PeriodwiseQuestionsMasterModule } from './modules/periodwise-questions-master/periodwise-questions-master.module';
+import { EmployeesModule } from './modules/admin/employee-master/employees.module';
+import { PasswordPolicyModule } from './modules/admin/password-policy/password-policy.module';
+import { AuditUnitsModule } from './modules/admin/audit-unit-master/audit-units.module';
+import { AuditSectionsModule } from './modules/admin/audit-section-master/audit-sections.module';
+import { MenuMasterModule } from './modules/admin/menu-master/menu-master.module';
+import { AuditSchemesModule } from './modules/admin/audit-scheme-master/audit-schemes.module';
+import { AuditQuestionsModule } from './modules/admin/audit-question-master/audit-questions.module';
+import { BroaderAreaMasterModule } from './modules/admin/broader-area-master/broader-area-master.module';
+import { ManageAssementMasterModule } from './modules/admin/manage-assement-master/manage-assement-master.module';
+import { AuditCategoriesModule } from './modules/admin/audit-category-master/audit-categories.module';
+import { AuditAnnexureModule } from './modules/admin/audit-annexure-master/audit-annexure.module';
+import { RiskCategoryModule } from './modules/admin/risk-masters/risk-category/risk-category.module';
+import { RiskControlModule } from './modules/admin/risk-masters/risk-control/risk-control.module';
+import { RiskCompositeModule } from './modules/admin/risk-masters/risk-composite/risk-composite.module';
+import { RiskMatrixModule } from './modules/admin/risk-masters/risk-matrix/risk-matrix.module';
+import { BranchRatingModule } from './modules/admin/risk-masters/risk-branch-rating/risk-branch-rating.module';
+import { PeriodwiseQuestionsMasterModule } from './modules/admin/periodwise-questions-master/periodwise-questions-master.module';
 import { AuditDashboardModule } from './modules/auditor/audit-dashboard/audit-dashboard.module';
 import { InternalAuditModule } from './modules/auditor/internal-audit/internal-audit.module';
-import { DepositAccountsModule } from './modules/manage-accounts/deposit-accounts/deposit-accounts.module';
-import { AdvanceAccountsModule } from './modules/manage-accounts/advance-accounts/advance-accounts.module';
+import { DepositAccountsModule } from './modules/admin/manage-accounts/deposit-accounts/deposit-accounts.module';
+import { AdvanceAccountsModule } from './modules/admin/manage-accounts/advance-accounts/advance-accounts.module';
+import { UnitsModule } from './modules/units/units.module';
 
 
 @Module({
@@ -57,7 +57,7 @@ import { AdvanceAccountsModule } from './modules/manage-accounts/advance-account
     AuditUnitsModule,
     AuditSchemesModule,
     AuditQuestionsModule,
-    BorderAreaMasterModule,
+    BroaderAreaMasterModule,
     ManageAssementMasterModule,
     AuditCategoriesModule,
     AuditAnnexureModule,
