@@ -854,6 +854,39 @@ export class AdvanceAccountsService {
             );
         }
 
+        const uploadDate =
+            this.formatCsvDate(payload.upload_date);
+
+        const uploadPeriodFrom =
+            this.formatCsvDate(payload.period_from);
+
+        const uploadPeriodTo =
+            this.formatCsvDate(payload.period_to);
+
+        if (
+            !uploadDate
+            || !uploadPeriodFrom
+            || !uploadPeriodTo
+        ) {
+
+            throw new BadRequestException(
+                'Upload date and upload period dates are required',
+            );
+        }
+
+        if (
+            new Date(uploadPeriodTo)
+            <= new Date(uploadPeriodFrom)
+        ) {
+
+            throw new BadRequestException(
+                'Upload period to date must be greater than period from date',
+            );
+        }
+
+        const uploadDateTime =
+            `${uploadDate} ${new Date().toTimeString().slice(0, 8)}`;
+
         // =========================================
         // PRELOAD BRANCHES
         // =========================================
@@ -865,7 +898,8 @@ export class AdvanceAccountsService {
                 id,
                 audit_unit_code
             FROM audit_unit_master
-            WHERE deleted_at IS NULL
+            WHERE is_active = 1
+              AND deleted_at IS NULL
             `,
             );
 
@@ -896,7 +930,8 @@ export class AdvanceAccountsService {
                 id,
                 scheme_code
             FROM scheme_master
-            WHERE deleted_at IS NULL
+            WHERE is_active = 1
+              AND deleted_at IS NULL
             `,
             );
 
@@ -924,7 +959,12 @@ export class AdvanceAccountsService {
         const existingAccounts =
             await this.db.query(
                 `
-            SELECT account_no
+            SELECT
+                branch_id,
+                scheme_id,
+                account_no,
+                account_opening_date,
+                renewal_date
             FROM dump_advances
             WHERE deleted_at IS NULL
             `,
@@ -936,9 +976,13 @@ export class AdvanceAccountsService {
                 existingAccounts.rows.map(
                     (x: any) =>
 
-                        String(
-                            x.account_no,
-                        ).trim(),
+                        [
+                            Number(x.branch_id || 0),
+                            Number(x.scheme_id || 0),
+                            String(x.account_no || '').trim(),
+                            this.formatCsvDate(x.account_opening_date),
+                            this.formatCsvDate(x.renewal_date),
+                        ].join('|'),
                 ),
             );
 
@@ -973,7 +1017,7 @@ export class AdvanceAccountsService {
             const c_data =
                 filteredRows[i];
 
-            if (c_data.length !== 15) {
+            if (c_data.length !== 17) {
 
                 failed++;
 
@@ -994,46 +1038,46 @@ export class AdvanceAccountsService {
                     String(c_data[0] || '').trim(),
 
                 scheme_code:
-                    String(c_data[1] || '').trim(),
-
-                account_no:
                     String(c_data[2] || '').trim(),
 
+                account_no:
+                    String(c_data[4] || '').trim(),
+
                 account_holder_name:
-                    this.toUpper(c_data[3]),
-
-                ucic:
-                    this.toUpper(c_data[4]),
-
-                customer_type:
                     this.toUpper(c_data[5]),
 
+                ucic:
+                    this.toUpper(c_data[6]),
+
+                customer_type:
+                    this.toUpper(c_data[7]),
+
                 account_opening_date:
-                    this.formatCsvDate(c_data[6]),
+                    this.formatCsvDate(c_data[8]),
 
                 renewal_date:
-                    this.formatCsvDate(c_data[7]),
+                    this.formatCsvDate(c_data[9]),
 
                 sanction_amount:
-                    this.toDecimal(c_data[8]),
+                    this.toDecimal(c_data[10]),
 
                 intrest_rate:
-                    this.toDecimal(c_data[9]),
-
-                due_date:
-                    this.formatCsvDate(c_data[10]),
-
-                outstanding_balance:
                     this.toDecimal(c_data[11]),
 
-                balance_date:
+                due_date:
                     this.formatCsvDate(c_data[12]),
 
+                outstanding_balance:
+                    this.toDecimal(c_data[13]),
+
+                balance_date:
+                    this.formatCsvDate(c_data[14]),
+
                 npa_status:
-                    this.toUpper(c_data[13]),
+                    this.toUpper(c_data[15]),
 
                 account_status:
-                    this.toUpper(c_data[14]),
+                    this.toUpper(c_data[16]),
             };
 
             try {
@@ -1046,6 +1090,7 @@ export class AdvanceAccountsService {
                     !row.account_no
                     || !row.branch_code
                     || !row.scheme_code
+                    || !row.account_holder_name
                 ) {
 
                     failed++;
@@ -1063,13 +1108,46 @@ export class AdvanceAccountsService {
 
                 const periodFrom =
                     new Date(
-                        payload.period_from,
+                        uploadPeriodFrom,
                     );
 
                 const periodTo =
                     new Date(
-                        payload.period_to,
+                        uploadPeriodTo,
                     );
+
+                if (!row.account_opening_date) {
+
+                    failed++;
+
+                    errors.push({
+
+                        row: i + 1,
+
+                        error:
+                            'Account opening date is required or invalid',
+                    });
+
+                    continue;
+                }
+
+                if (
+                    String(c_data[9] || '').trim()
+                    && !row.renewal_date
+                ) {
+
+                    failed++;
+
+                    errors.push({
+
+                        row: i + 1,
+
+                        error:
+                            'Renewal date is invalid',
+                    });
+
+                    continue;
+                }
 
                 const renewalDate =
                     row.renewal_date;
@@ -1168,10 +1246,18 @@ export class AdvanceAccountsService {
                     String(
                         row.account_no,
                     ).trim();
+                const accountKey =
+                    [
+                        Number(branchId),
+                        Number(schemeId),
+                        accountNo,
+                        this.formatCsvDate(row.account_opening_date),
+                        this.formatCsvDate(row.renewal_date),
+                    ].join('|');
 
                 if (
                     existingAccountSet.has(
-                        accountNo,
+                        accountKey,
                     )
                 ) {
 
@@ -1180,7 +1266,7 @@ export class AdvanceAccountsService {
                     );
 
                     duplicateAccountSet.add(
-                        accountNo,
+                        accountKey,
                     );
 
                     duplicateRows.add(
@@ -1226,18 +1312,11 @@ export class AdvanceAccountsService {
 
                     row.account_status,
 
-                    new Date()
-                        .toISOString()
-                        .slice(0, 19)
-                        .replace('T', ' '),
+                    uploadDateTime,
 
-                    this.formatCsvDate(
-                        payload.period_from,
-                    ),
+                    uploadPeriodFrom,
 
-                    this.formatCsvDate(
-                        payload.period_to,
-                    ),
+                    uploadPeriodTo,
 
                     uploadDumpKey,
 
@@ -1252,7 +1331,7 @@ export class AdvanceAccountsService {
                 // =====================================
 
                 existingAccountSet.add(
-                    accountNo,
+                    accountKey,
                 );
 
             } catch (err: any) {
@@ -1316,13 +1395,13 @@ export class AdvanceAccountsService {
                         item.row[0],
 
                     scheme_code:
-                        item.row[1],
-
-                    account_no:
                         item.row[2],
 
+                    account_no:
+                        item.row[4],
+
                     account_holder_name:
-                        item.row[3],
+                        item.row[5],
 
                     status:
 

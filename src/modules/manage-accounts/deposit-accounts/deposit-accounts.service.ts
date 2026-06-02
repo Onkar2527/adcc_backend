@@ -881,6 +881,39 @@ export class DepositAccountsService {
             );
         }
 
+        const uploadDate =
+            this.formatCsvDate(payload.upload_date);
+
+        const uploadPeriodFrom =
+            this.formatCsvDate(payload.period_from);
+
+        const uploadPeriodTo =
+            this.formatCsvDate(payload.period_to);
+
+        if (
+            !uploadDate
+            || !uploadPeriodFrom
+            || !uploadPeriodTo
+        ) {
+
+            throw new BadRequestException(
+                'Upload date and upload period dates are required',
+            );
+        }
+
+        if (
+            new Date(uploadPeriodTo)
+            <= new Date(uploadPeriodFrom)
+        ) {
+
+            throw new BadRequestException(
+                'Upload period to date must be greater than period from date',
+            );
+        }
+
+        const uploadDateTime =
+            `${uploadDate} ${new Date().toTimeString().slice(0, 8)}`;
+
         // =========================================
         // PRELOAD BRANCHES
         // =========================================
@@ -892,7 +925,8 @@ export class DepositAccountsService {
                 id,
                 audit_unit_code
             FROM audit_unit_master
-            WHERE deleted_at IS NULL
+            WHERE is_active = 1
+              AND deleted_at IS NULL
             `,
             );
 
@@ -923,7 +957,8 @@ export class DepositAccountsService {
                 id,
                 scheme_code
             FROM scheme_master
-            WHERE deleted_at IS NULL
+            WHERE is_active = 1
+              AND deleted_at IS NULL
             `,
             );
 
@@ -955,7 +990,6 @@ export class DepositAccountsService {
                 branch_id,
                 scheme_id,
                 account_no,
-                ucic,
                 account_opening_date
             FROM dump_deposits
             WHERE deleted_at IS NULL
@@ -972,7 +1006,6 @@ export class DepositAccountsService {
                             Number(x.branch_id || 0),
                             Number(x.scheme_id || 0),
                             String(x.account_no || '').trim(),
-                            this.toUpper(x.ucic),
                             this.formatCsvDate(x.account_opening_date),
                         ].join('|'),
                 ),
@@ -1009,7 +1042,7 @@ export class DepositAccountsService {
             const c_data =
                 filteredRows[i];
 
-            if (c_data.length !== 15) {
+            if (c_data.length !== 17) {
 
                 failed++;
 
@@ -1030,46 +1063,46 @@ export class DepositAccountsService {
                     String(c_data[0] || '').trim(),
 
                 scheme_code:
-                    String(c_data[1] || '').trim(),
-
-                account_no:
                     String(c_data[2] || '').trim(),
 
+                account_no:
+                    String(c_data[4] || '').trim(),
+
                 account_holder_name:
-                    this.toUpper(c_data[3]),
-
-                ucic:
-                    this.toUpper(c_data[4]),
-
-                customer_type:
                     this.toUpper(c_data[5]),
 
+                ucic:
+                    this.toUpper(c_data[6]),
+
+                customer_type:
+                    this.toUpper(c_data[7]),
+
                 intrest_rate:
-                    this.toDecimal(c_data[6]),
+                    this.toDecimal(c_data[8]),
 
                 principal_amount:
-                    this.toDecimal(c_data[7]),
-
-                account_opening_date:
-                    this.formatCsvDate(c_data[8]),
-
-                balance:
                     this.toDecimal(c_data[9]),
 
-                balance_date:
+                account_opening_date:
                     this.formatCsvDate(c_data[10]),
 
+                balance:
+                    this.toDecimal(c_data[11]),
+
+                balance_date:
+                    this.formatCsvDate(c_data[12]),
+
                 maturity_date:
-                    this.formatCsvDate(c_data[11]),
-
-                maturity_amount:
-                    this.toDecimal(c_data[12]),
-
-                close_date:
                     this.formatCsvDate(c_data[13]),
 
+                maturity_amount:
+                    this.toDecimal(c_data[14]),
+
+                close_date:
+                    this.formatCsvDate(c_data[15]),
+
                 account_status:
-                    this.toUpper(c_data[14]),
+                    this.toUpper(c_data[16]),
             };
 
             try {
@@ -1082,6 +1115,7 @@ export class DepositAccountsService {
                     !row.account_no
                     || !row.branch_code
                     || !row.scheme_code
+                    || !row.account_holder_name
                 ) {
 
                     failed++;
@@ -1106,13 +1140,28 @@ export class DepositAccountsService {
 
                 const periodFrom =
                     new Date(
-                        payload.period_from,
+                        uploadPeriodFrom,
                     );
 
                 const periodTo =
                     new Date(
-                        payload.period_to,
+                        uploadPeriodTo,
                     );
+
+                if (!openingDate) {
+
+                    failed++;
+
+                    errors.push({
+
+                        row: i + 1,
+
+                        error:
+                            'Account opening date is required or invalid',
+                    });
+
+                    continue;
+                }
 
                 if (openingDate) {
 
@@ -1205,7 +1254,6 @@ export class DepositAccountsService {
                         Number(branchId),
                         Number(schemeId),
                         accountNo,
-                        this.toUpper(row.ucic),
                         this.formatCsvDate(row.account_opening_date),
                     ].join('|');
 
@@ -1266,18 +1314,11 @@ export class DepositAccountsService {
 
                     row.account_status,
 
-                    new Date()
-                        .toISOString()
-                        .slice(0, 19)
-                        .replace('T', ' '),
+                    uploadDateTime,
 
-                    this.formatCsvDate(
-                        payload.period_from,
-                    ),
+                    uploadPeriodFrom,
 
-                    this.formatCsvDate(
-                        payload.period_to,
-                    ),
+                    uploadPeriodTo,
 
                     uploadDumpKey,
 
@@ -1357,13 +1398,13 @@ export class DepositAccountsService {
                         item.row[0],
 
                     scheme_code:
-                        item.row[1],
-
-                    account_no:
                         item.row[2],
 
+                    account_no:
+                        item.row[4],
+
                     account_holder_name:
-                        item.row[3],
+                        item.row[5],
 
                     status:
 
