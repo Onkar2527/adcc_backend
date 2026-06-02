@@ -18,6 +18,30 @@ export class AdvanceAccountsService {
         private readonly db: DatabaseService,
     ) { }
 
+    private stagedUploads =
+        new Map<string, { rows: any[]; createdAt: number }>();
+
+    private stageRows(rows: any[]) {
+        const uploadKey =
+            `ADV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+        const now =
+            Date.now();
+
+        for (const [key, value] of this.stagedUploads.entries()) {
+            if (now - value.createdAt > 30 * 60 * 1000) {
+                this.stagedUploads.delete(key);
+            }
+        }
+
+        this.stagedUploads.set(uploadKey, {
+            rows,
+            createdAt: now,
+        });
+
+        return uploadKey;
+    }
+
     async findAll(
         filters: AdvanceAccountFilterDto,
     ) {
@@ -933,6 +957,10 @@ export class AdvanceAccountsService {
         // =========================================
 
         const duplicateAccounts: string[] = [];
+        const duplicateAccountSet =
+            new Set<string>();
+        const uploadDumpKey =
+            `UP${Date.now()}`;
 
         for (
             let i = 0;
@@ -1031,13 +1059,6 @@ export class AdvanceAccountsService {
                     continue;
                 }
 
-                // =====================================
-                // OPENING DATE RANGE VALIDATION
-                // =====================================
-
-                const openingDate =
-                    row.account_opening_date;
-
                 const periodFrom =
                     new Date(
                         payload.period_from,
@@ -1048,7 +1069,18 @@ export class AdvanceAccountsService {
                         payload.period_to,
                     );
 
-                if (openingDate) {
+                const renewalDate =
+                    row.renewal_date;
+
+                const isRenewalInPeriod =
+                    !!renewalDate
+                    && new Date(renewalDate) >= periodFrom
+                    && new Date(renewalDate) <= periodTo;
+
+                if (!isRenewalInPeriod) {
+
+                    const openingDate =
+                        row.account_opening_date;
 
                     const open =
                         new Date(openingDate);
@@ -1065,7 +1097,7 @@ export class AdvanceAccountsService {
                             row: i + 1,
 
                             error:
-                                'Account opening date must be within selected dump period',
+                                'Account opening date or renewal date must be within selected dump period',
                         });
 
                         continue;
@@ -1145,6 +1177,10 @@ export class AdvanceAccountsService {
                         accountNo,
                     );
 
+                    duplicateAccountSet.add(
+                        accountNo,
+                    );
+
                     continue;
                 }
 
@@ -1197,7 +1233,7 @@ export class AdvanceAccountsService {
                         payload.period_to,
                     ),
 
-                    `UP${Date.now()}`,
+                    uploadDumpKey,
 
                     0,
 
@@ -1230,61 +1266,76 @@ export class AdvanceAccountsService {
 
 
 
+        const previewRows =
+            filteredRows.slice(0, 200).map(
+                (
+                    c_data: any[],
+                    index: number,
+                ) => ({
+
+                    sr_no:
+                        index + 1,
+
+                    branch_code:
+                        c_data[0],
+
+                    scheme_code:
+                        c_data[1],
+
+                    account_no:
+                        c_data[2],
+
+                    account_holder_name:
+                        c_data[3],
+
+                    status:
+
+                        duplicateAccountSet.has(
+                            String(c_data[2]).trim(),
+                        )
+
+                            ? 'DUPLICATE ACCOUNT NUMBER'
+
+                            : (
+
+                                errors.find(
+                                    (
+                                        e: any,
+                                    ) =>
+
+                                        e.row === index + 1,
+                                )?.error
+
+                                || 'VALID'
+                            ),
+                }),
+            );
+
+        const hasErrors =
+            duplicateAccounts.length > 0
+            || errors.length > 0;
+
         return {
 
             rows:
-
-                filteredRows.map(
-                    (
-                        c_data: any[],
-                        index: number,
-                    ) => ({
-
-                        sr_no:
-                            index + 1,
-
-                        branch_code:
-                            c_data[0],
-
-                        scheme_code:
-                            c_data[1],
-
-                        account_no:
-                            c_data[2],
-
-                        account_holder_name:
-                            c_data[3],
-
-                        status:
-
-                            duplicateAccounts.includes(
-                                String(c_data[2]).trim(),
-                            )
-
-                                ? 'DUPLICATE ACCOUNT NUMBER'
-
-                                : (
-
-                                    errors.find(
-                                        (
-                                            e: any,
-                                        ) =>
-
-                                            e.row === index + 1,
-                                    )?.error
-
-                                    || 'VALID'
-                                ),
-                    }),
-                ),
+                previewRows,
 
             validRows:
-                insertValues,
+                [],
+
+            uploadKey:
+                hasErrors
+                    ? null
+                    : this.stageRows(insertValues),
+
+            totalRows:
+                filteredRows.length,
+
+            validCount:
+                insertValues.length,
 
             hasErrors:
-
-                duplicateAccounts.length > 0
-                || errors.length > 0,
+                hasErrors,
 
             duplicates:
                 duplicateAccounts,
@@ -1300,8 +1351,15 @@ export class AdvanceAccountsService {
 
 
     async addDump(
-        rows: any[],
+        rowsOrKey: any[] | string,
     ) {
+
+        const rows =
+            typeof rowsOrKey === 'string'
+                ? this.stagedUploads.get(rowsOrKey)?.rows || []
+                : Array.isArray(rowsOrKey)
+                    ? rowsOrKey
+                    : [];
 
         if (!rows.length) {
 
@@ -1310,17 +1368,20 @@ export class AdvanceAccountsService {
             );
         }
 
-        const placeholders: string[] = [];
+        const insertChunk =
+            async (chunk: any[]) => {
 
-        const values: any[] = [];
+                const placeholders: string[] = [];
 
-        let paramIndex = 1;
+                const values: any[] = [];
 
-        for (const row of rows) {
+                let paramIndex = 1;
 
-            values.push(...row);
+                for (const row of chunk) {
 
-            placeholders.push(`(
+                    values.push(...row);
+
+                    placeholders.push(`(
 
         $${paramIndex++},
         $${paramIndex++},
@@ -1349,10 +1410,10 @@ export class AdvanceAccountsService {
 
         NOW()
     )`);
-        }
+                }
 
-        await this.db.query(
-            `
+                await this.db.query(
+                    `
         INSERT INTO dump_advances (
 
             branch_id,
@@ -1386,8 +1447,21 @@ export class AdvanceAccountsService {
 
         ${placeholders.join(',')}
         `,
-            values,
-        );
+                    values,
+                );
+            };
+
+        const chunkSize = 1000;
+
+        for (let index = 0; index < rows.length; index += chunkSize) {
+            await insertChunk(
+                rows.slice(index, index + chunkSize),
+            );
+        }
+
+        if (typeof rowsOrKey === 'string') {
+            this.stagedUploads.delete(rowsOrKey);
+        }
 
         return {
 

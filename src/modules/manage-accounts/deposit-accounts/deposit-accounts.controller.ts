@@ -40,6 +40,14 @@ export class DepositAccountsController {
         );
     }
 
+    @Get('upload-dumps')
+
+    async getUploadDumps() {
+
+        return this.service
+            .getUploadDumps();
+    }
+
     @Get(':id')
     findOne(@Param('id', ParseIntPipe) id: number) {
         return this.service.findOne(id);
@@ -115,16 +123,8 @@ export class DepositAccountsController {
 
         return this.service
             .addDump(
-                body.rows,
+                body.uploadKey || body.rows,
             );
     }
 
-
-    @Get('upload-dumps')
-
-    async getUploadDumps() {
-
-        return this.service
-            .getUploadDumps();
-    }
 }
