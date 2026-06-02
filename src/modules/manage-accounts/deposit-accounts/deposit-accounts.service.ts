@@ -1313,52 +1313,72 @@ export class DepositAccountsService {
 
 
 
-        const previewRows =
-            filteredRows.slice(0, 200).map(
-                (
-                    c_data: any[],
-                    index: number,
-                ) => ({
-
-                    sr_no:
-                        index + 1,
-
-                    branch_code:
-                        c_data[0],
-
-                    scheme_code:
-                        c_data[1],
-
-                    account_no:
-                        c_data[2],
-
-                    account_holder_name:
-                        c_data[3],
-
-                    status:
-
-                        duplicateRows.has(index + 1)
-
-                            ? 'DUPLICATE ACCOUNT DETAILS'
-
-                            : (
-
-                                errors.find(
-                                    (
-                                        e: any,
-                                    ) =>
-
-                                        e.row === index + 1,
-                                )?.error
-
-                                || 'VALID'
-                            ),
-                }),
+        const errorByRow =
+            new Map(
+                errors.map((error: any) => [
+                    Number(error.row),
+                    error.error,
+                ]),
             );
 
         const hasErrors =
             duplicateAccounts.length > 0
             || errors.length > 0;
+
+        const previewSource =
+            hasErrors
+                ? filteredRows
+                    .map((row: any[], index: number) => ({
+                        row,
+                        rowNumber: index + 1,
+                    }))
+                    .filter((item: any) =>
+                        duplicateRows.has(item.rowNumber)
+                        || errorByRow.has(item.rowNumber),
+                    )
+                    .slice(0, 200)
+                : filteredRows
+                    .slice(0, 200)
+                    .map((row: any[], index: number) => ({
+                        row,
+                        rowNumber: index + 1,
+                    }));
+
+        const previewRows =
+            previewSource.map(
+                (
+                    item: any,
+                ) => ({
+
+                    sr_no:
+                        item.rowNumber,
+
+                    branch_code:
+                        item.row[0],
+
+                    scheme_code:
+                        item.row[1],
+
+                    account_no:
+                        item.row[2],
+
+                    account_holder_name:
+                        item.row[3],
+
+                    status:
+
+                        duplicateRows.has(item.rowNumber)
+
+                            ? 'DUPLICATE ACCOUNT DETAILS'
+
+                            : (
+
+                                errorByRow.get(item.rowNumber)
+
+                                || 'VALID'
+                            ),
+                }),
+            );
 
         return {
 
@@ -1387,10 +1407,14 @@ export class DepositAccountsService {
 
             errors,
             errorSummary:
-
-                errors.map(
-                    (e: any) => e.error,
-                ),
+                [
+                    ...errors.map(
+                        (e: any) => e.error,
+                    ),
+                    ...(duplicateAccounts.length > 0
+                        ? ['Duplicate account details found']
+                        : []),
+                ],
         };
     }
 

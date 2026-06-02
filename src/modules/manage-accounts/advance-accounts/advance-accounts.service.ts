@@ -959,6 +959,8 @@ export class AdvanceAccountsService {
         const duplicateAccounts: string[] = [];
         const duplicateAccountSet =
             new Set<string>();
+        const duplicateRows =
+            new Set<number>();
         const uploadDumpKey =
             `UP${Date.now()}`;
 
@@ -1181,6 +1183,10 @@ export class AdvanceAccountsService {
                         accountNo,
                     );
 
+                    duplicateRows.add(
+                        i + 1,
+                    );
+
                     continue;
                 }
 
@@ -1266,54 +1272,72 @@ export class AdvanceAccountsService {
 
 
 
-        const previewRows =
-            filteredRows.slice(0, 200).map(
-                (
-                    c_data: any[],
-                    index: number,
-                ) => ({
-
-                    sr_no:
-                        index + 1,
-
-                    branch_code:
-                        c_data[0],
-
-                    scheme_code:
-                        c_data[1],
-
-                    account_no:
-                        c_data[2],
-
-                    account_holder_name:
-                        c_data[3],
-
-                    status:
-
-                        duplicateAccountSet.has(
-                            String(c_data[2]).trim(),
-                        )
-
-                            ? 'DUPLICATE ACCOUNT NUMBER'
-
-                            : (
-
-                                errors.find(
-                                    (
-                                        e: any,
-                                    ) =>
-
-                                        e.row === index + 1,
-                                )?.error
-
-                                || 'VALID'
-                            ),
-                }),
+        const errorByRow =
+            new Map(
+                errors.map((error: any) => [
+                    Number(error.row),
+                    error.error,
+                ]),
             );
 
         const hasErrors =
             duplicateAccounts.length > 0
             || errors.length > 0;
+
+        const previewSource =
+            hasErrors
+                ? filteredRows
+                    .map((row: any[], index: number) => ({
+                        row,
+                        rowNumber: index + 1,
+                    }))
+                    .filter((item: any) =>
+                        duplicateRows.has(item.rowNumber)
+                        || errorByRow.has(item.rowNumber),
+                    )
+                    .slice(0, 200)
+                : filteredRows
+                    .slice(0, 200)
+                    .map((row: any[], index: number) => ({
+                        row,
+                        rowNumber: index + 1,
+                    }));
+
+        const previewRows =
+            previewSource.map(
+                (
+                    item: any,
+                ) => ({
+
+                    sr_no:
+                        item.rowNumber,
+
+                    branch_code:
+                        item.row[0],
+
+                    scheme_code:
+                        item.row[1],
+
+                    account_no:
+                        item.row[2],
+
+                    account_holder_name:
+                        item.row[3],
+
+                    status:
+
+                        duplicateRows.has(item.rowNumber)
+
+                            ? 'DUPLICATE ACCOUNT NUMBER'
+
+                            : (
+
+                                errorByRow.get(item.rowNumber)
+
+                                || 'VALID'
+                            ),
+                }),
+            );
 
         return {
 
@@ -1342,10 +1366,14 @@ export class AdvanceAccountsService {
 
             errors,
             errorSummary:
-
-                errors.map(
-                    (e: any) => e.error,
-                ),
+                [
+                    ...errors.map(
+                        (e: any) => e.error,
+                    ),
+                    ...(duplicateAccounts.length > 0
+                        ? ['Duplicate account numbers found']
+                        : []),
+                ],
         };
     }
 
