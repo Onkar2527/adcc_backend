@@ -27,6 +27,7 @@ import { DepositAccountsModule } from './modules/admin/manage-accounts/deposit-a
 import { AdvanceAccountsModule } from './modules/admin/manage-accounts/advance-accounts/advance-accounts.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 
 @Module({
@@ -56,7 +57,8 @@ import { AuthModule } from './modules/auth/auth.module';
     DepositAccountsModule,
     AdvanceAccountsModule,
     UsersModule,
-    AuthModule
+    AuthModule,
+    ReportsModule
   ],
   controllers: [AppController],
   providers: [AppService],
