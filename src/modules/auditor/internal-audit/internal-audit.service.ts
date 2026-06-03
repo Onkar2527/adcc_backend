@@ -2389,12 +2389,20 @@ export class InternalAuditService {
             qm.annexure_id,
             qm.compliance_ev_upload AS compliance_evidence_upload,
             ac.columns_json AS annexure_columns,
+            au.name AS account_branch_name,
             COALESCE(dd.account_no, da.account_no) AS account_no,
             COALESCE(dd.account_holder_name, da.account_holder_name) AS account_holder_name,
             COALESCE(dd.ucic, da.ucic) AS ucic,
+            COALESCE(dd.customer_type, da.customer_type) AS customer_type,
             COALESCE(dd.account_opening_date, da.account_opening_date) AS account_opening_date,
             da.renewal_date,
             COALESCE(dd.principal_amount, da.sanction_amount) AS account_amount,
+            COALESCE(dd.intrest_rate, da.intrest_rate) AS interest_rate,
+            COALESCE(dd.balance, da.outstanding_balance) AS outstanding_balance,
+            COALESCE(dd.balance_date, da.balance_date) AS balance_date,
+            da.due_date,
+            da.npa_status,
+            COALESCE(dd.account_status, da.account_status) AS account_status,
             sm.name AS scheme_name,
             sm.scheme_code
         FROM answers_data ad
@@ -2430,6 +2438,9 @@ export class InternalAuditService {
             ON cm.linked_table_id = 2
             AND da.id = ad.dump_id
             AND da.deleted_at IS NULL
+        LEFT JOIN audit_unit_master au
+            ON au.id = COALESCE(dd.branch_id, da.branch_id)
+            AND au.deleted_at IS NULL
         LEFT JOIN scheme_master sm
             ON sm.id = COALESCE(dd.scheme_id, da.scheme_id)
             AND sm.deleted_at IS NULL
@@ -3261,12 +3272,20 @@ export class InternalAuditService {
             qm.annexure_id,
             qm.compliance_ev_upload AS compliance_evidence_upload,
             ac.columns_json AS annexure_columns,
+            au.name AS account_branch_name,
             COALESCE(dd.account_no, da.account_no) AS account_no,
             COALESCE(dd.account_holder_name, da.account_holder_name) AS account_holder_name,
             COALESCE(dd.ucic, da.ucic) AS ucic,
+            COALESCE(dd.customer_type, da.customer_type) AS customer_type,
             COALESCE(dd.account_opening_date, da.account_opening_date) AS account_opening_date,
             da.renewal_date,
             COALESCE(dd.principal_amount, da.sanction_amount) AS account_amount,
+            COALESCE(dd.intrest_rate, da.intrest_rate) AS interest_rate,
+            COALESCE(dd.balance, da.outstanding_balance) AS outstanding_balance,
+            COALESCE(dd.balance_date, da.balance_date) AS balance_date,
+            da.due_date,
+            da.npa_status,
+            COALESCE(dd.account_status, da.account_status) AS account_status,
             sm.name AS scheme_name,
             sm.scheme_code
         FROM answers_data ad
@@ -3302,6 +3321,9 @@ export class InternalAuditService {
             ON cm.linked_table_id = 2
             AND da.id = ad.dump_id
             AND da.deleted_at IS NULL
+        LEFT JOIN audit_unit_master au
+            ON au.id = COALESCE(dd.branch_id, da.branch_id)
+            AND au.deleted_at IS NULL
         LEFT JOIN scheme_master sm
             ON sm.id = COALESCE(dd.scheme_id, da.scheme_id)
             AND sm.deleted_at IS NULL
@@ -4033,12 +4055,20 @@ export class InternalAuditService {
             qm.option_id,
             qm.annexure_id,
             ac.columns_json AS annexure_columns,
+            au.name AS account_branch_name,
             COALESCE(dd.account_no, da.account_no) AS account_no,
             COALESCE(dd.account_holder_name, da.account_holder_name) AS account_holder_name,
             COALESCE(dd.ucic, da.ucic) AS ucic,
+            COALESCE(dd.customer_type, da.customer_type) AS customer_type,
             COALESCE(dd.account_opening_date, da.account_opening_date) AS account_opening_date,
             da.renewal_date,
             COALESCE(dd.principal_amount, da.sanction_amount) AS account_amount,
+            COALESCE(dd.intrest_rate, da.intrest_rate) AS interest_rate,
+            COALESCE(dd.balance, da.outstanding_balance) AS outstanding_balance,
+            COALESCE(dd.balance_date, da.balance_date) AS balance_date,
+            da.due_date,
+            da.npa_status,
+            COALESCE(dd.account_status, da.account_status) AS account_status,
             sm.name AS scheme_name,
             sm.scheme_code
         FROM answers_data ad
@@ -4088,6 +4118,9 @@ export class InternalAuditService {
             ON cm.linked_table_id = 2
             AND da.id = ad.dump_id
             AND da.deleted_at IS NULL
+        LEFT JOIN audit_unit_master au
+            ON au.id = COALESCE(dd.branch_id, da.branch_id)
+            AND au.deleted_at IS NULL
         LEFT JOIN scheme_master sm
             ON sm.id = COALESCE(dd.scheme_id, da.scheme_id)
             AND sm.deleted_at IS NULL

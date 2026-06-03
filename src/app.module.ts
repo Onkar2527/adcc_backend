@@ -4,14 +4,6 @@ import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './core/database/database.module';
 import { IdModule } from './core/id/id.module';
-import { ProposalsModule } from './modules/proposals/proposals.module';
-import { BranchesModule } from './modules/branches/branches.module';
-import { RolesModule } from './modules/roles/roles.module';
-import { UsersModule } from './modules/users/users.module';
-import { AuthModule } from './modules/auth/auth.module';
-import { LoanTypesModule } from './modules/loan-types/loan-types.module';
-import { ParticipantsModule } from './modules/participants/participants.module';
-import { DocumentsModule } from './modules/documents/documents.module';
 import { EmployeesModule } from './modules/admin/employee-master/employees.module';
 import { PasswordPolicyModule } from './modules/admin/password-policy/password-policy.module';
 import { AuditUnitsModule } from './modules/admin/audit-unit-master/audit-units.module';
@@ -33,7 +25,8 @@ import { AuditDashboardModule } from './modules/auditor/audit-dashboard/audit-da
 import { InternalAuditModule } from './modules/auditor/internal-audit/internal-audit.module';
 import { DepositAccountsModule } from './modules/admin/manage-accounts/deposit-accounts/deposit-accounts.module';
 import { AdvanceAccountsModule } from './modules/admin/manage-accounts/advance-accounts/advance-accounts.module';
-import { UnitsModule } from './modules/units/units.module';
+import { UsersModule } from './modules/users/users.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 
 @Module({
@@ -41,17 +34,8 @@ import { UnitsModule } from './modules/units/units.module';
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     IdModule,
-    ProposalsModule,
-    BranchesModule,
-    RolesModule,
-    UsersModule,
-    AuthModule,
-    LoanTypesModule,
-    ParticipantsModule,
-    DocumentsModule,
     EmployeesModule,
     PasswordPolicyModule,
-    UnitsModule,
     AuditSectionsModule,
     MenuMasterModule,
     AuditUnitsModule,
@@ -70,7 +54,9 @@ import { UnitsModule } from './modules/units/units.module';
     AuditDashboardModule,
     InternalAuditModule,
     DepositAccountsModule,
-    AdvanceAccountsModule
+    AdvanceAccountsModule,
+    UsersModule,
+    AuthModule
   ],
   controllers: [AppController],
   providers: [AppService],
