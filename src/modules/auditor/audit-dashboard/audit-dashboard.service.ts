@@ -56,141 +56,141 @@ export class AuditDashboardService {
             DatabaseService,
     ) { }
 
- async findAll(
-    dto: AuditDashboardDto,
-) {
+    async findAll(
+        dto: AuditDashboardDto,
+    ) {
 
-    try {
+        try {
 
-        const auditUnits =
-            await this.getAuthorizedAuditUnits(
-                dto.employee_id,
-            );
+            const auditUnits =
+                await this.getAuthorizedAuditUnits(
+                    dto.employee_id,
+                );
 
-        if (!auditUnits.length) {
-            return [];
-        }
+            if (!auditUnits.length) {
+                return [];
+            }
 
-        const auditUnitIds =
-            auditUnits.map(
-                (x: any) => x.id,
-            );
+            const auditUnitIds =
+                auditUnits.map(
+                    (x: any) => x.id,
+                );
 
-        const [
-            summaryData,
-            notStartedData,
-        ] = await Promise.all([
+            const [
+                summaryData,
+                notStartedData,
+            ] = await Promise.all([
 
-            this.getAssessmentSummary(
-                auditUnitIds,
-            ),
-
-            this.getNotStartedAudits(
-                auditUnits,
-            ),
-
-        ]);
-
-        const summaryMap =
-            new Map(
-
-                summaryData.map(
-                    (x: any) => [
-                        x.audit_unit_id,
-                        x,
-                    ],
+                this.getAssessmentSummary(
+                    auditUnitIds,
                 ),
+
+                this.getNotStartedAudits(
+                    auditUnits,
+                ),
+
+            ]);
+
+            const summaryMap =
+                new Map(
+
+                    summaryData.map(
+                        (x: any) => [
+                            x.audit_unit_id,
+                            x,
+                        ],
+                    ),
+                );
+
+            return auditUnits.map(
+                (unit: any) => {
+
+                    const summary =
+                        summaryMap.get(
+                            unit.id,
+                        );
+
+                    const notStarted =
+                        notStartedData[
+                        unit.id
+                        ] || [];
+
+                    return {
+
+                        audit_unit_id:
+                            unit.id,
+
+                        audit_unit_code:
+                            unit.audit_unit_code,
+
+                        audit_unit_name:
+                            unit.name,
+
+                        frequency:
+                            unit.frequency,
+
+                        last_audit_date:
+                            unit.last_audit_date,
+
+                        total_audit:
+                            Number(
+                                summary?.total_audit || 0,
+                            ),
+
+                        audit_pending:
+                            Number(
+                                summary?.audit_pending || 0,
+                            ),
+
+                        review_pending:
+                            Number(
+                                summary?.review_pending || 0,
+                            ),
+
+                        compliance_pending:
+                            Number(
+                                summary?.compliance_pending || 0,
+                            ),
+
+                        audit_completed:
+                            Number(
+                                summary?.audit_completed || 0,
+                            ),
+
+                        latest_assessment_id:
+                            summary?.latest_assessment_id || null,
+
+                        latest_status_id:
+                            summary?.latest_status_id || null,
+
+                        latest_status:
+                            summary?.latest_status
+                            || 'NOT STARTED',
+
+                        not_started_count:
+                            notStarted.length,
+
+                    };
+                },
             );
 
-        return auditUnits.map(
-            (unit: any) => {
+        } catch (error) {
 
-                const summary =
-                    summaryMap.get(
-                        unit.id,
-                    );
+            console.log(error);
 
-                const notStarted =
-                    notStartedData[
-                    unit.id
-                    ] || [];
-
-                return {
-
-                    audit_unit_id:
-                        unit.id,
-
-                    audit_unit_code:
-                        unit.audit_unit_code,
-
-                    audit_unit_name:
-                        unit.name,
-
-                    frequency:
-                        unit.frequency,
-
-                    last_audit_date:
-                        unit.last_audit_date,
-
-                    total_audit:
-                        Number(
-                            summary?.total_audit || 0,
-                        ),
-
-                    audit_pending:
-                        Number(
-                            summary?.audit_pending || 0,
-                        ),
-
-                    review_pending:
-                        Number(
-                            summary?.review_pending || 0,
-                        ),
-
-                    compliance_pending:
-                        Number(
-                            summary?.compliance_pending || 0,
-                        ),
-
-                    audit_completed:
-                        Number(
-                            summary?.audit_completed || 0,
-                        ),
-
-                    latest_assessment_id:
-                        summary?.latest_assessment_id || null,
-
-                    latest_status_id:
-                        summary?.latest_status_id || null,
-
-                    latest_status:
-                        summary?.latest_status
-                        || 'NOT STARTED',
-
-                    not_started_count:
-                        notStarted.length,
-
-                };
-            },
-        );
-
-    } catch (error) {
-
-        console.log(error);
-
-        throw new BadRequestException(
-            'Failed to fetch dashboard',
-        );
+            throw new BadRequestException(
+                'Failed to fetch dashboard',
+            );
+        }
     }
-}
 
 
 
-async getAuthorizedAuditUnits(
-    employeeId: number,
-) {
+    async getAuthorizedAuditUnits(
+        employeeId: number,
+    ) {
 
-    const query = `
+        const query = `
 
     WITH employee_units AS (
 
@@ -233,26 +233,26 @@ async getAuthorizedAuditUnits(
 
     `;
 
-    const result =
-        await this.db.query(
-            query,
-            [employeeId],
-        );
+        const result =
+            await this.db.query(
+                query,
+                [employeeId],
+            );
 
-    return result.rows;
-}
-
-
-
-async getAssessmentSummary(
-    auditUnitIds: number[],
-) {
-
-    if (!auditUnitIds.length) {
-        return [];
+        return result.rows;
     }
 
-    const query = `
+
+
+    async getAssessmentSummary(
+        auditUnitIds: number[],
+    ) {
+
+        if (!auditUnitIds.length) {
+            return [];
+        }
+
+        const query = `
 
     WITH latest_assessment AS (
 
@@ -345,37 +345,37 @@ async getAssessmentSummary(
 
     `;
 
-    const result =
-        await this.db.query(
-            query,
-            [auditUnitIds],
-        );
+        const result =
+            await this.db.query(
+                query,
+                [auditUnitIds],
+            );
 
-    return result.rows;
-}
-
-
-
-async getNotStartedAudits(
-    auditUnits: any[],
-) {
-
-    const response: any = {};
-
-    if (!auditUnits.length) {
-        return response;
+        return result.rows;
     }
 
-    const currentDate =
-        new Date();
 
-    const auditUnitIds =
-        auditUnits.map(
-            (x: any) => x.id,
-        );
 
-    // SINGLE QUERY
-    const existingAssessmentsQuery = `
+    async getNotStartedAudits(
+        auditUnits: any[],
+    ) {
+
+        const response: any = {};
+
+        if (!auditUnits.length) {
+            return response;
+        }
+
+        const currentDate =
+            new Date();
+
+        const auditUnitIds =
+            auditUnits.map(
+                (x: any) => x.id,
+            );
+
+        // SINGLE QUERY
+        const existingAssessmentsQuery = `
 
         SELECT
 
@@ -388,170 +388,72 @@ async getNotStartedAudits(
 
     `;
 
-    const existingAssessments =
-        await this.db.query(
+        const existingAssessments =
+            await this.db.query(
 
-            existingAssessmentsQuery,
+                existingAssessmentsQuery,
 
-            [auditUnitIds],
-        );
-
-    // FAST MEMORY LOOKUP
-    const assessmentSet =
-        new Set(
-
-            existingAssessments.rows.map(
-                (x: any) =>
-
-                    `${x.audit_unit_id}_${this.formatDate(
-                        x.assesment_period_to,
-                    )}`,
-            ),
-        );
-
-    for (
-        const branchDetails
-        of auditUnits
-    ) {
-
-        response[
-            branchDetails.id
-        ] = [];
-
-        if (
-            !branchDetails
-                .last_audit_date
-        ) {
-
-            continue;
-        }
-
-        const frequency =
-            Number(
-                branchDetails.frequency,
+                [auditUnitIds],
             );
 
-        const lastAuditDate =
-            new Date(
-                branchDetails
-                    .last_audit_date,
-            );
+        // FAST MEMORY LOOKUP
+        const assessmentSet =
+            new Set(
 
-        if (
-            lastAuditDate >=
-            currentDate
-        ) {
+                existingAssessments.rows.map(
+                    (x: any) =>
 
-            continue;
-        }
-
-        const nextAssessmentDate =
-            new Date(
-                lastAuditDate,
-            );
-
-        nextAssessmentDate
-            .setMonth(
-
-                nextAssessmentDate
-                    .getMonth()
-
-                +
-
-                frequency,
-            );
-
-        const nextAssessmentEndDate =
-            new Date(
-                nextAssessmentDate,
-            );
-
-        nextAssessmentEndDate
-            .setDate(
-
-                nextAssessmentEndDate
-                    .getDate() - 1,
-            );
-
-        const assessmentKey =
-
-            `${branchDetails.id}_${this.formatDate(
-                nextAssessmentEndDate,
-            )}`;
-
-        // NO DB QUERY HERE
-        if (
-            assessmentSet.has(
-                assessmentKey,
-            )
-        ) {
-
-            continue;
-        }
-
-        const currentDateDiff =
-            this.monthDiff(
-
-                lastAuditDate,
-
-                currentDate,
-            );
-
-        const assessmentCount =
-            Math.max(
-
-                Math.floor(
-
-                    currentDateDiff
-                    /
-                    frequency,
+                        `${x.audit_unit_id}_${this.formatDate(
+                            x.assesment_period_to,
+                        )}`,
                 ),
-
-                1,
             );
 
         for (
-            let i = 0;
-            i < assessmentCount;
-            i++
+            const branchDetails
+            of auditUnits
         ) {
 
-            const assessmentStartDate =
+            response[
+                branchDetails.id
+            ] = [];
+
+            if (
+                !branchDetails
+                    .last_audit_date
+            ) {
+
+                continue;
+            }
+
+            const frequency =
+                Number(
+                    branchDetails.frequency,
+                );
+
+            const lastAuditDate =
+                new Date(
+                    branchDetails
+                        .last_audit_date,
+                );
+
+            if (
+                lastAuditDate >=
+                currentDate
+            ) {
+
+                continue;
+            }
+
+            const nextAssessmentDate =
                 new Date(
                     lastAuditDate,
                 );
 
-            assessmentStartDate
+            nextAssessmentDate
                 .setMonth(
 
-                    assessmentStartDate
-                        .getMonth()
-
-                    +
-
-                    (
-                        i
-                        *
-                        frequency
-                    ),
-                );
-
-            assessmentStartDate
-                .setDate(
-
-                    assessmentStartDate
-                        .getDate() + 1,
-                );
-
-            const assessmentEndDate =
-                new Date(
-                    assessmentStartDate,
-                );
-
-            assessmentEndDate
-                .setMonth(
-
-                    assessmentEndDate
+                    nextAssessmentDate
                         .getMonth()
 
                     +
@@ -559,33 +461,131 @@ async getNotStartedAudits(
                     frequency,
                 );
 
-            assessmentEndDate
+            const nextAssessmentEndDate =
+                new Date(
+                    nextAssessmentDate,
+                );
+
+            nextAssessmentEndDate
                 .setDate(
 
-                    assessmentEndDate
+                    nextAssessmentEndDate
                         .getDate() - 1,
                 );
 
-            response[
-                branchDetails.id
-            ].push({
+            const assessmentKey =
 
-                id:
-                    branchDetails.id,
+                `${branchDetails.id}_${this.formatDate(
+                    nextAssessmentEndDate,
+                )}`;
 
-                assesment_period:
+            // NO DB QUERY HERE
+            if (
+                assessmentSet.has(
+                    assessmentKey,
+                )
+            ) {
 
-                    `${this.formatDate(
+                continue;
+            }
+
+            const currentDateDiff =
+                this.monthDiff(
+
+                    lastAuditDate,
+
+                    currentDate,
+                );
+
+            const assessmentCount =
+                Math.max(
+
+                    Math.floor(
+
+                        currentDateDiff
+                        /
+                        frequency,
+                    ),
+
+                    1,
+                );
+
+            for (
+                let i = 0;
+                i < assessmentCount;
+                i++
+            ) {
+
+                const assessmentStartDate =
+                    new Date(
+                        lastAuditDate,
+                    );
+
+                assessmentStartDate
+                    .setMonth(
+
+                        assessmentStartDate
+                            .getMonth()
+
+                        +
+
+                        (
+                            i
+                            *
+                            frequency
+                        ),
+                    );
+
+                assessmentStartDate
+                    .setDate(
+
+                        assessmentStartDate
+                            .getDate() + 1,
+                    );
+
+                const assessmentEndDate =
+                    new Date(
                         assessmentStartDate,
-                    )} to ${this.formatDate(
-                        assessmentEndDate,
-                    )}`,
-            });
-        }
-    }
+                    );
 
-    return response;
-}
+                assessmentEndDate
+                    .setMonth(
+
+                        assessmentEndDate
+                            .getMonth()
+
+                        +
+
+                        frequency,
+                    );
+
+                assessmentEndDate
+                    .setDate(
+
+                        assessmentEndDate
+                            .getDate() - 1,
+                    );
+
+                response[
+                    branchDetails.id
+                ].push({
+
+                    id:
+                        branchDetails.id,
+
+                    assesment_period:
+
+                        `${this.formatDate(
+                            assessmentStartDate,
+                        )} to ${this.formatDate(
+                            assessmentEndDate,
+                        )}`,
+                });
+            }
+        }
+
+        return response;
+    }
 
 
 
@@ -981,6 +981,7 @@ SELECT
     aam.audit_start_date,
     aam.audit_end_date,
     aam.compliance_due_date,
+    aam.audit_status_id,
     CASE aam.audit_status_id
         WHEN 1 THEN 'AUDIT (PENDING / ACTIVE)'
         WHEN 2 THEN 'REVIEW (PENDING / ACTIVE)'
@@ -1042,7 +1043,7 @@ LIMIT 1;
         const assessment = await this.db.query(assessmentQuery, [assessment_id]);
 
         if (
-             !assessment.rows.length
+            !assessment.rows.length
         ) {
             throw new NotFoundException(
                 'Assessment not found',
@@ -1204,7 +1205,9 @@ VALUES ($1, $2, null, '0', '0', $3, NOW());
                     `
 SELECT
     type_id,
-    amount
+    amount,
+    audit_status_id AS review_action,
+    audit_reviewer_comment AS reviewer_comment
 FROM executive_summary_branch_position
 WHERE assesment_id = $1
     AND year_id = $2
@@ -1219,7 +1222,9 @@ WHERE assesment_id = $1
                     `
 SELECT
     type_id,
-    accounts
+    accounts,
+    audit_status_id AS review_action,
+    audit_reviewer_comment AS reviewer_comment
 FROM executive_summary_fresh_accounts
 WHERE assesment_id = $1
     AND year_id = $2
@@ -1272,9 +1277,12 @@ WHERE audit_unit_id = $1
             audit_status:
                 data.audit_status,
 
+            audit_status_id:
+                Number(data.audit_status_id || 0),
+
             audit_review_status:
                 data.review_name
-                    || 'Not Available',
+                || 'Not Available',
 
             compliance_status:
                 data.compliance_review_date
@@ -1293,12 +1301,16 @@ WHERE audit_unit_id = $1
                 branchPositions.rows.map((row: any) => ({
                     type_id: row.type_id,
                     amount: row.amount,
+                    review_action: row.review_action,
+                    reviewer_comment: row.reviewer_comment,
                 })),
 
             fresh_accounts:
                 freshAccounts.rows.map((row: any) => ({
                     type_id: row.type_id,
                     accounts: row.accounts,
+                    review_action: row.review_action,
+                    reviewer_comment: row.reviewer_comment,
                 })),
 
             march_positions:
@@ -1307,155 +1319,155 @@ WHERE audit_unit_id = $1
                     march_position: Number(row.march_position || 0),
                 })),
 
-          summary_detail: [
+            summary_detail: [
 
-    {
-        label:
-            '1. Branch Name',
+                {
+                    label:
+                        '1. Branch Name',
 
-        value:
-            data.branch_name,
-    },
+                    value:
+                        data.branch_name,
+                },
 
-    {
-        label:
-            '2. Inspection Period',
+                {
+                    label:
+                        '2. Inspection Period',
 
-        value:
-            `${data.frequency} Months`,
-    },
+                    value:
+                        `${data.frequency} Months`,
+                },
 
-    {
-        label:
-            '3. Name of Branch Manager',
+                {
+                    label:
+                        '3. Name of Branch Manager',
 
-        value:
-            data.branch_manager_name,
-    },
+                    value:
+                        data.branch_manager_name,
+                },
 
-    {
-        label:
-            '4. Name of Assistant Branch Manager',
+                {
+                    label:
+                        '4. Name of Assistant Branch Manager',
 
-        value:
-            data.branch_assistant_manager,
-    },
+                    value:
+                        data.branch_assistant_manager,
+                },
 
-    {
-        label:
-            '5. Inspection Conducted by',
+                {
+                    label:
+                        '5. Inspection Conducted by',
 
-        value:
-            data.auditor_name,
-    },
+                    value:
+                        data.auditor_name,
+                },
 
-    {
-        label:
-            '6. Inspection Start Date',
+                {
+                    label:
+                        '6. Inspection Start Date',
 
-        value:
-            data.audit_start_date,
-    },
+                    value:
+                        data.audit_start_date,
+                },
 
-    {
-        label:
-            '7. Inspection End Date',
+                {
+                    label:
+                        '7. Inspection End Date',
 
-        value:
-            data.audit_end_date,
-    },
+                    value:
+                        data.audit_end_date,
+                },
 
-    {
-        label:
-            '8. Number of Days taken for Inspection',
+                {
+                    label:
+                        '8. Number of Days taken for Inspection',
 
-        value:
-            data.audit_duration_days
-                ? `${data.audit_duration_days} Days`
-                : null,
-    },
+                    value:
+                        data.audit_duration_days
+                            ? `${data.audit_duration_days} Days`
+                            : null,
+                },
 
-    {
-        label:
-            '9. Audit Report Submitted Date',
+                {
+                    label:
+                        '9. Audit Report Submitted Date',
 
-        value:
-            data.report_submitted_date,
-    },
+                    value:
+                        data.report_submitted_date,
+                },
 
-    {
-        label:
-            '10. Compliance to be done before date',
+                {
+                    label:
+                        '10. Compliance to be done before date',
 
-        value:
-            data.compliance_due_date,
-    },
+                    value:
+                        data.compliance_due_date,
+                },
 
-    {
-        label:
-            '11. Compliance done date',
+                {
+                    label:
+                        '11. Compliance done date',
 
-        value:
-            data.compliance_review_date,
-    },
+                    value:
+                        data.compliance_review_date,
+                },
 
-    {
-        label:
-            '12. Number of Staff including Contractual/Daily wages staff',
+                {
+                    label:
+                        '12. Number of Staff including Contractual/Daily wages staff',
 
-        value:
-            data.staff_count,
-    },
+                    value:
+                        data.staff_count,
+                },
 
-    {
-        label:
-            '13. Approximate Number of manual Challans per day',
+                {
+                    label:
+                        '13. Approximate Number of manual Challans per day',
 
-        value:
-            data.manual_challans_per_day,
-    },
+                    value:
+                        data.manual_challans_per_day,
+                },
 
-    {
-        label:
-            '14. CD Ratio',
+                {
+                    label:
+                        '14. CD Ratio',
 
-        value:
-            data.cd_ratio,
-    },
+                    value:
+                        data.cd_ratio,
+                },
 
-    {
-        label:
-            '15. Per Employee Business (In Lakhs)',
+                {
+                    label:
+                        '15. Per Employee Business (In Lakhs)',
 
-        value:
-            data.per_employee_business,
-    },
+                    value:
+                        data.per_employee_business,
+                },
 
-    {
-        label:
-            '16. Annual Incremental Deposit Target (IN LAKHS)',
+                {
+                    label:
+                        '16. Annual Incremental Deposit Target (IN LAKHS)',
 
-        value:
-            data.deposit_target,
-    },
+                    value:
+                        data.deposit_target,
+                },
 
-    {
-        label:
-            '17. Annual Incremental Advances Target (IN LAKHS)',
+                {
+                    label:
+                        '17. Annual Incremental Advances Target (IN LAKHS)',
 
-        value:
-            data.advances_target,
-    },
+                    value:
+                        data.advances_target,
+                },
 
-    {
-        label:
-            '18. Annual Differential NPA Target (IN LAKHS)',
+                {
+                    label:
+                        '18. Annual Differential NPA Target (IN LAKHS)',
 
-        value:
-            data.npa_target,
-    },
+                    value:
+                        data.npa_target,
+                },
 
-]
+            ]
 
         };
 
@@ -1622,7 +1634,10 @@ LIMIT 1;
             throw new BadRequestException('You are not authorized for this audit unit.');
         }
 
-        if (Number(assessment.audit_status_id) !== 1) {
+        const assessmentStatusId =
+            Number(assessment.audit_status_id || 0);
+
+        if (![1, 3].includes(assessmentStatusId)) {
             throw new BadRequestException('Executive summary can be updated only during the initial audit.');
         }
 
@@ -1673,20 +1688,90 @@ LIMIT 1;
             const faMap = new Map(existingFaRes.rows.map((r: any) => [String(r.type_id).trim(), r]));
 
             // --- BRANCH POSITIONS ---
-            const bpUpdates = { ids: [], amounts: [], empIds: [], batchKeys: [] };
-            const bpTimelines = {
-                esbp_ids: [], assessment_ids: [], last_updated_ats: [], answer_types: [], amounts: [],
-                business_risks: [], control_risks: [], risk_types: [], audit_comments: [], audit_emp_ids: [],
-                audit_status_ids: [], audit_reviewer_emp_ids: [], audit_reviewer_comments: [],
-                audit_compliances: [], compliance_emp_ids: [], compliance_status_ids: [],
-                compliance_reviewer_emp_ids: [], compliance_reviewer_comments: [], batch_keys: []
+            const bpUpdates: {
+                ids: number[];
+                amounts: string[];
+                empIds: number[];
+                batchKeys: string[];
+            } = {
+                ids: [],
+                amounts: [],
+                empIds: [],
+                batchKeys: [],
             };
-            const bpInserts = {
-                year_ids: [], assessment_ids: [], type_ids: [], amounts: [],
-                business_risks: [], control_risks: [], risk_types: [],
-                audit_status_ids: [], audit_emp_ids: [], audit_reviewer_emp_ids: [],
-                compliance_emp_ids: [], compliance_status_ids: [], compliance_reviewer_emp_ids: [],
-                batch_keys: []
+
+            const bpTimelines: {
+                esbp_ids: number[];
+                assessment_ids: number[];
+                last_updated_ats: any[];
+                answer_types: string[];
+                amounts: string[];
+                business_risks: number[];
+                control_risks: number[];
+                risk_types: number[];
+                audit_comments: string[];
+                audit_emp_ids: number[];
+                audit_status_ids: number[];
+                audit_reviewer_emp_ids: number[];
+                audit_reviewer_comments: string[];
+                audit_compliances: string[];
+                compliance_emp_ids: number[];
+                compliance_status_ids: number[];
+                compliance_reviewer_emp_ids: number[];
+                compliance_reviewer_comments: string[];
+                batch_keys: string[];
+            } = {
+                esbp_ids: [],
+                assessment_ids: [],
+                last_updated_ats: [],
+                answer_types: [],
+                amounts: [],
+                business_risks: [],
+                control_risks: [],
+                risk_types: [],
+                audit_comments: [],
+                audit_emp_ids: [],
+                audit_status_ids: [],
+                audit_reviewer_emp_ids: [],
+                audit_reviewer_comments: [],
+                audit_compliances: [],
+                compliance_emp_ids: [],
+                compliance_status_ids: [],
+                compliance_reviewer_emp_ids: [],
+                compliance_reviewer_comments: [],
+                batch_keys: [],
+            };
+
+            const bpInserts: {
+                year_ids: number[];
+                assessment_ids: number[];
+                type_ids: string[];
+                amounts: string[];
+                business_risks: number[];
+                control_risks: number[];
+                risk_types: number[];
+                audit_status_ids: number[];
+                audit_emp_ids: number[];
+                audit_reviewer_emp_ids: number[];
+                compliance_emp_ids: number[];
+                compliance_status_ids: number[];
+                compliance_reviewer_emp_ids: number[];
+                batch_keys: string[];
+            } = {
+                year_ids: [],
+                assessment_ids: [],
+                type_ids: [],
+                amounts: [],
+                business_risks: [],
+                control_risks: [],
+                risk_types: [],
+                audit_status_ids: [],
+                audit_emp_ids: [],
+                audit_reviewer_emp_ids: [],
+                compliance_emp_ids: [],
+                compliance_status_ids: [],
+                compliance_reviewer_emp_ids: [],
+                batch_keys: [],
             };
 
             for (const row of branchPositions) {
@@ -1694,6 +1779,13 @@ LIMIT 1;
                 const old = bpMap.get(typeIdKey);
 
                 if (old) {
+                    if (
+                        assessmentStatusId === 3
+                        && Number(old.audit_status_id || 0) !== 3
+                    ) {
+                        continue;
+                    }
+
                     if (Number(old.amount) !== Number(row.amount)) {
                         bpTimelines.esbp_ids.push(Number(old.id));
                         bpTimelines.assessment_ids.push(assessmentId);
@@ -1721,6 +1813,10 @@ LIMIT 1;
                         bpUpdates.batchKeys.push(assessment.batch_key);
                     }
                 } else {
+                    if (assessmentStatusId === 3) {
+                        continue;
+                    }
+
                     bpInserts.year_ids.push(Number(assessment.year_id));
                     bpInserts.assessment_ids.push(assessmentId);
                     bpInserts.type_ids.push(row.type_id);
@@ -1838,20 +1934,90 @@ LIMIT 1;
             }
 
             // --- FRESH ACCOUNTS ---
-            const faUpdates = { ids: [], accounts: [], empIds: [], batchKeys: [] };
-            const faTimelines = {
-                esfa_ids: [], assessment_ids: [], last_updated_ats: [], answer_types: [], accounts: [],
-                business_risks: [], control_risks: [], risk_types: [], audit_comments: [], audit_emp_ids: [],
-                audit_status_ids: [], audit_reviewer_emp_ids: [], audit_reviewer_comments: [],
-                audit_compliances: [], compliance_emp_ids: [], compliance_status_ids: [],
-                compliance_reviewer_emp_ids: [], compliance_reviewer_comments: [], batch_keys: []
+            const faUpdates: {
+                ids: number[];
+                accounts: string[];
+                empIds: number[];
+                batchKeys: string[];
+            } = {
+                ids: [],
+                accounts: [],
+                empIds: [],
+                batchKeys: [],
             };
-            const faInserts = {
-                year_ids: [], assessment_ids: [], type_ids: [], accounts: [],
-                business_risks: [], control_risks: [], risk_types: [],
-                audit_status_ids: [], audit_emp_ids: [], audit_reviewer_emp_ids: [],
-                compliance_emp_ids: [], compliance_status_ids: [], compliance_reviewer_emp_ids: [],
-                batch_keys: []
+
+            const faTimelines: {
+                esfa_ids: number[];
+                assessment_ids: number[];
+                last_updated_ats: any[];
+                answer_types: string[];
+                accounts: string[];
+                business_risks: number[];
+                control_risks: number[];
+                risk_types: number[];
+                audit_comments: string[];
+                audit_emp_ids: number[];
+                audit_status_ids: number[];
+                audit_reviewer_emp_ids: number[];
+                audit_reviewer_comments: string[];
+                audit_compliances: string[];
+                compliance_emp_ids: number[];
+                compliance_status_ids: number[];
+                compliance_reviewer_emp_ids: number[];
+                compliance_reviewer_comments: string[];
+                batch_keys: string[];
+            } = {
+                esfa_ids: [],
+                assessment_ids: [],
+                last_updated_ats: [],
+                answer_types: [],
+                accounts: [],
+                business_risks: [],
+                control_risks: [],
+                risk_types: [],
+                audit_comments: [],
+                audit_emp_ids: [],
+                audit_status_ids: [],
+                audit_reviewer_emp_ids: [],
+                audit_reviewer_comments: [],
+                audit_compliances: [],
+                compliance_emp_ids: [],
+                compliance_status_ids: [],
+                compliance_reviewer_emp_ids: [],
+                compliance_reviewer_comments: [],
+                batch_keys: [],
+            };
+
+            const faInserts: {
+                year_ids: number[];
+                assessment_ids: number[];
+                type_ids: string[];
+                accounts: string[];
+                business_risks: number[];
+                control_risks: number[];
+                risk_types: number[];
+                audit_status_ids: number[];
+                audit_emp_ids: number[];
+                audit_reviewer_emp_ids: number[];
+                compliance_emp_ids: number[];
+                compliance_status_ids: number[];
+                compliance_reviewer_emp_ids: number[];
+                batch_keys: string[];
+            } = {
+                year_ids: [],
+                assessment_ids: [],
+                type_ids: [],
+                accounts: [],
+                business_risks: [],
+                control_risks: [],
+                risk_types: [],
+                audit_status_ids: [],
+                audit_emp_ids: [],
+                audit_reviewer_emp_ids: [],
+                compliance_emp_ids: [],
+                compliance_status_ids: [],
+                compliance_reviewer_emp_ids: [],
+                batch_keys: [],
             };
 
             for (const row of freshAccounts) {
@@ -1859,6 +2025,13 @@ LIMIT 1;
                 const old = faMap.get(typeIdKey);
 
                 if (old) {
+                    if (
+                        assessmentStatusId === 3
+                        && Number(old.audit_status_id || 0) !== 3
+                    ) {
+                        continue;
+                    }
+
                     if (Number(old.accounts) !== Number(row.accounts)) {
                         faTimelines.esfa_ids.push(Number(old.id));
                         faTimelines.assessment_ids.push(assessmentId);
@@ -1886,6 +2059,10 @@ LIMIT 1;
                         faUpdates.batchKeys.push(assessment.batch_key);
                     }
                 } else {
+                    if (assessmentStatusId === 3) {
+                        continue;
+                    }
+
                     faInserts.year_ids.push(Number(assessment.year_id));
                     faInserts.assessment_ids.push(assessmentId);
                     faInserts.type_ids.push(row.type_id);
@@ -2182,10 +2359,20 @@ ORDER BY
                     const comment =
                         String(review.reviewer_comment || '');
 
-                    if (
-                        !typeId || ![2, 3].includes(action)
-                    ) {
+                    if (!typeId) {
                         continue;
+                    }
+
+                    if (![2, 3].includes(action)) {
+                        throw new BadRequestException(
+                            'Please accept or mark re-assessment for every executive summary row.',
+                        );
+                    }
+
+                    if (action === 3 && !comment.trim()) {
+                        throw new BadRequestException(
+                            'Reviewer comment is required for re-assessment rows.',
+                        );
                     }
 
                     // Update branch position review
@@ -2193,10 +2380,10 @@ ORDER BY
                         `
                         UPDATE executive_summary_branch_position
                         SET
-                            review_action = $3,
-                            reviewer_comment = $4,
-                            reviewer_emp_id = $5,
-                            reviewed_at = NOW()
+                            audit_status_id = $3,
+                            audit_reviewer_comment = $4,
+                            audit_reviewer_emp_id = $5,
+                            updated_at = NOW()
                         WHERE
                             assesment_id = $1
                             AND type_id = $2
@@ -2216,10 +2403,10 @@ ORDER BY
                         `
                         UPDATE executive_summary_fresh_accounts
                         SET
-                            review_action = $3,
-                            reviewer_comment = $4,
-                            reviewer_emp_id = $5,
-                            reviewed_at = NOW()
+                            audit_status_id = $3,
+                            audit_reviewer_comment = $4,
+                            audit_reviewer_emp_id = $5,
+                            updated_at = NOW()
                         WHERE
                             assesment_id = $1
                             AND type_id = $2
