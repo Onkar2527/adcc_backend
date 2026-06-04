@@ -40,6 +40,18 @@ export class ReportsService {
       return this.getAuditStatusDefinition();
     }
 
+    if (reportSlug === 'audit-status-expired-report') {
+      return this.getAuditStatusExpiredDefinition();
+    }
+
+    if (reportSlug === 'assesment-timeline-report') {
+      return this.getAssessmentTimelineDefinition();
+    }
+
+    if (reportSlug === 'assement-not-started-yet-report') {
+      return this.getAssessmentNotStartedDefinition();
+    }
+
     if (reportSlug === 'audit-complete-report') {
       return this.getAuditCompleteDefinition();
     }
@@ -131,6 +143,174 @@ export class ReportsService {
     };
   }
 
+  private async getAuditStatusExpiredDefinition() {
+    const lookups = await this.getAuditStatusLookups();
+
+    return {
+      slug: 'audit-status-expired-report',
+      title: 'Audit Status Expired Report',
+      category: 'Audit Reports',
+      page: 'A4L',
+      fileName: 'audit-status-expired-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        audit_unit_id: 'all_branches',
+        financial_year: 'all',
+        audit_status: '13',
+      },
+      filters: [
+        {
+          key: 'audit_unit_id',
+          label: 'Select Branch',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Select Financial Year',
+          type: 'select',
+          options: lookups.years,
+        },
+        {
+          key: 'audit_status',
+          label: 'Select Audit Status',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '13', label: 'Audit Expired' },
+            { value: '11', label: 'Compliance Expired' },
+          ],
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
+        { key: 'audit_unit_name', label: 'Audit Unit', width: '10%' },
+        { key: 'auditor_name', label: 'Auditor', width: '15%' },
+        { key: 'audit_start_date', label: 'Audit Start Date', width: '8%', type: 'date' },
+        { key: 'audit_end_date', label: 'Audit End Date', width: '8%', type: 'date' },
+        { key: 'assessment_period', label: 'Assessment Period', width: '15%', type: 'assessmentPeriod' },
+        {
+          key: 'audit_status_label',
+          label: 'Audit Status',
+          width: '10%',
+          align: 'center',
+          type: 'status',
+          expiredKey: 'audit_expired',
+          dueDateKey: 'audit_due_date',
+        },
+        { key: 'compliance_start_date', label: 'Compliance Start Date', width: '8%', type: 'date' },
+        { key: 'compliance_end_date', label: 'Compliance End Date', width: '8%', type: 'date' },
+        {
+          key: 'compliance_status_label',
+          label: 'Compliance Status',
+          width: '13%',
+          type: 'status',
+          expiredKey: 'compliance_expired',
+          dueDateKey: 'compliance_due_date',
+        },
+      ],
+      summaryCards: [
+        { key: 'total', label: 'Total Expired' },
+        { key: 'auditExpired', label: 'Audit Expired' },
+        { key: 'complianceExpired', label: 'Compliance Expired' },
+      ],
+    };
+  }
+
+  private async getAssessmentTimelineDefinition() {
+    const lookups = await this.getAssessmentTimelineLookups();
+
+    return {
+      slug: 'assesment-timeline-report',
+      title: 'Assesment Timeline Report',
+      category: 'Audit Reports',
+      page: 'A4L',
+      fileName: 'assesment-timeline-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        reportAuditUnit: '',
+        reportAuditAssesment: '',
+      },
+      filters: [
+        {
+          key: 'reportAuditUnit',
+          label: 'Audit Unit',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Audit Assessment',
+          type: 'select',
+          required: true,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No.', width: '10%', align: 'center' },
+        { key: 'inspection_type', label: 'Inspection Type', width: '20%' },
+        { key: 'rejected_count', label: 'Rejected Count', width: '10%', align: 'center' },
+        { key: 'employee_name', label: 'Employee Name', width: '10%' },
+        { key: 'status_label', label: 'Status', width: '40%' },
+        { key: 'created_at', label: 'Status Changed On', width: '20%', type: 'date' },
+      ],
+      summaryCards: [
+        { key: 'total', label: 'Timeline Entries' },
+        { key: 'audit', label: 'Audit' },
+        { key: 'compliance', label: 'Compliance' },
+        { key: 'admin', label: 'Admin' },
+      ],
+    };
+  }
+
+  private async getAssessmentNotStartedDefinition() {
+    const lookups = await this.getAuditStatusLookups();
+
+    return {
+      slug: 'assement-not-started-yet-report',
+      title: 'Assement Not Started Yet Report',
+      category: 'Audit Reports',
+      page: 'A4L',
+      fileName: 'assement-not-started-yet-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        audit_unit_id: 'all_branches',
+      },
+      filters: [
+        {
+          key: 'audit_unit_id',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No', width: '10%', align: 'center' },
+        { key: 'audit_unit_name', label: 'Audit Unit', width: '25%' },
+        { key: 'assessment_period', label: 'Assessment Period', width: '25%' },
+        { key: 'frequency_label', label: 'Frequency', width: '10%', align: 'center' },
+        { key: 'audit_status_label', label: 'Audit Status', width: '30%' },
+      ],
+      summaryCards: [
+        { key: 'total', label: 'Not Started' },
+      ],
+    };
+  }
+
   private async getAuditCompleteDefinition() {
     const lookups = await this.getAuditCompleteLookups();
 
@@ -208,6 +388,18 @@ export class ReportsService {
   async getReportData(reportSlug: string, query: any) {
     if (reportSlug === 'audit-complete-report') {
       return this.getAuditCompleteReport(query);
+    }
+
+    if (reportSlug === 'audit-status-expired-report') {
+      return this.getAuditStatusExpiredReport(query);
+    }
+
+    if (reportSlug === 'assesment-timeline-report') {
+      return this.getAssessmentTimelineReport(query);
+    }
+
+    if (reportSlug === 'assement-not-started-yet-report') {
+      return this.getAssessmentNotStartedReport(query);
     }
 
     if (reportSlug !== 'audit-status-report') {
@@ -327,6 +519,54 @@ export class ReportsService {
         value: String(row.id),
         label: String(row.risk_category || '').toUpperCase(),
       })),
+    };
+  }
+
+  async getAssessmentTimelineLookups() {
+    const [units, assessments] = await Promise.all([
+      this.db.query(`
+        SELECT
+          id,
+          audit_unit_code,
+          name,
+          section_type_id
+        FROM audit_unit_master
+        WHERE is_active = 1
+          AND deleted_at IS NULL
+        ORDER BY section_type_id ASC, audit_unit_code ASC, name ASC
+      `),
+      this.db.query(`
+        SELECT
+          asm.id,
+          asm.audit_unit_id,
+          asm.assesment_period_from,
+          asm.assesment_period_to,
+          asm.frequency
+        FROM audit_assesment_master asm
+        INNER JOIN audit_unit_master aum
+          ON aum.id = asm.audit_unit_id
+        WHERE asm.deleted_at IS NULL
+          AND aum.deleted_at IS NULL
+        ORDER BY aum.audit_unit_code ASC, asm.assesment_period_from DESC
+      `),
+    ]);
+
+    return {
+      auditUnits: [
+        { value: '', label: 'Please select audit unit' },
+        ...units.rows.map((row: any) => ({
+          value: String(row.id),
+          label: this.auditUnitName(row),
+        })),
+      ],
+      assessments: [
+        { value: '', label: 'Please select audit assessment' },
+        ...assessments.rows.map((row: any) => ({
+          value: String(row.id),
+          label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
+          audit_unit_id: row.audit_unit_id,
+        })),
+      ],
     };
   }
 
@@ -508,6 +748,238 @@ export class ReportsService {
         complianceRequired: questionRows.filter((row) => Number(row.is_compliance) === 1).length,
         highBusinessRisk: questionRows.filter((row) => Number(row.business_risk) === 1).length,
         highControlRisk: questionRows.filter((row) => Number(row.control_risk) === 1).length,
+      },
+    };
+  }
+
+  async getAuditStatusExpiredReport(query: any) {
+    const auditUnitId = String(query.audit_unit_id || '').trim();
+    const financialYear = String(query.financial_year || 'all').trim();
+    const auditStatus = String(query.audit_status || '13').trim();
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    const today = this.dateOnly(new Date());
+    const where: string[] = [
+      'asm.deleted_at IS NULL',
+      'aum.deleted_at IS NULL',
+      'COALESCE(asm.is_limit_blocked, 0) = 0',
+    ];
+    const params: any[] = [];
+
+    if (auditUnitId === 'all_branches') {
+      where.push('aum.section_type_id = 1');
+    } else if (auditUnitId === 'all_head_of_dept') {
+      where.push('aum.section_type_id > 1');
+    } else {
+      params.push(Number(auditUnitId));
+      where.push(`asm.audit_unit_id = $${params.length}`);
+    }
+
+    if (financialYear !== 'all') {
+      params.push(Number(financialYear));
+      where.push(`asm.year_id = $${params.length}`);
+    }
+
+    params.push(today);
+
+    if (auditStatus === '11') {
+      where.push('asm.audit_status_id IN (4, 6)');
+      where.push(`asm.compliance_due_date < $${params.length}`);
+    } else {
+      where.push('asm.audit_status_id IN (1, 3)');
+      where.push(`asm.audit_due_date < $${params.length}`);
+    }
+
+    const result = await this.db.query(
+      `
+      SELECT
+        asm.id,
+        asm.year_id,
+        ym.year AS financial_year,
+        asm.audit_unit_id,
+        aum.audit_unit_code,
+        aum.name AS audit_unit_name,
+        aum.section_type_id,
+        asm.audit_emp_id,
+        emp.name AS auditor_name,
+        emp.emp_code AS auditor_code,
+        asm.audit_start_date,
+        asm.audit_end_date,
+        asm.assesment_period_from,
+        asm.assesment_period_to,
+        asm.frequency,
+        asm.audit_status_id,
+        asm.audit_due_date,
+        asm.compliance_start_date,
+        asm.compliance_end_date,
+        asm.compliance_due_date,
+        COALESCE(asm.is_limit_blocked, 0) AS is_limit_blocked
+      FROM audit_assesment_master asm
+      INNER JOIN audit_unit_master aum
+        ON aum.id = asm.audit_unit_id
+      LEFT JOIN year_master ym
+        ON ym.id = asm.year_id
+      LEFT JOIN employee_master emp
+        ON emp.id = asm.audit_emp_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY aum.audit_unit_code ASC, asm.audit_unit_id ASC, asm.assesment_period_from ASC
+      `,
+      params,
+    );
+
+    const rows = result.rows.map((row: any, index: number) =>
+      this.mapAuditStatusRow(row, index + 1, today),
+    );
+
+    return {
+      filters: {
+        audit_unit_id: auditUnitId,
+        financial_year: financialYear,
+        audit_status: auditStatus,
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      rows,
+      summary: {
+        total: rows.length,
+        auditExpired: rows.filter((row) => row.audit_expired).length,
+        complianceExpired: rows.filter((row) => row.compliance_expired).length,
+      },
+    };
+  }
+
+  async getAssessmentTimelineReport(query: any) {
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if (!assessmentId) {
+      throw new BadRequestException('Audit assessment is required');
+    }
+
+    const result = await this.db.query(
+      `
+      SELECT
+        aut.id,
+        aut.type_id,
+        aut.assesment_id,
+        aut.status_id,
+        aut.rejected_cnt,
+        aut.reviewer_emp_id,
+        aut.created_at,
+        emp.name AS employee_name
+      FROM audit_assesment_master asm
+      INNER JOIN audit_assesment_timeline aut
+        ON asm.id = aut.assesment_id
+      LEFT JOIN employee_master emp
+        ON emp.id = aut.reviewer_emp_id
+      WHERE aut.assesment_id = $1
+        AND asm.audit_unit_id = $2
+        AND aut.deleted_at IS NULL
+        AND asm.deleted_at IS NULL
+      ORDER BY aut.type_id::int ASC, aut.created_at ASC, aut.id ASC
+      `,
+      [assessmentId, auditUnitId],
+    );
+
+    const rows = result.rows.map((row: any, index: number) => ({
+      sr_no: index + 1,
+      inspection_type: this.timelineTypeLabel(row.type_id),
+      rejected_count:
+        [3, 6].includes(Number(row.status_id))
+          ? row.rejected_cnt || 0
+          : '-',
+      employee_name: row.employee_name || '-',
+      status_label: this.timelineStatusLabel(row.status_id),
+      created_at: row.created_at,
+      type_id: Number(row.type_id || 0),
+      status_id: Number(row.status_id || 0),
+    }));
+
+    const assessment = await this.getAssessmentHeader(assessmentId);
+
+    return {
+      filters: {
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: String(assessmentId),
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      header: assessment,
+      rows,
+      summary: {
+        total: rows.length,
+        audit: rows.filter((row) => row.type_id === 1).length,
+        compliance: rows.filter((row) => row.type_id === 2).length,
+        admin: rows.filter((row) => row.type_id === 3).length,
+      },
+    };
+  }
+
+  async getAssessmentNotStartedReport(query: any) {
+    const auditUnitId = String(query.audit_unit_id || '').trim();
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Search type is required');
+    }
+
+    const where: string[] = [
+      'frequency != 0',
+      'is_active = 1',
+      'deleted_at IS NULL',
+    ];
+    const params: any[] = [];
+
+    if (auditUnitId === 'all_branches') {
+      where.push('section_type_id = 1');
+    } else if (auditUnitId === 'all_head_of_dept') {
+      where.push('section_type_id != 1');
+    } else {
+      params.push(Number(auditUnitId));
+      where.push(`id = $${params.length}`);
+    }
+
+    const unitsResult = await this.db.query(
+      `
+      SELECT id, audit_unit_code, name, frequency, last_audit_date
+      FROM audit_unit_master
+      WHERE ${where.join(' AND ')}
+      ORDER BY audit_unit_code ASC, name ASC
+      `,
+      params,
+    );
+
+    const rows: any[] = [];
+    const currentDate = this.dateOnly(new Date());
+
+    for (const unit of unitsResult.rows) {
+      const notStartedRows = await this.getNotStartedRowsForUnit(
+        unit,
+        currentDate,
+      );
+      rows.push(...notStartedRows);
+    }
+
+    const mappedRows = rows.map((row, index) => ({
+      sr_no: index + 1,
+      ...row,
+    }));
+
+    return {
+      filters: {
+        audit_unit_id: auditUnitId,
+      },
+      total: mappedRows.length,
+      generatedAt: new Date().toISOString(),
+      rows: mappedRows,
+      summary: {
+        total: mappedRows.length,
       },
     };
   }
@@ -777,6 +1249,108 @@ export class ReportsService {
     );
 
     return option?.label || '-';
+  }
+
+  private timelineTypeLabel(value: any) {
+    const labels: Record<number, string> = {
+      1: 'AUDIT',
+      2: 'COMPLIANCE',
+      3: 'ADMIN',
+    };
+
+    return labels[Number(value || 0)] || '-';
+  }
+
+  private timelineStatusLabel(value: any) {
+    const labels: Record<number, string> = {
+      1: 'AUDIT PENDING',
+      2: 'REVIEW PENDING',
+      3: 'RE-AUDIT NEEDED',
+      4: 'COMPLIANCE PENDING',
+      5: 'COMPLIANCE REVIEW PENDING',
+      6: 'RE-COMPLIANCE NEEDED',
+      7: 'COMPLETED',
+      10: 'COMPLIANCE BLOCKED',
+      11: 'ASSESSMENT STARTED',
+      12: 'AUDIT BLOCKED',
+      13: 'AUDIT DUE DATE EXTENDED',
+      14: 'CARRY FORWARD',
+    };
+
+    return labels[Number(value || 0)] || '-';
+  }
+
+  private async getNotStartedRowsForUnit(unit: any, currentDate: string) {
+    const rows: any[] = [];
+    const frequency = Number(unit.frequency || 0);
+    const lastAuditDate = this.dateOnly(unit.last_audit_date);
+
+    if (!frequency || !lastAuditDate || lastAuditDate >= currentDate) {
+      return rows;
+    }
+
+    const nextAssessmentDate = this.addMonths(lastAuditDate, frequency);
+    const nextAssessmentEndDate = this.addDays(nextAssessmentDate, -1);
+    const existing = await this.db.query(
+      `
+      SELECT id
+      FROM audit_assesment_master
+      WHERE audit_unit_id = $1
+        AND assesment_period_to = $2
+        AND deleted_at IS NULL
+      LIMIT 1
+      `,
+      [unit.id, nextAssessmentEndDate],
+    );
+
+    if (existing.rows.length) {
+      return rows;
+    }
+
+    const monthDiff = this.monthDifference(lastAuditDate, currentDate);
+    const assessmentCount = Math.max(Math.floor(monthDiff / frequency), 1);
+
+    for (let index = 0; index < assessmentCount; index += 1) {
+      const startDate = this.addDays(
+        this.addMonths(lastAuditDate, index * frequency),
+        1,
+      );
+      const endDate = this.addDays(
+        this.addMonths(startDate, frequency),
+        -1,
+      );
+
+      rows.push({
+        audit_unit_name: this.auditUnitName(unit),
+        assessment_period: `${startDate} to ${endDate}`,
+        frequency_label: `${frequency} Months`,
+        audit_status_label: 'Assement Not Started Yet',
+      });
+    }
+
+    return rows;
+  }
+
+  private addMonths(value: string, months: number) {
+    const date = new Date(`${value}T00:00:00`);
+    date.setMonth(date.getMonth() + months);
+
+    return this.dateOnly(date);
+  }
+
+  private addDays(value: string, days: number) {
+    const date = new Date(`${value}T00:00:00`);
+    date.setDate(date.getDate() + days);
+
+    return this.dateOnly(date);
+  }
+
+  private monthDifference(fromDate: string, toDate: string) {
+    const from = new Date(`${fromDate}T00:00:00`);
+    const to = new Date(`${toDate}T00:00:00`);
+
+    return (to.getFullYear() - from.getFullYear()) * 12
+      + (to.getMonth() - from.getMonth());
   }
 
   private buildAuditCompleteGroupedRows(questionRows: any[]) {
