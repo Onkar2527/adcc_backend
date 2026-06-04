@@ -131,4 +131,17 @@ export class AuditDashboardController {
     );
 
   }
+
+  @Post('save-executive-summary-review')
+  async saveExecutiveSummaryReview(
+    @Body() body: any,
+    @Req() req: any,
+  ) {
+
+    return this.service.saveExecutiveSummaryReview(
+      body,
+      Number(body?.employee_id || req.admin_id || 0),
+    );
+
+  }
 }

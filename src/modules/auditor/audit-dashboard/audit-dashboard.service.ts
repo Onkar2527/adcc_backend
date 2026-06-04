@@ -2143,4 +2143,104 @@ ORDER BY
         return result.rows;
     }
 
+    async saveExecutiveSummaryReview(
+        body: any,
+        employeeId: number,
+    ) {
+        const assessmentId =
+            Number(body?.assessment_id || 0);
+
+        if (!assessmentId) {
+            throw new BadRequestException(
+                'Assessment ID is required.',
+            );
+        }
+
+        const reviews =
+            Array.isArray(body?.reviews)
+                ? body.reviews
+                : [];
+
+        if (!reviews.length) {
+            throw new BadRequestException(
+                'No review actions provided.',
+            );
+        }
+
+        await this.db.transaction(
+            async (client) => {
+
+                for (
+                    const review of reviews
+                ) {
+                    const typeId =
+                        String(review.type_id || '').trim();
+
+                    const action =
+                        Number(review.review_action || 0);
+
+                    const comment =
+                        String(review.reviewer_comment || '');
+
+                    if (
+                        !typeId || ![2, 3].includes(action)
+                    ) {
+                        continue;
+                    }
+
+                    // Update branch position review
+                    await client.query(
+                        `
+                        UPDATE executive_summary_branch_position
+                        SET
+                            review_action = $3,
+                            reviewer_comment = $4,
+                            reviewer_emp_id = $5,
+                            reviewed_at = NOW()
+                        WHERE
+                            assesment_id = $1
+                            AND type_id = $2
+                            AND deleted_at IS NULL;
+                        `,
+                        [
+                            assessmentId,
+                            typeId,
+                            action,
+                            comment,
+                            employeeId,
+                        ],
+                    );
+
+                    // Update fresh accounts review
+                    await client.query(
+                        `
+                        UPDATE executive_summary_fresh_accounts
+                        SET
+                            review_action = $3,
+                            reviewer_comment = $4,
+                            reviewer_emp_id = $5,
+                            reviewed_at = NOW()
+                        WHERE
+                            assesment_id = $1
+                            AND type_id = $2
+                            AND deleted_at IS NULL;
+                        `,
+                        [
+                            assessmentId,
+                            typeId,
+                            action,
+                            comment,
+                            employeeId,
+                        ],
+                    );
+                }
+            },
+        );
+
+        return {
+            success: true,
+            message: 'Executive summary review saved successfully.',
+        };
+    }
+
 }
