@@ -16,7 +16,7 @@ async function run() {
   try {
     const res = await pool.query('SELECT COUNT(*) FROM tab_master');
     console.log(`Tabs in master: ${res.rows[0].count}`);
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error:', err.message);
   } finally {
     await pool.end();
