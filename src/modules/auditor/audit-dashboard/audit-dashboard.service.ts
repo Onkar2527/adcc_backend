@@ -965,138 +965,91 @@ LIMIT 1;
 
         return date < today;
     }
-     async getExecutiveSummary(
+    async getExecutiveSummary(
         assessment_id: number,
         employeeId: number,
     ) {
 
-        const assessment =
-            await this.db.query(
-                `
+        const assessmentQuery = `
 SELECT 
     aam.id,
     aam.year_id,
     aam.audit_unit_id,
     aam.frequency,
-
     aam.assesment_period_from,
-
     aam.assesment_period_to,
-
     aam.audit_start_date,
-
     aam.audit_end_date,
-
     aam.compliance_due_date,
-
     CASE aam.audit_status_id
-
         WHEN 1 THEN 'AUDIT (PENDING / ACTIVE)'
-
         WHEN 2 THEN 'REVIEW (PENDING / ACTIVE)'
-
         WHEN 3 THEN 'RE AUDIT (PENDING / ACTIVE)'
-
         WHEN 4 THEN 'COMPLIANCE (PENDING / ACTIVE)'
-
         WHEN 5 THEN 'REVIEW (PENDING / ACTIVE)'
-
         WHEN 6 THEN 'RE COMPLIANCE (PENDING / ACTIVE)'
-
         WHEN 7 THEN 'ASSESMENT COMPLETED'
-
         WHEN 8 THEN 'REVIEWER TO AUDIT (All OBSERVATIONS)'
-
         WHEN 9 THEN 'REVIEWER TO COMPLIANCE (All OBSERVATIONS)'
-
         WHEN 10 THEN 'ADMIN INCREASE ACCEPT / REJECT LIMIT IN AUDIT'
-
         WHEN 11 THEN 'ADMIN INCREASE ACCEPT / REJECT LIMIT IN COMPLIANCE'
-
         WHEN 12 THEN 'ADMIN INCREASE DUE DATE IN AUDIT'
-
         WHEN 13 THEN 'ADMIN INCREASE DUE DATE IN COMPLIANCE'
-
         WHEN 14 THEN 'REVIEWER TO AUDIT (ENTIRE ASSESMENT BACK TO AUDIT)'
-
         ELSE 'UNKNOWN'
-
     END AS audit_status,
-
     aam.audit_review_date,
-
     aam.compliance_review_date,
-
     aum.name AS branch_name,
-
     aum.audit_unit_code AS branch_code,
-
     (
         aam.audit_end_date::date
         -
         aam.audit_start_date::date
     ) AS audit_duration_days,
-
     branch_manager.name AS branch_manager_name,
-
     branch_assitant_manager.name AS branch_assistant_manager,
-
     auditor_name.name AS auditor_name,
-
     td.deposit_target AS deposit_target,
-
     td.advances_target AS advances_target,
-
     td.npa_target AS npa_target,
-	esb.report_submitted_date AS report_submitted_date,
-	esb.staff_count As staff_count,
-	esb.manual_challans_per_day as manual_challans_per_day
-
+    esb.id AS esb_id,
+    esb.report_submitted_date AS report_submitted_date,
+    esb.staff_count As staff_count,
+    esb.manual_challans_per_day as manual_challans_per_day
 FROM audit_assesment_master aam
-
 LEFT JOIN audit_unit_master aum
     ON aum.id = aam.audit_unit_id
-
 LEFT JOIN employee_master auditor
     ON auditor.id = aam.audit_emp_id
-
 LEFT JOIN employee_master review
     ON review.id = aam.audit_review_emp_id
-
 LEFT JOIN employee_master branch_manager
     ON branch_manager.id = aam.branch_head_id
-
 LEFT JOIN employee_master branch_assitant_manager
     ON branch_assitant_manager.id = aam.branch_subhead_id
-
 LEFT JOIN employee_master auditor_name
     ON auditor_name.id = aam.audit_head_id
-
 LEFT JOIN target_details td
     ON td.audit_unit_id = aam.audit_unit_id
     AND td.year_id = aam.year_id
-	
 left join executive_summary_basic_details esb
   on esb.assesment_id=aam.id
 WHERE aam.id = $1
+LIMIT 1;
+        `;
 
-LIMIT 1
-                `,
-                [assessment_id],
-            );
+        const assessment = await this.db.query(assessmentQuery, [assessment_id]);
 
         if (
              !assessment.rows.length
         ) {
-
             throw new NotFoundException(
                 'Assessment not found',
             );
-
         }
 
-       const data =
-    assessment.rows[0];
+        let data = assessment.rows[0];
 
         if (
             !await this.hasAuditUnitAuthority(
@@ -1107,6 +1060,138 @@ LIMIT 1
             throw new BadRequestException(
                 'You are not authorized for this audit unit.',
             );
+        }
+
+        if (!data.esb_id) {
+            const [depositsResult, advancesResult] = await Promise.all([
+                this.db.query(
+                    `
+SELECT 
+  sm.scheme_code,
+  sm.category_id,
+  SUM(COALESCE(dd.balance::numeric, 0)) AS total_balance,
+  COUNT(dd.account_no) AS total_accounts
+FROM dump_deposits dd
+LEFT JOIN scheme_master sm ON sm.id = dd.scheme_id
+WHERE dd.branch_id = $1 
+  AND dd.account_opening_date BETWEEN $2 AND $3
+  AND dd.deleted_at IS NULL
+GROUP BY sm.scheme_code, sm.category_id;
+                    `,
+                    [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
+                ),
+                this.db.query(
+                    `
+SELECT 
+  sm.scheme_code,
+  sm.category_id,
+  da.npa_status,
+  SUM(COALESCE(da.outstanding_balance::numeric, 0)) AS total_balance,
+  COUNT(da.account_no) AS total_accounts
+FROM dump_advances da
+LEFT JOIN scheme_master sm ON sm.id = da.scheme_id
+WHERE da.branch_id = $1 
+  AND da.account_opening_date BETWEEN $2 AND $3
+  AND da.deleted_at IS NULL
+GROUP BY sm.scheme_code, sm.category_id, da.npa_status;
+                    `,
+                    [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
+                )
+            ]);
+
+            await this.db.transaction(async (client) => {
+                await client.query(
+                    `DELETE FROM executive_summary_branch_position WHERE assesment_id = $1 AND year_id = $2`,
+                    [assessment_id, data.year_id]
+                );
+                await client.query(
+                    `DELETE FROM executive_summary_fresh_accounts WHERE assesment_id = $1 AND year_id = $2`,
+                    [assessment_id, data.year_id]
+                );
+                await client.query(
+                    `
+INSERT INTO executive_summary_basic_details (
+    year_id,
+    assesment_id,
+    report_submitted_date,
+    staff_count,
+    manual_challans_per_day,
+    admin_id,
+    created_at
+)
+VALUES ($1, $2, null, '0', '0', $3, NOW());
+                    `,
+                    [data.year_id, assessment_id, employeeId]
+                );
+
+                for (const row of depositsResult.rows) {
+                    const schemeCode = String(row.scheme_code || '').trim();
+                    if (!schemeCode) continue;
+                    const balance = Number(row.total_balance || 0);
+                    const accounts = Number(row.total_accounts || 0);
+
+                    // Insert into branch_position (type_id = schemeCode)
+                    await client.query(
+                        `INSERT INTO executive_summary_branch_position (
+                            year_id, assesment_id, type_id, amount,
+                            business_risk, control_risk, risk_type,
+                            audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                            compliance_emp_id, compliance_status_id,
+                            compliance_reviewer_emp_id, batch_key, created_at
+                        ) VALUES ($1, $2, $3, $4, 4, 4, 1, 1, $5, 0, 0, 0, 0, $6, NOW());`,
+                        [data.year_id, assessment_id, schemeCode, String(balance), employeeId, data.batch_key]
+                    );
+
+                    // Insert into fresh_accounts (type_id = schemeCode)
+                    await client.query(
+                        `INSERT INTO executive_summary_fresh_accounts (
+                            year_id, assesment_id, type_id, accounts,
+                            business_risk, control_risk, risk_type,
+                            audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                            compliance_emp_id, compliance_status_id,
+                            compliance_reviewer_emp_id, batch_key, created_at
+                        ) VALUES ($1, $2, $3, $4, 4, 4, 1, 1, $5, 0, 0, 0, 0, $6, NOW());`,
+                        [data.year_id, assessment_id, schemeCode, String(accounts), employeeId, data.batch_key]
+                    );
+                }
+
+                for (const row of advancesResult.rows) {
+                    const schemeCode = String(row.scheme_code || '').trim();
+                    if (!schemeCode) continue;
+                    const balance = Number(row.total_balance || 0);
+                    const accounts = Number(row.total_accounts || 0);
+                    const isNpa = !['STD', 'SB_STD', 'N'].includes(String(row.npa_status || '').trim().toUpperCase());
+
+                    const dbTypeId = isNpa ? `${schemeCode}_NPA` : schemeCode;
+
+                    // Insert into branch_position
+                    await client.query(
+                        `INSERT INTO executive_summary_branch_position (
+                            year_id, assesment_id, type_id, amount,
+                            business_risk, control_risk, risk_type,
+                            audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                            compliance_emp_id, compliance_status_id,
+                            compliance_reviewer_emp_id, batch_key, created_at
+                        ) VALUES ($1, $2, $3, $4, 4, 4, 1, 1, $5, 0, 0, 0, 0, $6, NOW());`,
+                        [data.year_id, assessment_id, dbTypeId, String(balance), employeeId, data.batch_key]
+                    );
+
+                    // Insert into fresh_accounts
+                    await client.query(
+                        `INSERT INTO executive_summary_fresh_accounts (
+                            year_id, assesment_id, type_id, accounts,
+                            business_risk, control_risk, risk_type,
+                            audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                            compliance_emp_id, compliance_status_id,
+                            compliance_reviewer_emp_id, batch_key, created_at
+                        ) VALUES ($1, $2, $3, $4, 4, 4, 1, 1, $5, 0, 0, 0, 0, $6, NOW());`,
+                        [data.year_id, assessment_id, dbTypeId, String(accounts), employeeId, data.batch_key]
+                    );
+                }
+            });
+
+            const reAssessment = await this.db.query(assessmentQuery, [assessment_id]);
+            data = reAssessment.rows[0];
         }
 
         const [
@@ -1162,36 +1247,6 @@ WHERE audit_unit_id = $1
                 ),
             ]);
 
-        const branchPositionMap =
-            new Map(
-                branchPositions.rows.map(
-                    (row: any) => [
-                        Number(row.type_id),
-                        row.amount,
-                    ],
-                ),
-            );
-
-        const freshAccountMap =
-            new Map(
-                freshAccounts.rows.map(
-                    (row: any) => [
-                        Number(row.type_id),
-                        row.accounts,
-                    ],
-                ),
-            );
-
-        const marchPositionMap =
-            new Map(
-                marchPositions.rows.map(
-                    (row: any) => [
-                        Number(row.gl_type_id),
-                        row.march_position,
-                    ],
-                ),
-            );
-
         return {
             year_id:
                 data.year_id,
@@ -1235,24 +1290,22 @@ WHERE audit_unit_id = $1
                 this.getFinancialYear(),
 
             branch_positions:
-                EXECUTIVE_BRANCH_POSITION_LINES.map(
-                    (line) => ({
-                        ...line,
-                        amount:
-                            branchPositionMap.get(line.type_id) ?? '',
-                        march_position:
-                            marchPositionMap.get(line.type_id) ?? 0,
-                    }),
-                ),
+                branchPositions.rows.map((row: any) => ({
+                    type_id: row.type_id,
+                    amount: row.amount,
+                })),
 
             fresh_accounts:
-                EXECUTIVE_FRESH_ACCOUNT_LINES.map(
-                    (line) => ({
-                        ...line,
-                        accounts:
-                            freshAccountMap.get(line.type_id) ?? '',
-                    }),
-                ),
+                freshAccounts.rows.map((row: any) => ({
+                    type_id: row.type_id,
+                    accounts: row.accounts,
+                })),
+
+            march_positions:
+                marchPositions.rows.map((row: any) => ({
+                    gl_type_id: Number(row.gl_type_id),
+                    march_position: Number(row.march_position || 0),
+                })),
 
           summary_detail: [
 
@@ -1431,16 +1484,13 @@ WHERE audit_unit_id = $1
         return `${currentYear - 1} - ${currentYear}`;
 
     }
-    async saveExecutiveSummary(
-    body: any,
-    admin_id: number,
-) {
+    async saveExecutiveSummaryBasic(
+        body: any,
+        admin_id: number,
+    ) {
+        const assessmentId = Number(body?.assessment_id || 0);
 
-    const assessmentId =
-        Number(body?.assessment_id || 0);
-
-    const assessment =
-        await this.db.findOne(
+        const assessment = await this.db.findOne(
             `
 SELECT id, year_id, audit_unit_id, audit_status_id, batch_key
 FROM audit_assesment_master
@@ -1448,105 +1498,54 @@ WHERE id = $1
     AND deleted_at IS NULL
 LIMIT 1;
             `,
-            [
-                assessmentId,
-            ],
+            [assessmentId],
         );
 
-    if (
-        !assessment
-    ) {
-        throw new NotFoundException(
-            'Assessment not found',
-        );
-    }
+        if (!assessment) {
+            throw new NotFoundException('Assessment not found');
+        }
 
-    if (
-        !await this.hasAuditUnitAuthority(
-            admin_id,
-            Number(assessment.audit_unit_id),
-        )
-    ) {
-        throw new BadRequestException(
-            'You are not authorized for this audit unit.',
-        );
-    }
+        if (!await this.hasAuditUnitAuthority(admin_id, Number(assessment.audit_unit_id))) {
+            throw new BadRequestException('You are not authorized for this audit unit.');
+        }
 
-    if (
-        Number(assessment.audit_status_id) !== 1
-    ) {
-        throw new BadRequestException(
-            'Executive summary can be updated only during the initial audit.',
-        );
-    }
+        if (Number(assessment.audit_status_id) !== 1) {
+            throw new BadRequestException('Executive summary can be updated only during the initial audit.');
+        }
 
-    const reportDate =
-        String(body?.audit_report_submitted_date || '').trim();
-    const staffCount =
-        Number(body?.staff_count);
-    const challanCount =
-        Number(body?.manual_challans_per_day);
+        let reportDate = String(body?.audit_report_submitted_date || '').trim();
+        if (reportDate.includes('T')) {
+            reportDate = reportDate.split('T')[0];
+        }
+        const staffCount = Number(body?.staff_count);
+        const challanCount = Number(body?.manual_challans_per_day);
 
-    if (
-        !/^\d{4}-\d{2}-\d{2}$/.test(reportDate)
-        ||
-        !Number.isInteger(staffCount)
-        ||
-        staffCount < 0
-        ||
-        !Number.isInteger(challanCount)
-        ||
-        challanCount < 0
-    ) {
-        throw new BadRequestException(
-            'Enter report submitted date, staff count and manual challans per day.',
-        );
-    }
+        if (
+            !/^\d{4}-\d{2}-\d{2}$/.test(reportDate) ||
+            !Number.isInteger(staffCount) ||
+            staffCount < 0 ||
+            !Number.isInteger(challanCount) ||
+            challanCount < 0
+        ) {
+            throw new BadRequestException('Enter report submitted date, staff count and manual challans per day.');
+        }
 
-    const branchPositions =
-        Array.isArray(body?.branch_positions)
-            ? this.validateExecutiveRows(
-                body.branch_positions,
-                EXECUTIVE_BRANCH_POSITION_LINES,
-                'amount',
-                false,
-            )
-            : [];
+        const employeeId = Number(admin_id || 0);
 
-    const freshAccounts =
-        Array.isArray(body?.fresh_accounts)
-            ? this.validateExecutiveRows(
-                body.fresh_accounts,
-                EXECUTIVE_FRESH_ACCOUNT_LINES,
-                'accounts',
-                true,
-            )
-            : [];
-
-    const employeeId =
-        Number(admin_id || 0);
-
-    await this.db.transaction(
-        async (client) => {
-            const existing =
-                await client.query(
-                    `
+        await this.db.transaction(async (client) => {
+            const existing = await client.query(
+                `
 SELECT id
 FROM executive_summary_basic_details
 WHERE assesment_id = $1
     AND year_id = $2
     AND deleted_at IS NULL
 LIMIT 1;
-                    `,
-                    [
-                        assessmentId,
-                        assessment.year_id,
-                    ],
-                );
+                `,
+                [assessmentId, assessment.year_id],
+            );
 
-            if (
-                existing.rows.length
-            ) {
+            if (existing.rows.length) {
                 await client.query(
                     `
 UPDATE executive_summary_basic_details
@@ -1590,351 +1589,550 @@ VALUES ($1, $2, $3, $4, $5, $6, NOW());
                     ],
                 );
             }
+        });
 
-            for (
-                const row
-                of branchPositions
-            ) {
-                const updated =
-                    await client.query(
-                    `
-UPDATE executive_summary_branch_position
-SET
-    amount = $1,
-    audit_emp_id = $2,
-    batch_key = $3,
-    updated_at = NOW()
-WHERE assesment_id = $4
-    AND year_id = $5
-    AND type_id = $6
-    AND deleted_at IS NULL;
-                    `,
-                    [
-                        row.amount,
-                        employeeId,
-                        assessment.batch_key,
-                        assessmentId,
-                        assessment.year_id,
-                        row.type_id,
-                    ],
-                );
+        return {
+            success: true,
+            message: 'Basic details saved successfully',
+        };
+    }
 
-                if (
-                    !updated.rowCount
-                ) {
-                    await client.query(
-                        `
-INSERT INTO executive_summary_branch_position (
-    year_id, assesment_id, type_id, amount,
-    business_risk, control_risk, risk_type,
-    audit_status_id, audit_emp_id, audit_reviewer_emp_id,
-    compliance_emp_id, compliance_status_id,
-    compliance_reviewer_emp_id, batch_key
-)
-VALUES (
-    $1, $2, $3, $4,
-    4, 4, 1,
-    1, $5, 0,
-    0, 0, 0, $6
-);
-                        `,
-                        [
-                            assessment.year_id,
-                            assessmentId,
-                            row.type_id,
-                            row.amount,
-                            employeeId,
-                            assessment.batch_key,
-                        ],
-                    );
-                }
-            }
+    async saveExecutiveSummaryFinancials(
+        body: any,
+        admin_id: number,
+    ) {
+        const assessmentId = Number(body?.assessment_id || 0);
 
-            for (
-                const row
-                of freshAccounts
-            ) {
-                const updated =
-                    await client.query(
-                    `
-UPDATE executive_summary_fresh_accounts
-SET
-    accounts = $1,
-    audit_emp_id = $2,
-    batch_key = $3,
-    updated_at = NOW()
-WHERE assesment_id = $4
-    AND year_id = $5
-    AND type_id = $6
-    AND deleted_at IS NULL;
-                    `,
-                    [
-                        row.accounts,
-                        employeeId,
-                        assessment.batch_key,
-                        assessmentId,
-                        assessment.year_id,
-                        row.type_id,
-                    ],
-                );
-
-                if (
-                    !updated.rowCount
-                ) {
-                    await client.query(
-                        `
-INSERT INTO executive_summary_fresh_accounts (
-    year_id, assesment_id, type_id, accounts,
-    business_risk, control_risk, risk_type,
-    audit_status_id, audit_emp_id, audit_reviewer_emp_id,
-    compliance_emp_id, compliance_status_id,
-    compliance_reviewer_emp_id, batch_key
-)
-VALUES (
-    $1, $2, $3, $4,
-    4, 4, 1,
-    1, $5, 0,
-    0, 0, 0, $6
-);
-                        `,
-                        [
-                            assessment.year_id,
-                            assessmentId,
-                            row.type_id,
-                            row.accounts,
-                            employeeId,
-                            assessment.batch_key,
-                        ],
-                    );
-                }
-            }
-        },
-    );
-
-    return {
-        success:
-            true,
-        message:
-            'Executive Summary Saved Successfully',
-    };
-
-}
-
-private validateExecutiveRows(
-    values: any,
-    lines: Array<{
-        type_id: number;
-    }>,
-    valueKey: string,
-    integerOnly: boolean,
-) {
-
-    const rows =
-        Array.isArray(values)
-            ? values
-            : [];
-
-    const expectedIds =
-        new Set(
-            lines.map(
-                (line) =>
-                    line.type_id,
-            ),
+        const assessment = await this.db.findOne(
+            `
+SELECT id, year_id, audit_unit_id, audit_status_id, batch_key
+FROM audit_assesment_master
+WHERE id = $1
+    AND deleted_at IS NULL
+LIMIT 1;
+            `,
+            [assessmentId],
         );
 
-    if (
-        rows.length !== lines.length
+        if (!assessment) {
+            throw new NotFoundException('Assessment not found');
+        }
+
+        if (!await this.hasAuditUnitAuthority(admin_id, Number(assessment.audit_unit_id))) {
+            throw new BadRequestException('You are not authorized for this audit unit.');
+        }
+
+        if (Number(assessment.audit_status_id) !== 1) {
+            throw new BadRequestException('Executive summary can be updated only during the initial audit.');
+        }
+
+        const branchPositions = Array.isArray(body?.branch_positions)
+            ? this.validateExecutiveRows(
+                body.branch_positions,
+                [],
+                'amount',
+                false,
+            )
+            : [];
+
+        const freshAccounts = Array.isArray(body?.fresh_accounts)
+            ? this.validateExecutiveRows(
+                body.fresh_accounts,
+                [],
+                'accounts',
+                true,
+            )
+            : [];
+
+        const employeeId = Number(admin_id || 0);
+
+        await this.db.transaction(async (client) => {
+            // 1. Fetch all existing branch positions and fresh accounts in parallel
+            const [existingBpRes, existingFaRes] = await Promise.all([
+                client.query(
+                    `SELECT id, type_id, amount, business_risk, control_risk, risk_type, audit_comment, audit_emp_id, 
+                            audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment, audit_commpliance, 
+                            compliance_emp_id, compliance_status_id, compliance_reviewer_emp_id, 
+                            compliance_reviewer_comment, batch_key, created_at, updated_at
+                     FROM executive_summary_branch_position
+                     WHERE assesment_id = $1 AND year_id = $2 AND deleted_at IS NULL`,
+                    [assessmentId, assessment.year_id]
+                ),
+                client.query(
+                    `SELECT id, type_id, accounts, business_risk, control_risk, risk_type, audit_comment, audit_emp_id, 
+                            audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment, audit_commpliance, 
+                            compliance_emp_id, compliance_status_id, compliance_reviewer_emp_id, 
+                            compliance_reviewer_comment, batch_key, created_at, updated_at
+                     FROM executive_summary_fresh_accounts
+                     WHERE assesment_id = $1 AND year_id = $2 AND deleted_at IS NULL`,
+                    [assessmentId, assessment.year_id]
+                )
+            ]);
+
+            const bpMap = new Map(existingBpRes.rows.map((r: any) => [String(r.type_id).trim(), r]));
+            const faMap = new Map(existingFaRes.rows.map((r: any) => [String(r.type_id).trim(), r]));
+
+            // --- BRANCH POSITIONS ---
+            const bpUpdates = { ids: [], amounts: [], empIds: [], batchKeys: [] };
+            const bpTimelines = {
+                esbp_ids: [], assessment_ids: [], last_updated_ats: [], answer_types: [], amounts: [],
+                business_risks: [], control_risks: [], risk_types: [], audit_comments: [], audit_emp_ids: [],
+                audit_status_ids: [], audit_reviewer_emp_ids: [], audit_reviewer_comments: [],
+                audit_compliances: [], compliance_emp_ids: [], compliance_status_ids: [],
+                compliance_reviewer_emp_ids: [], compliance_reviewer_comments: [], batch_keys: []
+            };
+            const bpInserts = {
+                year_ids: [], assessment_ids: [], type_ids: [], amounts: [],
+                business_risks: [], control_risks: [], risk_types: [],
+                audit_status_ids: [], audit_emp_ids: [], audit_reviewer_emp_ids: [],
+                compliance_emp_ids: [], compliance_status_ids: [], compliance_reviewer_emp_ids: [],
+                batch_keys: []
+            };
+
+            for (const row of branchPositions) {
+                const typeIdKey = String(row.type_id).trim();
+                const old = bpMap.get(typeIdKey);
+
+                if (old) {
+                    if (Number(old.amount) !== Number(row.amount)) {
+                        bpTimelines.esbp_ids.push(Number(old.id));
+                        bpTimelines.assessment_ids.push(assessmentId);
+                        bpTimelines.last_updated_ats.push(old.updated_at || old.created_at || new Date());
+                        bpTimelines.answer_types.push(row.type_id);
+                        bpTimelines.amounts.push(String(old.amount));
+                        bpTimelines.business_risks.push(Number(old.business_risk || 4));
+                        bpTimelines.control_risks.push(Number(old.control_risk || 4));
+                        bpTimelines.risk_types.push(Number(old.risk_type || 1));
+                        bpTimelines.audit_comments.push(old.audit_comment || '');
+                        bpTimelines.audit_emp_ids.push(Number(old.audit_emp_id || 0));
+                        bpTimelines.audit_status_ids.push(Number(old.audit_status_id || 1));
+                        bpTimelines.audit_reviewer_emp_ids.push(Number(old.audit_reviewer_emp_id || 0));
+                        bpTimelines.audit_reviewer_comments.push(old.audit_reviewer_comment || '');
+                        bpTimelines.audit_compliances.push(old.audit_commpliance || '');
+                        bpTimelines.compliance_emp_ids.push(Number(old.compliance_emp_id || 0));
+                        bpTimelines.compliance_status_ids.push(Number(old.compliance_status_id || 0));
+                        bpTimelines.compliance_reviewer_emp_ids.push(Number(old.compliance_reviewer_emp_id || 0));
+                        bpTimelines.compliance_reviewer_comments.push(old.compliance_reviewer_comment || '');
+                        bpTimelines.batch_keys.push(old.batch_key || '');
+
+                        bpUpdates.ids.push(Number(old.id));
+                        bpUpdates.amounts.push(String(row.amount));
+                        bpUpdates.empIds.push(employeeId);
+                        bpUpdates.batchKeys.push(assessment.batch_key);
+                    }
+                } else {
+                    bpInserts.year_ids.push(Number(assessment.year_id));
+                    bpInserts.assessment_ids.push(assessmentId);
+                    bpInserts.type_ids.push(row.type_id);
+                    bpInserts.amounts.push(String(row.amount));
+                    bpInserts.business_risks.push(4);
+                    bpInserts.control_risks.push(4);
+                    bpInserts.risk_types.push(1);
+                    bpInserts.audit_status_ids.push(1);
+                    bpInserts.audit_emp_ids.push(employeeId);
+                    bpInserts.audit_reviewer_emp_ids.push(0);
+                    bpInserts.compliance_emp_ids.push(0);
+                    bpInserts.compliance_status_ids.push(0);
+                    bpInserts.compliance_reviewer_emp_ids.push(0);
+                    bpInserts.batch_keys.push(assessment.batch_key);
+                }
+            }
+
+            if (bpTimelines.esbp_ids.length > 0) {
+                await client.query(
+                    `INSERT INTO executive_summary_branch_position_timeline (
+                        esbp_id, assesment_id, last_updated_at, answer_type, amount,
+                        business_risk, control_risk, risk_type, audit_comment, audit_emp_id,
+                        audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment,
+                        audit_commpliance, compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, compliance_reviewer_comment, batch_key,
+                        created_at, updated_at
+                    )
+                    SELECT 
+                        esbp_id, assesment_id, last_updated_at, answer_type, amount,
+                        business_risk, control_risk, risk_type, audit_comment, audit_emp_id,
+                        audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment,
+                        audit_commpliance, compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, compliance_reviewer_comment, batch_key,
+                        NOW(), NOW()
+                    FROM UNNEST(
+                        $1::bigint[], $2::bigint[], $3::timestamp without time zone[], $4::varchar[], $5::varchar[],
+                        $6::bigint[], $7::bigint[], $8::bigint[], $9::varchar[], $10::bigint[],
+                        $11::bigint[], $12::bigint[], $13::varchar[], $14::varchar[], $15::bigint[],
+                        $16::bigint[], $17::bigint[], $18::varchar[], $19::varchar[]
+                    ) AS t(
+                        esbp_id, assesment_id, last_updated_at, answer_type, amount,
+                        business_risk, control_risk, risk_type, audit_comment, audit_emp_id,
+                        audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment,
+                        audit_commpliance, compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, compliance_reviewer_comment, batch_key
+                    )`,
+                    [
+                        bpTimelines.esbp_ids, bpTimelines.assessment_ids, bpTimelines.last_updated_ats, bpTimelines.answer_types, bpTimelines.amounts,
+                        bpTimelines.business_risks, bpTimelines.control_risks, bpTimelines.risk_types, bpTimelines.audit_comments, bpTimelines.audit_emp_ids,
+                        bpTimelines.audit_status_ids, bpTimelines.audit_reviewer_emp_ids, bpTimelines.audit_reviewer_comments,
+                        bpTimelines.audit_compliances, bpTimelines.compliance_emp_ids, bpTimelines.compliance_status_ids,
+                        bpTimelines.compliance_reviewer_emp_ids, bpTimelines.compliance_reviewer_comments, bpTimelines.batch_keys
+                    ]
+                );
+            }
+
+            if (bpUpdates.ids.length > 0) {
+                await client.query(
+                    `UPDATE executive_summary_branch_position AS bp
+                    SET 
+                        amount = val.amount,
+                        audit_emp_id = val.audit_emp_id,
+                        batch_key = val.batch_key,
+                        updated_at = NOW()
+                    FROM (
+                        SELECT * FROM UNNEST($1::bigint[], $2::varchar[], $3::bigint[], $4::varchar[]) 
+                        AS t(id, amount, audit_emp_id, batch_key)
+                    ) AS val
+                    WHERE bp.id = val.id`,
+                    [
+                        bpUpdates.ids,
+                        bpUpdates.amounts,
+                        bpUpdates.empIds,
+                        bpUpdates.batchKeys
+                    ]
+                );
+            }
+
+            if (bpInserts.type_ids.length > 0) {
+                await client.query(
+                    `INSERT INTO executive_summary_branch_position (
+                        year_id, assesment_id, type_id, amount,
+                        business_risk, control_risk, risk_type,
+                        audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                        compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, batch_key, created_at
+                    )
+                    SELECT 
+                        year_id, assesment_id, type_id, amount,
+                        business_risk, control_risk, risk_type,
+                        audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                        compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, batch_key, NOW()
+                    FROM UNNEST(
+                        $1::bigint[], $2::bigint[], $3::varchar[], $4::varchar[],
+                        $5::bigint[], $6::bigint[], $7::bigint[],
+                        $8::bigint[], $9::bigint[], $10::bigint[],
+                        $11::bigint[], $12::bigint[], $13::bigint[],
+                        $14::varchar[]
+                    ) AS t(
+                        year_id, assesment_id, type_id, amount,
+                        business_risk, control_risk, risk_type,
+                        audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                        compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, batch_key
+                    )`,
+                    [
+                        bpInserts.year_ids, bpInserts.assessment_ids, bpInserts.type_ids, bpInserts.amounts,
+                        bpInserts.business_risks, bpInserts.control_risks, bpInserts.risk_types,
+                        bpInserts.audit_status_ids, bpInserts.audit_emp_ids, bpInserts.audit_reviewer_emp_ids,
+                        bpInserts.compliance_emp_ids, bpInserts.compliance_status_ids, bpInserts.compliance_reviewer_emp_ids,
+                        bpInserts.batch_keys
+                    ]
+                );
+            }
+
+            // --- FRESH ACCOUNTS ---
+            const faUpdates = { ids: [], accounts: [], empIds: [], batchKeys: [] };
+            const faTimelines = {
+                esfa_ids: [], assessment_ids: [], last_updated_ats: [], answer_types: [], accounts: [],
+                business_risks: [], control_risks: [], risk_types: [], audit_comments: [], audit_emp_ids: [],
+                audit_status_ids: [], audit_reviewer_emp_ids: [], audit_reviewer_comments: [],
+                audit_compliances: [], compliance_emp_ids: [], compliance_status_ids: [],
+                compliance_reviewer_emp_ids: [], compliance_reviewer_comments: [], batch_keys: []
+            };
+            const faInserts = {
+                year_ids: [], assessment_ids: [], type_ids: [], accounts: [],
+                business_risks: [], control_risks: [], risk_types: [],
+                audit_status_ids: [], audit_emp_ids: [], audit_reviewer_emp_ids: [],
+                compliance_emp_ids: [], compliance_status_ids: [], compliance_reviewer_emp_ids: [],
+                batch_keys: []
+            };
+
+            for (const row of freshAccounts) {
+                const typeIdKey = String(row.type_id).trim();
+                const old = faMap.get(typeIdKey);
+
+                if (old) {
+                    if (Number(old.accounts) !== Number(row.accounts)) {
+                        faTimelines.esfa_ids.push(Number(old.id));
+                        faTimelines.assessment_ids.push(assessmentId);
+                        faTimelines.last_updated_ats.push(old.updated_at || old.created_at || new Date());
+                        faTimelines.answer_types.push(row.type_id);
+                        faTimelines.accounts.push(String(old.accounts));
+                        faTimelines.business_risks.push(Number(old.business_risk || 4));
+                        faTimelines.control_risks.push(Number(old.control_risk || 4));
+                        faTimelines.risk_types.push(Number(old.risk_type || 1));
+                        faTimelines.audit_comments.push(old.audit_comment || '');
+                        faTimelines.audit_emp_ids.push(Number(old.audit_emp_id || 0));
+                        faTimelines.audit_status_ids.push(Number(old.audit_status_id || 1));
+                        faTimelines.audit_reviewer_emp_ids.push(Number(old.audit_reviewer_emp_id || 0));
+                        faTimelines.audit_reviewer_comments.push(old.audit_reviewer_comment || '');
+                        faTimelines.audit_compliances.push(old.audit_commpliance || '');
+                        faTimelines.compliance_emp_ids.push(Number(old.compliance_emp_id || 0));
+                        faTimelines.compliance_status_ids.push(Number(old.compliance_status_id || 0));
+                        faTimelines.compliance_reviewer_emp_ids.push(Number(old.compliance_reviewer_emp_id || 0));
+                        faTimelines.compliance_reviewer_comments.push(old.compliance_reviewer_comment || '');
+                        faTimelines.batch_keys.push(old.batch_key || '');
+
+                        faUpdates.ids.push(Number(old.id));
+                        faUpdates.accounts.push(String(row.accounts));
+                        faUpdates.empIds.push(employeeId);
+                        faUpdates.batchKeys.push(assessment.batch_key);
+                    }
+                } else {
+                    faInserts.year_ids.push(Number(assessment.year_id));
+                    faInserts.assessment_ids.push(assessmentId);
+                    faInserts.type_ids.push(row.type_id);
+                    faInserts.accounts.push(String(row.accounts));
+                    faInserts.business_risks.push(4);
+                    faInserts.control_risks.push(4);
+                    faInserts.risk_types.push(1);
+                    faInserts.audit_status_ids.push(1);
+                    faInserts.audit_emp_ids.push(employeeId);
+                    faInserts.audit_reviewer_emp_ids.push(0);
+                    faInserts.compliance_emp_ids.push(0);
+                    faInserts.compliance_status_ids.push(0);
+                    faInserts.compliance_reviewer_emp_ids.push(0);
+                    faInserts.batch_keys.push(assessment.batch_key);
+                }
+            }
+
+            if (faTimelines.esfa_ids.length > 0) {
+                await client.query(
+                    `INSERT INTO executive_summary_fresh_accounts_timeline (
+                        esfa_id, assesment_id, last_updated_at, answer_type, accounts,
+                        business_risk, control_risk, risk_type, audit_comment, audit_emp_id,
+                        audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment,
+                        audit_commpliance, compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, compliance_reviewer_comment, batch_key,
+                        created_at, updated_at
+                    )
+                    SELECT 
+                        esfa_id, assesment_id, last_updated_at, answer_type, accounts,
+                        business_risk, control_risk, risk_type, audit_comment, audit_emp_id,
+                        audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment,
+                        audit_commpliance, compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, compliance_reviewer_comment, batch_key,
+                        NOW(), NOW()
+                    FROM UNNEST(
+                        $1::bigint[], $2::bigint[], $3::timestamp without time zone[], $4::varchar[], $5::varchar[],
+                        $6::bigint[], $7::bigint[], $8::bigint[], $9::varchar[], $10::bigint[],
+                        $11::bigint[], $12::bigint[], $13::varchar[], $14::varchar[], $15::bigint[],
+                        $16::bigint[], $17::bigint[], $18::varchar[], $19::varchar[]
+                    ) AS t(
+                        esfa_id, assesment_id, last_updated_at, answer_type, accounts,
+                        business_risk, control_risk, risk_type, audit_comment, audit_emp_id,
+                        audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment,
+                        audit_commpliance, compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, compliance_reviewer_comment, batch_key
+                    )`,
+                    [
+                        faTimelines.esfa_ids, faTimelines.assessment_ids, faTimelines.last_updated_ats, faTimelines.answer_types, faTimelines.accounts,
+                        faTimelines.business_risks, faTimelines.control_risks, faTimelines.risk_types, faTimelines.audit_comments, faTimelines.audit_emp_ids,
+                        faTimelines.audit_status_ids, faTimelines.audit_reviewer_emp_ids, faTimelines.audit_reviewer_comments,
+                        faTimelines.audit_compliances, faTimelines.compliance_emp_ids, faTimelines.compliance_status_ids,
+                        faTimelines.compliance_reviewer_emp_ids, faTimelines.compliance_reviewer_comments, faTimelines.batch_keys
+                    ]
+                );
+            }
+
+            if (faUpdates.ids.length > 0) {
+                await client.query(
+                    `UPDATE executive_summary_fresh_accounts AS fa
+                    SET 
+                        accounts = val.accounts,
+                        audit_emp_id = val.audit_emp_id,
+                        batch_key = val.batch_key,
+                        updated_at = NOW()
+                    FROM (
+                        SELECT * FROM UNNEST($1::bigint[], $2::varchar[], $3::bigint[], $4::varchar[]) 
+                        AS t(id, accounts, audit_emp_id, batch_key)
+                    ) AS val
+                    WHERE fa.id = val.id`,
+                    [
+                        faUpdates.ids,
+                        faUpdates.accounts,
+                        faUpdates.empIds,
+                        faUpdates.batchKeys
+                    ]
+                );
+            }
+
+            if (faInserts.type_ids.length > 0) {
+                await client.query(
+                    `INSERT INTO executive_summary_fresh_accounts (
+                        year_id, assesment_id, type_id, accounts,
+                        business_risk, control_risk, risk_type,
+                        audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                        compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, batch_key, created_at
+                    )
+                    SELECT 
+                        year_id, assesment_id, type_id, accounts,
+                        business_risk, control_risk, risk_type,
+                        audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                        compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, batch_key, NOW()
+                    FROM UNNEST(
+                        $1::bigint[], $2::bigint[], $3::varchar[], $4::varchar[],
+                        $5::bigint[], $6::bigint[], $7::bigint[],
+                        $8::bigint[], $9::bigint[], $10::bigint[],
+                        $11::bigint[], $12::bigint[], $13::bigint[],
+                        $14::varchar[]
+                    ) AS t(
+                        year_id, assesment_id, type_id, accounts,
+                        business_risk, control_risk, risk_type,
+                        audit_status_id, audit_emp_id, audit_reviewer_emp_id,
+                        compliance_emp_id, compliance_status_id,
+                        compliance_reviewer_emp_id, batch_key
+                    )`,
+                    [
+                        faInserts.year_ids, faInserts.assessment_ids, faInserts.type_ids, faInserts.accounts,
+                        faInserts.business_risks, faInserts.control_risks, faInserts.risk_types,
+                        faInserts.audit_status_ids, faInserts.audit_emp_ids, faInserts.audit_reviewer_emp_ids,
+                        faInserts.compliance_emp_ids, faInserts.compliance_status_ids, faInserts.compliance_reviewer_emp_ids,
+                        faInserts.batch_keys
+                    ]
+                );
+            }
+        });
+
+        return {
+            success: true,
+            message: 'Executive Summary Financials Saved Successfully',
+        };
+    }
+
+    private validateExecutiveRows(
+        values: any,
+        lines: Array<{
+            type_id: number;
+        }>,
+        valueKey: string,
+        integerOnly: boolean,
     ) {
-        throw new BadRequestException(
-            'Complete all executive summary rows before saving.',
+        const rows = Array.isArray(values) ? values : [];
+        return rows.map(
+            (row: any) => {
+                const typeId = String(row?.type_id || '').trim();
+                let rawValue = row?.[valueKey];
+                if (rawValue === '' || rawValue === null || rawValue === undefined) {
+                    rawValue = 0;
+                }
+                const numberValue = Number(rawValue);
+
+                if (
+                    typeId === '' ||
+                    !Number.isFinite(numberValue) ||
+                    numberValue < 0 ||
+                    (
+                        integerOnly &&
+                        !Number.isInteger(numberValue)
+                    )
+                ) {
+                    console.error('validateExecutiveRows FAILED:', {
+                        typeId,
+                        valueKey,
+                        rawValue: row?.[valueKey],
+                        numberValue,
+                        integerOnly,
+                        row
+                    });
+                    throw new BadRequestException(
+                        'Complete all executive summary rows with valid values.',
+                    );
+                }
+
+                return {
+                    type_id: typeId,
+                    [valueKey]: numberValue,
+                };
+            },
         );
     }
 
-    return rows.map(
-        (row: any) => {
-            const typeId =
-                Number(row?.type_id);
-            const numberValue =
-                Number(row?.[valueKey]);
-
-            if (
-                !expectedIds.has(typeId)
-                ||
-                row?.[valueKey] === ''
-                ||
-                row?.[valueKey] === null
-                ||
-                row?.[valueKey] === undefined
-                ||
-                !Number.isFinite(numberValue)
-                ||
-                numberValue < 0
-                ||
-                (
-                    integerOnly
-                    &&
-                    !Number.isInteger(numberValue)
-                )
-            ) {
-                throw new BadRequestException(
-                    'Complete all executive summary rows with valid values.',
-                );
-            }
-
-            expectedIds.delete(typeId);
-
-            return {
-                type_id:
-                    typeId,
-                [valueKey]:
-                    numberValue,
-            };
-        },
-    );
-}
-async getBranchFinancialPosition(
-    branch_id: number,
-) {
-
-    const result =
-        await this.db.query(
+    async getBranchFinancialPosition(
+        branch_id: number,
+    ) {
+        const result = await this.db.query(
             `
 SELECT
-
     scheme_type,
-
     scheme_code,
-
     scheme_name,
-
+    category_id,
     MAX(march_position) AS march_position,
-
     SUM(total_accounts) AS total_accounts,
-
     SUM(total_amount) AS total_amount
-
 FROM (
-
     SELECT
-
         'DEPOSITS' AS scheme_type,
-
         sm.scheme_code,
-
         sm.name AS scheme_name,
-
+        CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END AS category_id,
         es.march_position,
-
         COUNT(dd.account_no) AS total_accounts,
-
-        SUM(
-            COALESCE(
-                dd.balance::numeric,
-                0
-            )
-        ) AS total_amount
-
+        SUM(COALESCE(dd.balance::numeric, 0)) AS total_amount
     FROM dump_deposits dd
-
     INNER JOIN audit_assesment_master aam
         ON aam.audit_unit_id = dd.branch_id
-
     LEFT JOIN scheme_master sm
         ON sm.id = dd.scheme_id
-
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = dd.branch_id
-        AND es.year_id = (
-            aam.year_id - 1
-        )
-        AND es.gl_type_id::text = sm.scheme_code    
-
+        AND es.year_id = (aam.year_id - 1)
+        AND es.gl_type_id = CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
     WHERE
-
         dd.branch_id = $1
-
-        AND dd.account_opening_date
-        BETWEEN
-            aam.assesment_period_from
-            AND
-            aam.assesment_period_to
-
+        AND dd.account_opening_date BETWEEN aam.assesment_period_from AND aam.assesment_period_to
+        AND dd.deleted_at IS NULL
     GROUP BY
-
         sm.scheme_code,
-
         sm.name,
-
+        sm.category_id,
         es.march_position
-
     UNION ALL
-
     SELECT
-
         'ADVANCES' AS scheme_type,
-
         sm.scheme_code,
-
         sm.name AS scheme_name,
-
+        CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END AS category_id,
         es.march_position,
-
         COUNT(da.account_no) AS total_accounts,
-
-        SUM(
-            COALESCE(
-                da.outstanding_balance::numeric,
-                0
-            )
-        ) AS total_amount
-
+        SUM(COALESCE(da.outstanding_balance::numeric, 0)) AS total_amount
     FROM dump_advances da
-
     INNER JOIN audit_assesment_master aam
         ON aam.audit_unit_id = da.branch_id
-
     LEFT JOIN scheme_master sm
         ON sm.id = da.scheme_id
-
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = da.branch_id
-        AND es.year_id = (
-            aam.year_id - 1
-        )
-    AND es.gl_type_id::text = sm.scheme_code
+        AND es.year_id = (aam.year_id - 1)
+        AND es.gl_type_id = CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
     WHERE
-
         da.branch_id = $2
-
-        AND da.account_opening_date
-        BETWEEN
-            aam.assesment_period_from
-            AND
-            aam.assesment_period_to
-
+        AND da.account_opening_date BETWEEN aam.assesment_period_from AND aam.assesment_period_to
+        AND da.deleted_at IS NULL
     GROUP BY
-
         sm.scheme_code,
-
         sm.name,
-
+        sm.category_id,
         es.march_position
-
 ) x
-
 GROUP BY
-
     scheme_type,
-
     scheme_code,
-
-    scheme_name
-
+    scheme_name,
+    category_id
 ORDER BY
-
     scheme_type,
-
-    scheme_code
+    scheme_code;
             `,
             [
                 branch_id,
@@ -1942,8 +2140,7 @@ ORDER BY
             ],
         );
 
-    return result.rows;
-
-}
+        return result.rows;
+    }
 
 }
