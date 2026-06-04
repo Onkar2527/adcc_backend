@@ -95,13 +95,26 @@ export class AuditDashboardController {
       );
 
   }
-  @Post('save-executive-summary')
-  async saveExecutiveSummary(
+  @Post('save-executive-summary-basic')
+  async saveExecutiveSummaryBasic(
     @Body() body: any,
     @Req() req: any,
   ) {
 
-    return this.service.saveExecutiveSummary(
+    return this.service.saveExecutiveSummaryBasic(
+      body,
+      Number(body?.employee_id || req.admin_id || 0),
+    );
+
+  }
+
+  @Post('save-executive-summary-financials')
+  async saveExecutiveSummaryFinancials(
+    @Body() body: any,
+    @Req() req: any,
+  ) {
+
+    return this.service.saveExecutiveSummaryFinancials(
       body,
       Number(body?.employee_id || req.admin_id || 0),
     );

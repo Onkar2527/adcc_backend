@@ -400,5 +400,5 @@ dist
 .serverless/**/*.zip
 *.example
 
-
+scripts/
 /uploads
