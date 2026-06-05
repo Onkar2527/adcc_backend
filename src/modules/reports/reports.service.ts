@@ -76,6 +76,10 @@ export class ReportsService {
       return this.getRiskWiseAuditUnitsDefinition();
     }
 
+    if (reportSlug === 'broader-areawise-scoring-report') {
+      return this.getBroaderAreaWiseScoringDefinition();
+    }
+
     throw new NotFoundException('Report is not implemented yet');
   }
 
@@ -797,6 +801,121 @@ export class ReportsService {
     };
   }
 
+  private async getBroaderAreaWiseScoringDefinition() {
+    const lookups = await this.getAuditCompleteLookups();
+
+    return {
+      slug: 'broader-areawise-scoring-report',
+      title: 'Broader Areawise Scoring Report',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'broader-areawise-scoring-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        selectSearchTypeFilter: '3',
+        reportAuditUnit: '',
+        reportAuditAssesment: '',
+        startDate: '',
+        endDate: '',
+        rmv_pending_assesments: [],
+      },
+      filters: [
+        {
+          key: 'selectSearchTypeFilter',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '3', label: 'Single Branch (Assessment Wise)' },
+            { value: '4', label: 'Single Department (Assessment Wise)' },
+            { value: '5', label: 'Single Branch Wise' },
+            { value: '6', label: 'Single Head Of Department Wise' },
+          ],
+        },
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Branch / Department',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Select Assessment',
+          type: 'select',
+          required: false,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+        {
+          key: 'startDate',
+          label: 'Start Date',
+          type: 'date',
+          required: false,
+        },
+        {
+          key: 'endDate',
+          label: 'End Date',
+          type: 'date',
+          required: false,
+        },
+        {
+          key: 'rmv_pending_assesments',
+          label: 'Remove Pending Assessments',
+          type: 'checkbox',
+          options: [{ value: '1', label: 'Remove Pending Assessments' }],
+        },
+      ],
+      columns: [
+        { key: 'branch_code', label: 'Audit Unit Code', width: '5%', align: 'center' },
+        { key: 'branch_name', label: 'Branch', width: '8%' },
+        { key: 'risk_type', label: 'Risk Type', width: '6%' },
+        { key: 'category_name', label: 'Category', width: '6%' },
+        { key: 'broader_area_name', label: 'Broader Area of Audit Non-Compliance', width: '12%' },
+
+        { key: 'qual_1_1', label: 'BR-H Qual H', width: '3%', align: 'center' },
+        { key: 'qual_1_2', label: 'BR-H Qual M', width: '3%', align: 'center' },
+        { key: 'qual_1_3', label: 'BR-H Qual L', width: '3%', align: 'center' },
+        { key: 'quan_1_1', label: 'BR-H Quan H', width: '3%', align: 'center' },
+        { key: 'quan_1_2', label: 'BR-H Quan M', width: '3%', align: 'center' },
+        { key: 'quan_1_3', label: 'BR-H Quan L', width: '3%', align: 'center' },
+
+        { key: 'qual_2_1', label: 'BR-M Qual H', width: '3%', align: 'center' },
+        { key: 'qual_2_2', label: 'BR-M Qual M', width: '3%', align: 'center' },
+        { key: 'qual_2_3', label: 'BR-M Qual L', width: '3%', align: 'center' },
+        { key: 'quan_2_1', label: 'BR-M Quan H', width: '3%', align: 'center' },
+        { key: 'quan_2_2', label: 'BR-M Quan M', width: '3%', align: 'center' },
+        { key: 'quan_2_3', label: 'BR-M Quan L', width: '3%', align: 'center' },
+
+        { key: 'qual_3_1', label: 'BR-L Qual H', width: '3%', align: 'center' },
+        { key: 'qual_3_2', label: 'BR-L Qual M', width: '3%', align: 'center' },
+        { key: 'qual_3_3', label: 'BR-L Qual L', width: '3%', align: 'center' },
+        { key: 'quan_3_1', label: 'BR-L Quan H', width: '3%', align: 'center' },
+        { key: 'quan_3_2', label: 'BR-L Quan M', width: '3%', align: 'center' },
+        { key: 'quan_3_3', label: 'BR-L Quan L', width: '3%', align: 'center' },
+
+        { key: 'qual_tot', label: 'Qualitative Score', width: '4%', align: 'center' },
+        { key: 'quan_tot', label: 'Quantitative Score', width: '4%', align: 'center' },
+        { key: 'total_qual_quan', label: 'Total Score Before Averaging', width: '5%', align: 'center' },
+        { key: 'acc_non_compliant', label: 'No. Of Accounts Non-Compliant', width: '4%', align: 'center' },
+        { key: 'no_of_acc_checked', label: 'No Of Accounts Checked', width: '4%', align: 'center' },
+        { key: 'avg_quan_score', label: 'Averaged Quantitative Score', width: '4%', align: 'right' },
+        { key: 'tot_avg_score', label: 'Total Averaged Score', width: '4%', align: 'right' },
+        { key: 'no_of_audit_conduct', label: 'Number of Audits Conducted', width: '4%', align: 'center' },
+        { key: 'avg_tot_score_per_audit', label: 'Averaged Total Score Per Audit', width: '4%', align: 'right' },
+        { key: 'risk_weight', label: 'Risk Weight', width: '3%', align: 'center' },
+        { key: 'weighted_score', label: 'Weighted Score', width: '4%', align: 'right' },
+      ],
+      summaryCards: [
+        { key: 'total', label: 'Total Weighted Score' },
+      ],
+    };
+  }
+
   async getReportData(reportSlug: string, query: any) {
     if (reportSlug === 'audit-complete-report') {
       return this.getAuditCompleteReport(query);
@@ -820,6 +939,10 @@ export class ReportsService {
 
     if (reportSlug === 'risk-wise-audit-units-report') {
       return this.getRiskWiseAuditUnitsReport(query);
+    }
+
+    if (reportSlug === 'broader-areawise-scoring-report') {
+      return this.getBroaderAreaWiseScoringReport(query);
     }
 
     if (reportSlug === 'audit-status-expired-report') {
@@ -2917,6 +3040,374 @@ export class ReportsService {
 
   private formatDecimal(val: number, decimals: number): string {
     return Number(val || 0).toFixed(decimals);
+  }
+
+  async getBroaderAreaWiseScoringReport(query: any) {
+    const searchType = String(query.selectSearchTypeFilter || '3').trim();
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+    const startDate = query.startDate ? String(query.startDate).trim() : null;
+    const endDate = query.endDate ? String(query.endDate).trim() : null;
+    const removePending = Array.isArray(query.rmv_pending_assesments)
+      ? query.rmv_pending_assesments.includes('1')
+      : String(query.rmv_pending_assesments) === '1';
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if ((searchType === '3' || searchType === '4') && !assessmentId) {
+      throw new BadRequestException('Audit assessment is required');
+    }
+
+    if ((searchType === '5' || searchType === '6') && (!startDate || !endDate)) {
+      throw new BadRequestException('Date range (Start Date & End Date) is required');
+    }
+
+    // Step 1: Find matching assessments
+    let assessments: any[] = [];
+    if (searchType === '3' || searchType === '4') {
+      const result = await this.db.query(
+        `
+        SELECT id, year_id, audit_unit_id, assesment_period_from, assesment_period_to, frequency
+        FROM audit_assesment_master
+        WHERE id = $1
+          AND audit_unit_id = $2
+          AND deleted_at IS NULL
+        `,
+        [assessmentId, auditUnitId]
+      );
+      assessments = result.rows;
+    } else {
+      const statusCondition = removePending ? 'AND audit_status_id > 4' : 'AND audit_status_id > 1';
+      const result = await this.db.query(
+        `
+        SELECT id, year_id, audit_unit_id, assesment_period_from, assesment_period_to, frequency
+        FROM audit_assesment_master
+        WHERE audit_unit_id = $1
+          AND assesment_period_from >= $2
+          AND assesment_period_to <= $3
+          ${statusCondition}
+          AND deleted_at IS NULL
+        ORDER BY id ASC
+        `,
+        [auditUnitId, startDate, endDate]
+      );
+      assessments = result.rows;
+    }
+
+    if (!assessments.length) {
+      throw new BadRequestException('No assessments found for selected filters.');
+    }
+
+    const assessmentIds = assessments.map((a) => Number(a.id));
+    const firstYearId = Number(assessments[0].year_id);
+
+    // Fetch branch info
+    const branchResult = await this.db.query(
+      `SELECT name, audit_unit_code FROM audit_unit_master WHERE id = $1 AND deleted_at IS NULL`,
+      [auditUnitId]
+    );
+    const branchInfo = branchResult.rows[0] || { name: 'Unknown', audit_unit_code: '-' };
+
+    // Step 2: Fetch Risk Category weightages for the financial year
+    const riskCategoriesResult = await this.db.query(
+      `
+      SELECT
+        rcm.id,
+        rcm.risk_category AS title,
+        COALESCE(rcw.risk_weight, 0) AS risk_weight
+      FROM risk_category_master rcm
+      LEFT JOIN risk_category_weights rcw
+        ON rcw.risk_category_id = rcm.id
+        AND rcw.year_id = $1
+        AND rcw.is_active = 1
+        AND rcw.deleted_at IS NULL
+      WHERE rcm.is_active = 1
+        AND rcm.deleted_at IS NULL
+      ORDER BY rcm.id ASC
+      `,
+      [firstYearId]
+    );
+    const riskCategories = riskCategoriesResult.rows;
+
+    // Step 3: Fetch Deposits/Advances Sampling Counts per Assessment
+    const [depositsSamplingResult, advancesSamplingResult] = await Promise.all([
+      this.db.query(
+        `
+        SELECT COUNT(*)::int AS count
+        FROM dump_deposits
+        WHERE sampling_filter = 1
+          AND assesment_period_id = ANY($1::int[])
+          AND deleted_at IS NULL
+        `,
+        [assessmentIds]
+      ),
+      this.db.query(
+        `
+        SELECT COUNT(*)::int AS count
+        FROM dump_advances
+        WHERE sampling_filter = 1
+          AND assesment_period_id = ANY($1::int[])
+          AND deleted_at IS NULL
+        `,
+        [assessmentIds]
+      ),
+    ]);
+
+    const totalDepositsSampling = Number(depositsSamplingResult.rows[0]?.count || 0);
+    const totalAdvancesSampling = Number(advancesSamplingResult.rows[0]?.count || 0);
+
+    // Fetch Broader Area names
+    const broaderAreasResult = await this.db.query(
+      `SELECT id, name FROM audit_area_master WHERE deleted_at IS NULL`
+    );
+    const broaderAreasMap = new Map();
+    for (const row of broaderAreasResult.rows) {
+      broaderAreasMap.set(Number(row.id), String(row.name || '').trim());
+    }
+
+    // Step 4: Run Unified Aggregation Query in DB
+    const aggregationResult = await this.db.query(
+      `
+      WITH unified_answers AS (
+        -- Standard Answers
+        SELECT
+          ans.assesment_id::int,
+          ans.category_id::int,
+          ans.is_compliance::int AS is_compliance,
+          qm.risk_category_id::int,
+          qm.area_of_audit_id::int AS audit_area_id,
+          cm.linked_table_id::int,
+          CASE WHEN ans.business_risk::text ~ '^[0-9]+$' THEN ans.business_risk::int ELSE NULL END AS business_risk,
+          CASE WHEN ans.control_risk::text ~ '^[0-9]+$' THEN ans.control_risk::int ELSE NULL END AS control_risk,
+          0 AS is_annexure,
+          qm.option_id::int
+        FROM answers_data ans
+        INNER JOIN question_master qm ON ans.question_id = qm.id
+        LEFT JOIN category_master cm ON cm.id = ans.category_id
+        WHERE ans.assesment_id = ANY($1::int[])
+          AND (ans.business_risk IN ('1', '2', '3') OR ans.control_risk IN ('1', '2', '3') OR qm.option_id = 4)
+          AND ans.deleted_at IS NULL
+          AND qm.deleted_at IS NULL
+
+        UNION ALL
+
+        -- Annexure Answers
+        SELECT
+          ax.assesment_id::int,
+          ans.category_id::int,
+          CASE WHEN ax.audit_commpliance = '1' THEN 1 ELSE 0 END AS is_compliance,
+          ax.risk_cat_id::int AS risk_category_id,
+          qm.area_of_audit_id::int AS audit_area_id,
+          cm.linked_table_id::int,
+          CASE WHEN ax.business_risk::text ~ '^[0-9]+$' THEN ax.business_risk::int ELSE NULL END AS business_risk,
+          CASE WHEN ax.control_risk::text ~ '^[0-9]+$' THEN ax.control_risk::int ELSE NULL END AS control_risk,
+          1 AS is_annexure,
+          qm.option_id::int
+        FROM answers_data_annexure ax
+        INNER JOIN answers_data ans ON ax.answer_id = ans.id
+        INNER JOIN question_master qm ON ans.question_id = qm.id
+        LEFT JOIN category_master cm ON cm.id = ans.category_id
+        WHERE qm.option_id = 4
+          AND ax.assesment_id = ANY($1::int[])
+          AND (ax.business_risk IN ('1', '2', '3') OR ax.control_risk IN ('1', '2', '3'))
+          AND ax.deleted_at IS NULL
+      ),
+      answers_with_scores AS (
+        SELECT
+          ua.linked_table_id,
+          ua.audit_area_id,
+          ua.risk_category_id,
+          ua.is_compliance,
+          ua.is_annexure,
+          ua.option_id,
+          ua.business_risk,
+          ua.control_risk,
+          COALESCE(rm_b.business_risk_score, 0) + COALESCE(rm_c.control_risk_score, 0) AS score
+        FROM unified_answers ua
+        LEFT JOIN risk_matrix rm_b 
+          ON rm_b.risk_parameter::int = ua.business_risk 
+          AND rm_b.year_id = $2 
+          AND rm_b.deleted_at IS NULL
+        LEFT JOIN risk_matrix rm_c 
+          ON rm_c.risk_parameter::int = ua.control_risk 
+          AND rm_c.year_id = $2 
+          AND rm_c.deleted_at IS NULL
+      )
+      SELECT
+        CASE 
+          WHEN linked_table_id = 1 THEN 'deposits'
+          WHEN linked_table_id = 2 THEN 'advances'
+          ELSE 'general'
+        END AS cat_key,
+        audit_area_id,
+        risk_category_id,
+        SUM(CASE WHEN is_compliance = 1 THEN 1 ELSE 0 END)::int AS acc_non_compliant,
+        SUM(CASE WHEN is_annexure = 1 THEN 1 ELSE 0 END)::int AS total_annex,
+        
+        -- Business Risk High (Business Risk = 1)
+        SUM(CASE WHEN linked_table_id NOT IN (1, 2) AND is_annexure = 0 AND option_id != 4 AND business_risk = 1 AND control_risk = 1 THEN score ELSE 0 END)::int AS qual_1_1,
+        SUM(CASE WHEN linked_table_id NOT IN (1, 2) AND is_annexure = 0 AND option_id != 4 AND business_risk = 1 AND control_risk = 2 THEN score ELSE 0 END)::int AS qual_1_2,
+        SUM(CASE WHEN linked_table_id NOT IN (1, 2) AND is_annexure = 0 AND option_id != 4 AND business_risk = 1 AND control_risk = 3 THEN score ELSE 0 END)::int AS qual_1_3,
+        SUM(CASE WHEN (linked_table_id IN (1, 2) OR is_annexure = 1) AND business_risk = 1 AND control_risk = 1 THEN score ELSE 0 END)::int AS quan_1_1,
+        SUM(CASE WHEN (linked_table_id IN (1, 2) OR is_annexure = 1) AND business_risk = 1 AND control_risk = 2 THEN score ELSE 0 END)::int AS quan_1_2,
+        SUM(CASE WHEN (linked_table_id IN (1, 2) OR is_annexure = 1) AND business_risk = 1 AND control_risk = 3 THEN score ELSE 0 END)::int AS quan_1_3,
+        
+        -- Business Risk Medium (Business Risk = 2)
+        SUM(CASE WHEN linked_table_id NOT IN (1, 2) AND is_annexure = 0 AND option_id != 4 AND business_risk = 2 AND control_risk = 1 THEN score ELSE 0 END)::int AS qual_2_1,
+        SUM(CASE WHEN linked_table_id NOT IN (1, 2) AND is_annexure = 0 AND option_id != 4 AND business_risk = 2 AND control_risk = 2 THEN score ELSE 0 END)::int AS qual_2_2,
+        SUM(CASE WHEN linked_table_id NOT IN (1, 2) AND is_annexure = 0 AND option_id != 4 AND business_risk = 2 AND control_risk = 3 THEN score ELSE 0 END)::int AS qual_2_3,
+        SUM(CASE WHEN (linked_table_id IN (1, 2) OR is_annexure = 1) AND business_risk = 2 AND control_risk = 1 THEN score ELSE 0 END)::int AS quan_2_1,
+        SUM(CASE WHEN (linked_table_id IN (1, 2) OR is_annexure = 1) AND business_risk = 2 AND control_risk = 2 THEN score ELSE 0 END)::int AS quan_2_2,
+        SUM(CASE WHEN (linked_table_id IN (1, 2) OR is_annexure = 1) AND business_risk = 2 AND control_risk = 3 THEN score ELSE 0 END)::int AS quan_2_3,
+        
+        -- Business Risk Low (Business Risk = 3)
+        SUM(CASE WHEN linked_table_id NOT IN (1, 2) AND is_annexure = 0 AND option_id != 4 AND business_risk = 3 AND control_risk = 1 THEN score ELSE 0 END)::int AS qual_3_1,
+        SUM(CASE WHEN linked_table_id NOT IN (1, 2) AND is_annexure = 0 AND option_id != 4 AND business_risk = 3 AND control_risk = 2 THEN score ELSE 0 END)::int AS qual_3_2,
+        SUM(CASE WHEN linked_table_id NOT IN (1, 2) AND is_annexure = 0 AND option_id != 4 AND business_risk = 3 AND control_risk = 3 THEN score ELSE 0 END)::int AS qual_3_3,
+        SUM(CASE WHEN (linked_table_id IN (1, 2) OR is_annexure = 1) AND business_risk = 3 AND control_risk = 1 THEN score ELSE 0 END)::int AS quan_3_1,
+        SUM(CASE WHEN (linked_table_id IN (1, 2) OR is_annexure = 1) AND business_risk = 3 AND control_risk = 2 THEN score ELSE 0 END)::int AS quan_3_2,
+        SUM(CASE WHEN (linked_table_id IN (1, 2) OR is_annexure = 1) AND business_risk = 3 AND control_risk = 3 THEN score ELSE 0 END)::int AS quan_3_3
+      FROM answers_with_scores
+      GROUP BY cat_key, audit_area_id, risk_category_id
+      `,
+      [assessmentIds, firstYearId]
+    );
+
+    const rows = [];
+    let tot_weighted_score = 0;
+
+    for (const dbRow of aggregationResult.rows) {
+      const catKey = String(dbRow.cat_key);
+      const broaderAreaId = Number(dbRow.audit_area_id);
+      const riskCatId = Number(dbRow.risk_category_id);
+
+      if (!broaderAreaId || !riskCatId) continue;
+
+      const rc = riskCategories.find((r) => Number(r.id) === riskCatId);
+      const title = rc ? String(rc.title).toUpperCase() : `Risk #${riskCatId}`;
+      const riskWeight = rc ? Number(rc.risk_weight || 0) : 0;
+
+      // Sum totals
+      const qual_tot =
+        dbRow.qual_1_1 + dbRow.qual_1_2 + dbRow.qual_1_3 +
+        dbRow.qual_2_1 + dbRow.qual_2_2 + dbRow.qual_2_3 +
+        dbRow.qual_3_1 + dbRow.qual_3_2 + dbRow.qual_3_3;
+
+      const quan_tot =
+        dbRow.quan_1_1 + dbRow.quan_1_2 + dbRow.quan_1_3 +
+        dbRow.quan_2_1 + dbRow.quan_2_2 + dbRow.quan_2_3 +
+        dbRow.quan_3_1 + dbRow.quan_3_2 + dbRow.quan_3_3;
+
+      if (qual_tot === 0 && quan_tot === 0) {
+        continue; // Skip blank rows
+      }
+
+      const total_qual_quan = qual_tot + quan_tot;
+
+      // no_of_acc_checked
+      let no_of_acc_checked = 0;
+      if (catKey === 'deposits') {
+        no_of_acc_checked = totalDepositsSampling + dbRow.total_annex;
+      } else if (catKey === 'advances') {
+        no_of_acc_checked = totalAdvancesSampling + dbRow.total_annex;
+      } else {
+        no_of_acc_checked = dbRow.total_annex;
+      }
+
+      // avg_quan_score
+      const avg_quan_score = quan_tot > 0
+        ? (quan_tot / (no_of_acc_checked || 1))
+        : 0;
+
+      // tot_avg_score
+      const tot_avg_score = qual_tot + avg_quan_score;
+
+      // avg_tot_score_per_audit
+      const avg_tot_score_per_audit = tot_avg_score / assessmentIds.length;
+
+      // weighted_score
+      const weighted_score = riskWeight * avg_tot_score_per_audit;
+
+      tot_weighted_score += weighted_score;
+
+      rows.push({
+        branch_code: branchInfo.audit_unit_code,
+        branch_name: branchInfo.name,
+        risk_type: title,
+        category_name: catKey.toUpperCase(),
+        broader_area_name: broaderAreasMap.get(broaderAreaId) || `Area #${broaderAreaId}`,
+
+        qual_1_1: dbRow.qual_1_1 || 0,
+        qual_1_2: dbRow.qual_1_2 || 0,
+        qual_1_3: dbRow.qual_1_3 || 0,
+        quan_1_1: dbRow.quan_1_1 || 0,
+        quan_1_2: dbRow.quan_1_2 || 0,
+        quan_1_3: dbRow.quan_1_3 || 0,
+
+        qual_2_1: dbRow.qual_2_1 || 0,
+        qual_2_2: dbRow.qual_2_2 || 0,
+        qual_2_3: dbRow.qual_2_3 || 0,
+        quan_2_1: dbRow.quan_2_1 || 0,
+        quan_2_2: dbRow.quan_2_2 || 0,
+        quan_2_3: dbRow.quan_2_3 || 0,
+
+        qual_3_1: dbRow.qual_3_1 || 0,
+        qual_3_2: dbRow.qual_3_2 || 0,
+        qual_3_3: dbRow.qual_3_3 || 0,
+        quan_3_1: dbRow.quan_3_1 || 0,
+        quan_3_2: dbRow.quan_3_2 || 0,
+        quan_3_3: dbRow.quan_3_3 || 0,
+
+        qual_tot: this.formatDecimal(qual_tot, 2),
+        quan_tot: this.formatDecimal(quan_tot, 2),
+        total_qual_quan: this.formatDecimal(total_qual_quan, 2),
+        acc_non_compliant: dbRow.acc_non_compliant,
+        no_of_acc_checked: no_of_acc_checked,
+        avg_quan_score: this.formatDecimal(avg_quan_score, 2),
+        tot_avg_score: this.formatDecimal(tot_avg_score, 2),
+        no_of_audit_conduct: assessmentIds.length,
+        avg_tot_score_per_audit: this.formatDecimal(avg_tot_score_per_audit, 2),
+        risk_weight: riskWeight,
+        weighted_score: this.formatDecimal(weighted_score, 2),
+        __broader_area_id: broaderAreaId,
+        __risk_cat_id: riskCatId,
+      });
+    }
+
+    // Sort matching legacy looping hierarchy
+    const catOrder = { GENERAL: 1, DEPOSITS: 2, ADVANCES: 3 };
+    rows.sort((a, b) => {
+      const catDiff = (catOrder[a.category_name] || 99) - (catOrder[b.category_name] || 99);
+      if (catDiff !== 0) return catDiff;
+      const areaDiff = a.__broader_area_id - b.__broader_area_id;
+      if (areaDiff !== 0) return areaDiff;
+      return a.__risk_cat_id - b.__risk_cat_id;
+    });
+
+    return {
+      filters: {
+        selectSearchTypeFilter: searchType,
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: String(assessmentId),
+        startDate: startDate || '',
+        endDate: endDate || '',
+        rmv_pending_assesments: removePending ? ['1'] : [],
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      header: {
+        assessmentPeriod: searchType === '3' || searchType === '4'
+          ? `${this.dateOnly(assessments[0].assesment_period_from)} to ${this.dateOnly(assessments[0].assesment_period_to)}`
+          : `${startDate} to ${endDate}`,
+        auditUnit: branchInfo.name,
+      },
+      rows,
+      summary: {
+        total: this.formatDecimal(tot_weighted_score, 2),
+      },
+    };
   }
 
   async getAuditStatusExpiredReport(query: any) {
