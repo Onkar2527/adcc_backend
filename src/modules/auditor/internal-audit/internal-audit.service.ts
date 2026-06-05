@@ -3726,6 +3726,16 @@ export class InternalAuditService {
                       WHERE assesment_id = $1
                           AND audit_status_id = 3
                           AND deleted_at IS NULL)
+                  +
+                  (SELECT COUNT(*) FROM executive_summary_branch_position
+                      WHERE assesment_id = $1
+                          AND audit_status_id = 3
+                          AND deleted_at IS NULL)
+                  +
+                  (SELECT COUNT(*) FROM executive_summary_fresh_accounts
+                      WHERE assesment_id = $1
+                          AND audit_status_id = 3
+                          AND deleted_at IS NULL)
               )::int AS rejected_count,
               (
                   SELECT COUNT(*)
