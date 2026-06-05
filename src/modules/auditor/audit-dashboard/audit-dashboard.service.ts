@@ -1064,50 +1064,113 @@ LIMIT 1;
         }
 
         if (!data.esb_id) {
-            const [depositsResult, advancesResult] = await Promise.all([
+            const [bpDeposits, bpAdvances, faDeposits, faAdvances] = await Promise.all([
+                // Deposits for Branch Position (Balances of all accounts)
                 this.db.query(
                     `
 SELECT 
   sm.scheme_code,
-  sm.category_id,
-  SUM(COALESCE(dd.balance::numeric, 0)) AS total_balance,
+  SUM(COALESCE(dd.balance::numeric, 0)) AS total_balance
+FROM dump_deposits dd
+LEFT JOIN scheme_master sm ON sm.id = dd.scheme_id
+WHERE dd.branch_id = $1 
+  AND dd.deleted_at IS NULL
+GROUP BY sm.scheme_code;
+                    `,
+                    [data.audit_unit_id]
+                ),
+                // Advances for Branch Position (Balances of all accounts)
+                this.db.query(
+                    `
+SELECT 
+  sm.scheme_code,
+  da.npa_status,
+  SUM(COALESCE(da.outstanding_balance::numeric, 0)) AS total_balance
+FROM dump_advances da
+LEFT JOIN scheme_master sm ON sm.id = da.scheme_id
+WHERE da.branch_id = $1 
+  AND da.deleted_at IS NULL
+GROUP BY sm.scheme_code, da.npa_status;
+                    `,
+                    [data.audit_unit_id]
+                ),
+                // Deposits for Fresh Accounts (New accounts count)
+                this.db.query(
+                    `
+SELECT 
+  sm.scheme_code,
   COUNT(dd.account_no) AS total_accounts
 FROM dump_deposits dd
 LEFT JOIN scheme_master sm ON sm.id = dd.scheme_id
 WHERE dd.branch_id = $1 
   AND dd.account_opening_date BETWEEN $2 AND $3
   AND dd.deleted_at IS NULL
-GROUP BY sm.scheme_code, sm.category_id;
+GROUP BY sm.scheme_code;
                     `,
                     [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
                 ),
+                // Advances for Fresh Accounts (New accounts count)
                 this.db.query(
                     `
 SELECT 
   sm.scheme_code,
-  sm.category_id,
   da.npa_status,
-  SUM(COALESCE(da.outstanding_balance::numeric, 0)) AS total_balance,
   COUNT(da.account_no) AS total_accounts
 FROM dump_advances da
 LEFT JOIN scheme_master sm ON sm.id = da.scheme_id
 WHERE da.branch_id = $1 
   AND da.account_opening_date BETWEEN $2 AND $3
   AND da.deleted_at IS NULL
-GROUP BY sm.scheme_code, sm.category_id, da.npa_status;
+GROUP BY sm.scheme_code, da.npa_status;
                     `,
                     [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
                 )
             ]);
 
+            const depositSchemes = new Map<string, { balance: number; accounts: number }>();
+            for (const row of bpDeposits.rows) {
+                const code = String(row.scheme_code || '').trim();
+                if (code) {
+                    depositSchemes.set(code, { balance: Number(row.total_balance || 0), accounts: 0 });
+                }
+            }
+            for (const row of faDeposits.rows) {
+                const code = String(row.scheme_code || '').trim();
+                if (code) {
+                    const existing = depositSchemes.get(code) || { balance: 0, accounts: 0 };
+                    existing.accounts = Number(row.total_accounts || 0);
+                    depositSchemes.set(code, existing);
+                }
+            }
+
+            const advanceSchemes = new Map<string, { balance: number; accounts: number }>();
+            for (const row of bpAdvances.rows) {
+                const code = String(row.scheme_code || '').trim();
+                if (!code) continue;
+                const isNpa = !['STD', 'SB_STD', 'N'].includes(String(row.npa_status || '').trim().toUpperCase());
+                const dbTypeId = isNpa ? `${code}_NPA` : code;
+                const existing = advanceSchemes.get(dbTypeId) || { balance: 0, accounts: 0 };
+                existing.balance += Number(row.total_balance || 0);
+                advanceSchemes.set(dbTypeId, existing);
+            }
+            for (const row of faAdvances.rows) {
+                const code = String(row.scheme_code || '').trim();
+                if (!code) continue;
+                const isNpa = !['STD', 'SB_STD', 'N'].includes(String(row.npa_status || '').trim().toUpperCase());
+                const dbTypeId = isNpa ? `${code}_NPA` : code;
+                const existing = advanceSchemes.get(dbTypeId) || { balance: 0, accounts: 0 };
+                existing.accounts += Number(row.total_accounts || 0);
+                advanceSchemes.set(dbTypeId, existing);
+            }
+
             await this.db.transaction(async (client) => {
                 await client.query(
-                    `DELETE FROM executive_summary_branch_position WHERE assesment_id = $1 AND year_id = $2`,
-                    [assessment_id, data.year_id]
+                    `DELETE FROM executive_summary_branch_position WHERE assesment_id = $1`,
+                    [assessment_id]
                 );
                 await client.query(
-                    `DELETE FROM executive_summary_fresh_accounts WHERE assesment_id = $1 AND year_id = $2`,
-                    [assessment_id, data.year_id]
+                    `DELETE FROM executive_summary_fresh_accounts WHERE assesment_id = $1`,
+                    [assessment_id]
                 );
                 await client.query(
                     `
@@ -1125,13 +1188,7 @@ VALUES ($1, $2, null, '0', '0', $3, NOW());
                     [data.year_id, assessment_id, employeeId]
                 );
 
-                for (const row of depositsResult.rows) {
-                    const schemeCode = String(row.scheme_code || '').trim();
-                    if (!schemeCode) continue;
-                    const balance = Number(row.total_balance || 0);
-                    const accounts = Number(row.total_accounts || 0);
-
-                    // Insert into branch_position (type_id = schemeCode)
+                for (const [schemeCode, val] of depositSchemes.entries()) {
                     await client.query(
                         `INSERT INTO executive_summary_branch_position (
                             year_id, assesment_id, type_id, amount,
@@ -1140,10 +1197,9 @@ VALUES ($1, $2, null, '0', '0', $3, NOW());
                             compliance_emp_id, compliance_status_id,
                             compliance_reviewer_emp_id, batch_key, created_at
                         ) VALUES ($1, $2, $3, $4, 4, 4, 1, 1, $5, 0, 0, 0, 0, $6, NOW());`,
-                        [data.year_id, assessment_id, schemeCode, String(balance), employeeId, data.batch_key]
+                        [data.year_id, assessment_id, schemeCode, String(val.balance), employeeId, data.batch_key]
                     );
 
-                    // Insert into fresh_accounts (type_id = schemeCode)
                     await client.query(
                         `INSERT INTO executive_summary_fresh_accounts (
                             year_id, assesment_id, type_id, accounts,
@@ -1152,20 +1208,11 @@ VALUES ($1, $2, null, '0', '0', $3, NOW());
                             compliance_emp_id, compliance_status_id,
                             compliance_reviewer_emp_id, batch_key, created_at
                         ) VALUES ($1, $2, $3, $4, 4, 4, 1, 1, $5, 0, 0, 0, 0, $6, NOW());`,
-                        [data.year_id, assessment_id, schemeCode, String(accounts), employeeId, data.batch_key]
+                        [data.year_id, assessment_id, schemeCode, String(val.accounts), employeeId, data.batch_key]
                     );
                 }
 
-                for (const row of advancesResult.rows) {
-                    const schemeCode = String(row.scheme_code || '').trim();
-                    if (!schemeCode) continue;
-                    const balance = Number(row.total_balance || 0);
-                    const accounts = Number(row.total_accounts || 0);
-                    const isNpa = !['STD', 'SB_STD', 'N'].includes(String(row.npa_status || '').trim().toUpperCase());
-
-                    const dbTypeId = isNpa ? `${schemeCode}_NPA` : schemeCode;
-
-                    // Insert into branch_position
+                for (const [dbTypeId, val] of advanceSchemes.entries()) {
                     await client.query(
                         `INSERT INTO executive_summary_branch_position (
                             year_id, assesment_id, type_id, amount,
@@ -1174,10 +1221,9 @@ VALUES ($1, $2, null, '0', '0', $3, NOW());
                             compliance_emp_id, compliance_status_id,
                             compliance_reviewer_emp_id, batch_key, created_at
                         ) VALUES ($1, $2, $3, $4, 4, 4, 1, 1, $5, 0, 0, 0, 0, $6, NOW());`,
-                        [data.year_id, assessment_id, dbTypeId, String(balance), employeeId, data.batch_key]
+                        [data.year_id, assessment_id, dbTypeId, String(val.balance), employeeId, data.batch_key]
                     );
 
-                    // Insert into fresh_accounts
                     await client.query(
                         `INSERT INTO executive_summary_fresh_accounts (
                             year_id, assesment_id, type_id, accounts,
@@ -1186,7 +1232,7 @@ VALUES ($1, $2, null, '0', '0', $3, NOW());
                             compliance_emp_id, compliance_status_id,
                             compliance_reviewer_emp_id, batch_key, created_at
                         ) VALUES ($1, $2, $3, $4, 4, 4, 1, 1, $5, 0, 0, 0, 0, $6, NOW());`,
-                        [data.year_id, assessment_id, dbTypeId, String(accounts), employeeId, data.batch_key]
+                        [data.year_id, assessment_id, dbTypeId, String(val.accounts), employeeId, data.batch_key]
                     );
                 }
             });
@@ -1206,16 +1252,15 @@ VALUES ($1, $2, null, '0', '0', $3, NOW());
 SELECT
     type_id,
     amount,
+    year_id,
     audit_status_id AS review_action,
     audit_reviewer_comment AS reviewer_comment
 FROM executive_summary_branch_position
 WHERE assesment_id = $1
-    AND year_id = $2
     AND deleted_at IS NULL;
                     `,
                     [
                         assessment_id,
-                        data.year_id,
                     ],
                 ),
                 this.db.query(
@@ -1223,16 +1268,15 @@ WHERE assesment_id = $1
 SELECT
     type_id,
     accounts,
+    year_id,
     audit_status_id AS review_action,
     audit_reviewer_comment AS reviewer_comment
 FROM executive_summary_fresh_accounts
 WHERE assesment_id = $1
-    AND year_id = $2
     AND deleted_at IS NULL;
                     `,
                     [
                         assessment_id,
-                        data.year_id,
                     ],
                 ),
                 this.db.query(
@@ -1251,6 +1295,18 @@ WHERE audit_unit_id = $1
                     ],
                 ),
             ]);
+
+        const deduplicate = (rows: any[], targetYearId: number) => {
+            const map = new Map<string, any>();
+            for (const row of rows) {
+                const key = String(row.type_id).trim();
+                const existing = map.get(key);
+                if (!existing || Number(row.year_id) === Number(targetYearId)) {
+                    map.set(key, row);
+                }
+            }
+            return Array.from(map.values());
+        };
 
         return {
             year_id:
@@ -1298,7 +1354,7 @@ WHERE audit_unit_id = $1
                 this.getFinancialYear(),
 
             branch_positions:
-                branchPositions.rows.map((row: any) => ({
+                deduplicate(branchPositions.rows, data.year_id).map((row: any) => ({
                     type_id: row.type_id,
                     amount: row.amount,
                     review_action: row.review_action,
@@ -1306,7 +1362,7 @@ WHERE audit_unit_id = $1
                 })),
 
             fresh_accounts:
-                freshAccounts.rows.map((row: any) => ({
+                deduplicate(freshAccounts.rows, data.year_id).map((row: any) => ({
                     type_id: row.type_id,
                     accounts: row.accounts,
                     review_action: row.review_action,
@@ -1550,11 +1606,10 @@ LIMIT 1;
 SELECT id
 FROM executive_summary_basic_details
 WHERE assesment_id = $1
-    AND year_id = $2
     AND deleted_at IS NULL
 LIMIT 1;
                 `,
-                [assessmentId, assessment.year_id],
+                [assessmentId],
             );
 
             if (existing.rows.length) {
@@ -1566,14 +1621,16 @@ SET
     staff_count = $2,
     manual_challans_per_day = $3,
     admin_id = $4,
+    year_id = $5,
     updated_at = NOW()
-WHERE id = $5;
+WHERE id = $6;
                     `,
                     [
                         reportDate,
                         staffCount,
                         challanCount,
                         employeeId,
+                        assessment.year_id,
                         existing.rows[0].id,
                     ],
                 );
@@ -1665,22 +1722,22 @@ LIMIT 1;
             // 1. Fetch all existing branch positions and fresh accounts in parallel
             const [existingBpRes, existingFaRes] = await Promise.all([
                 client.query(
-                    `SELECT id, type_id, amount, business_risk, control_risk, risk_type, audit_comment, audit_emp_id, 
+                    `SELECT id, type_id, amount, year_id, business_risk, control_risk, risk_type, audit_comment, audit_emp_id, 
                             audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment, audit_commpliance, 
                             compliance_emp_id, compliance_status_id, compliance_reviewer_emp_id, 
                             compliance_reviewer_comment, batch_key, created_at, updated_at
                      FROM executive_summary_branch_position
-                     WHERE assesment_id = $1 AND year_id = $2 AND deleted_at IS NULL`,
-                    [assessmentId, assessment.year_id]
+                     WHERE assesment_id = $1 AND deleted_at IS NULL`,
+                    [assessmentId]
                 ),
                 client.query(
-                    `SELECT id, type_id, accounts, business_risk, control_risk, risk_type, audit_comment, audit_emp_id, 
+                    `SELECT id, type_id, accounts, year_id, business_risk, control_risk, risk_type, audit_comment, audit_emp_id, 
                             audit_status_id, audit_reviewer_emp_id, audit_reviewer_comment, audit_commpliance, 
                             compliance_emp_id, compliance_status_id, compliance_reviewer_emp_id, 
                             compliance_reviewer_comment, batch_key, created_at, updated_at
                      FROM executive_summary_fresh_accounts
-                     WHERE assesment_id = $1 AND year_id = $2 AND deleted_at IS NULL`,
-                    [assessmentId, assessment.year_id]
+                     WHERE assesment_id = $1 AND deleted_at IS NULL`,
+                    [assessmentId]
                 )
             ]);
 
@@ -1693,11 +1750,13 @@ LIMIT 1;
                 amounts: string[];
                 empIds: number[];
                 batchKeys: string[];
+                yearIds: number[];
             } = {
                 ids: [],
                 amounts: [],
                 empIds: [],
                 batchKeys: [],
+                yearIds: [],
             };
 
             const bpTimelines: {
@@ -1786,31 +1845,37 @@ LIMIT 1;
                         continue;
                     }
 
-                    if (Number(old.amount) !== Number(row.amount)) {
-                        bpTimelines.esbp_ids.push(Number(old.id));
-                        bpTimelines.assessment_ids.push(assessmentId);
-                        bpTimelines.last_updated_ats.push(old.updated_at || old.created_at || new Date());
-                        bpTimelines.answer_types.push(row.type_id);
-                        bpTimelines.amounts.push(String(old.amount));
-                        bpTimelines.business_risks.push(Number(old.business_risk || 4));
-                        bpTimelines.control_risks.push(Number(old.control_risk || 4));
-                        bpTimelines.risk_types.push(Number(old.risk_type || 1));
-                        bpTimelines.audit_comments.push(old.audit_comment || '');
-                        bpTimelines.audit_emp_ids.push(Number(old.audit_emp_id || 0));
-                        bpTimelines.audit_status_ids.push(Number(old.audit_status_id || 1));
-                        bpTimelines.audit_reviewer_emp_ids.push(Number(old.audit_reviewer_emp_id || 0));
-                        bpTimelines.audit_reviewer_comments.push(old.audit_reviewer_comment || '');
-                        bpTimelines.audit_compliances.push(old.audit_commpliance || '');
-                        bpTimelines.compliance_emp_ids.push(Number(old.compliance_emp_id || 0));
-                        bpTimelines.compliance_status_ids.push(Number(old.compliance_status_id || 0));
-                        bpTimelines.compliance_reviewer_emp_ids.push(Number(old.compliance_reviewer_emp_id || 0));
-                        bpTimelines.compliance_reviewer_comments.push(old.compliance_reviewer_comment || '');
-                        bpTimelines.batch_keys.push(old.batch_key || '');
+                    const amountChanged = Number(old.amount) !== Number(row.amount);
+                    const yearChanged = Number(old.year_id) !== Number(assessment.year_id);
+
+                    if (amountChanged || yearChanged) {
+                        if (amountChanged) {
+                            bpTimelines.esbp_ids.push(Number(old.id));
+                            bpTimelines.assessment_ids.push(assessmentId);
+                            bpTimelines.last_updated_ats.push(old.updated_at || old.created_at || new Date());
+                            bpTimelines.answer_types.push(row.type_id);
+                            bpTimelines.amounts.push(String(old.amount));
+                            bpTimelines.business_risks.push(Number(old.business_risk || 4));
+                            bpTimelines.control_risks.push(Number(old.control_risk || 4));
+                            bpTimelines.risk_types.push(Number(old.risk_type || 1));
+                            bpTimelines.audit_comments.push(old.audit_comment || '');
+                            bpTimelines.audit_emp_ids.push(Number(old.audit_emp_id || 0));
+                            bpTimelines.audit_status_ids.push(Number(old.audit_status_id || 1));
+                            bpTimelines.audit_reviewer_emp_ids.push(Number(old.audit_reviewer_emp_id || 0));
+                            bpTimelines.audit_reviewer_comments.push(old.audit_reviewer_comment || '');
+                            bpTimelines.audit_compliances.push(old.audit_commpliance || '');
+                            bpTimelines.compliance_emp_ids.push(Number(old.compliance_emp_id || 0));
+                            bpTimelines.compliance_status_ids.push(Number(old.compliance_status_id || 0));
+                            bpTimelines.compliance_reviewer_emp_ids.push(Number(old.compliance_reviewer_emp_id || 0));
+                            bpTimelines.compliance_reviewer_comments.push(old.compliance_reviewer_comment || '');
+                            bpTimelines.batch_keys.push(old.batch_key || '');
+                        }
 
                         bpUpdates.ids.push(Number(old.id));
                         bpUpdates.amounts.push(String(row.amount));
                         bpUpdates.empIds.push(employeeId);
                         bpUpdates.batchKeys.push(assessment.batch_key);
+                        bpUpdates.yearIds.push(Number(assessment.year_id));
                     }
                 } else {
                     if (assessmentStatusId === 3) {
@@ -1880,17 +1945,19 @@ LIMIT 1;
                         amount = val.amount,
                         audit_emp_id = val.audit_emp_id,
                         batch_key = val.batch_key,
+                        year_id = val.year_id,
                         updated_at = NOW()
                     FROM (
-                        SELECT * FROM UNNEST($1::bigint[], $2::varchar[], $3::bigint[], $4::varchar[]) 
-                        AS t(id, amount, audit_emp_id, batch_key)
+                        SELECT * FROM UNNEST($1::bigint[], $2::varchar[], $3::bigint[], $4::varchar[], $5::bigint[]) 
+                        AS t(id, amount, audit_emp_id, batch_key, year_id)
                     ) AS val
                     WHERE bp.id = val.id`,
                     [
                         bpUpdates.ids,
                         bpUpdates.amounts,
                         bpUpdates.empIds,
-                        bpUpdates.batchKeys
+                        bpUpdates.batchKeys,
+                        bpUpdates.yearIds,
                     ]
                 );
             }
@@ -1939,11 +2006,13 @@ LIMIT 1;
                 accounts: string[];
                 empIds: number[];
                 batchKeys: string[];
+                yearIds: number[];
             } = {
                 ids: [],
                 accounts: [],
                 empIds: [],
                 batchKeys: [],
+                yearIds: [],
             };
 
             const faTimelines: {
@@ -2032,31 +2101,37 @@ LIMIT 1;
                         continue;
                     }
 
-                    if (Number(old.accounts) !== Number(row.accounts)) {
-                        faTimelines.esfa_ids.push(Number(old.id));
-                        faTimelines.assessment_ids.push(assessmentId);
-                        faTimelines.last_updated_ats.push(old.updated_at || old.created_at || new Date());
-                        faTimelines.answer_types.push(row.type_id);
-                        faTimelines.accounts.push(String(old.accounts));
-                        faTimelines.business_risks.push(Number(old.business_risk || 4));
-                        faTimelines.control_risks.push(Number(old.control_risk || 4));
-                        faTimelines.risk_types.push(Number(old.risk_type || 1));
-                        faTimelines.audit_comments.push(old.audit_comment || '');
-                        faTimelines.audit_emp_ids.push(Number(old.audit_emp_id || 0));
-                        faTimelines.audit_status_ids.push(Number(old.audit_status_id || 1));
-                        faTimelines.audit_reviewer_emp_ids.push(Number(old.audit_reviewer_emp_id || 0));
-                        faTimelines.audit_reviewer_comments.push(old.audit_reviewer_comment || '');
-                        faTimelines.audit_compliances.push(old.audit_commpliance || '');
-                        faTimelines.compliance_emp_ids.push(Number(old.compliance_emp_id || 0));
-                        faTimelines.compliance_status_ids.push(Number(old.compliance_status_id || 0));
-                        faTimelines.compliance_reviewer_emp_ids.push(Number(old.compliance_reviewer_emp_id || 0));
-                        faTimelines.compliance_reviewer_comments.push(old.compliance_reviewer_comment || '');
-                        faTimelines.batch_keys.push(old.batch_key || '');
+                    const accountsChanged = Number(old.accounts) !== Number(row.accounts);
+                    const yearChanged = Number(old.year_id) !== Number(assessment.year_id);
+
+                    if (accountsChanged || yearChanged) {
+                        if (accountsChanged) {
+                            faTimelines.esfa_ids.push(Number(old.id));
+                            faTimelines.assessment_ids.push(assessmentId);
+                            faTimelines.last_updated_ats.push(old.updated_at || old.created_at || new Date());
+                            faTimelines.answer_types.push(row.type_id);
+                            faTimelines.accounts.push(String(old.accounts));
+                            faTimelines.business_risks.push(Number(old.business_risk || 4));
+                            faTimelines.control_risks.push(Number(old.control_risk || 4));
+                            faTimelines.risk_types.push(Number(old.risk_type || 1));
+                            faTimelines.audit_comments.push(old.audit_comment || '');
+                            faTimelines.audit_emp_ids.push(Number(old.audit_emp_id || 0));
+                            faTimelines.audit_status_ids.push(Number(old.audit_status_id || 1));
+                            faTimelines.audit_reviewer_emp_ids.push(Number(old.audit_reviewer_emp_id || 0));
+                            faTimelines.audit_reviewer_comments.push(old.audit_reviewer_comment || '');
+                            faTimelines.audit_compliances.push(old.audit_commpliance || '');
+                            faTimelines.compliance_emp_ids.push(Number(old.compliance_emp_id || 0));
+                            faTimelines.compliance_status_ids.push(Number(old.compliance_status_id || 0));
+                            faTimelines.compliance_reviewer_emp_ids.push(Number(old.compliance_reviewer_emp_id || 0));
+                            faTimelines.compliance_reviewer_comments.push(old.compliance_reviewer_comment || '');
+                            faTimelines.batch_keys.push(old.batch_key || '');
+                        }
 
                         faUpdates.ids.push(Number(old.id));
                         faUpdates.accounts.push(String(row.accounts));
                         faUpdates.empIds.push(employeeId);
                         faUpdates.batchKeys.push(assessment.batch_key);
+                        faUpdates.yearIds.push(Number(assessment.year_id));
                     }
                 } else {
                     if (assessmentStatusId === 3) {
@@ -2126,17 +2201,19 @@ LIMIT 1;
                         accounts = val.accounts,
                         audit_emp_id = val.audit_emp_id,
                         batch_key = val.batch_key,
+                        year_id = val.year_id,
                         updated_at = NOW()
                     FROM (
-                        SELECT * FROM UNNEST($1::bigint[], $2::varchar[], $3::bigint[], $4::varchar[]) 
-                        AS t(id, accounts, audit_emp_id, batch_key)
+                        SELECT * FROM UNNEST($1::bigint[], $2::varchar[], $3::bigint[], $4::varchar[], $5::bigint[]) 
+                        AS t(id, accounts, audit_emp_id, batch_key, year_id)
                     ) AS val
                     WHERE fa.id = val.id`,
                     [
                         faUpdates.ids,
                         faUpdates.accounts,
                         faUpdates.empIds,
-                        faUpdates.batchKeys
+                        faUpdates.batchKeys,
+                        faUpdates.yearIds,
                     ]
                 );
             }
@@ -2237,6 +2314,25 @@ LIMIT 1;
     async getBranchFinancialPosition(
         branch_id: number,
     ) {
+        const latestAssessment = await this.db.findOne(
+            `
+            SELECT id, year_id, assesment_period_from, assesment_period_to
+            FROM audit_assesment_master
+            WHERE audit_unit_id = $1
+              AND deleted_at IS NULL
+            ORDER BY id DESC
+            LIMIT 1
+            `,
+            [branch_id]
+        );
+
+        if (!latestAssessment) {
+            return [];
+        }
+
+        const assessmentId = Number(latestAssessment.id);
+        const prevYearId = Number(latestAssessment.year_id) - 1;
+
         const result = await this.db.query(
             `
 SELECT
@@ -2257,17 +2353,14 @@ FROM (
         COUNT(dd.account_no) AS total_accounts,
         SUM(COALESCE(dd.balance::numeric, 0)) AS total_amount
     FROM dump_deposits dd
-    INNER JOIN audit_assesment_master aam
-        ON aam.audit_unit_id = dd.branch_id
     LEFT JOIN scheme_master sm
         ON sm.id = dd.scheme_id
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = dd.branch_id
-        AND es.year_id = (aam.year_id - 1)
+        AND es.year_id = $2
         AND es.gl_type_id = CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
     WHERE
         dd.branch_id = $1
-        AND dd.account_opening_date BETWEEN aam.assesment_period_from AND aam.assesment_period_to
         AND dd.deleted_at IS NULL
     GROUP BY
         sm.scheme_code,
@@ -2284,23 +2377,78 @@ FROM (
         COUNT(da.account_no) AS total_accounts,
         SUM(COALESCE(da.outstanding_balance::numeric, 0)) AS total_amount
     FROM dump_advances da
-    INNER JOIN audit_assesment_master aam
-        ON aam.audit_unit_id = da.branch_id
     LEFT JOIN scheme_master sm
         ON sm.id = da.scheme_id
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = da.branch_id
-        AND es.year_id = (aam.year_id - 1)
+        AND es.year_id = $2
         AND es.gl_type_id = CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
     WHERE
-        da.branch_id = $2
-        AND da.account_opening_date BETWEEN aam.assesment_period_from AND aam.assesment_period_to
+        da.branch_id = $1
         AND da.deleted_at IS NULL
     GROUP BY
         sm.scheme_code,
         sm.name,
         sm.category_id,
         es.march_position
+        
+    UNION ALL
+    
+    SELECT
+        CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+        sm.scheme_code,
+        sm.name AS scheme_name,
+        CASE 
+            WHEN cm.linked_table_id = 1 THEN
+                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+            ELSE
+                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+        END AS category_id,
+        es.march_position,
+        0 AS total_accounts,
+        0 AS total_amount
+    FROM executive_summary_branch_position bp
+    INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(bp.type_id, '_NPA', '')
+    LEFT JOIN category_master cm ON cm.id = sm.category_id
+    LEFT JOIN exe_summary es
+        ON es.audit_unit_id = $1
+        AND es.year_id = $2
+        AND es.gl_type_id = CASE 
+            WHEN cm.linked_table_id = 1 THEN
+                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+            ELSE
+                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+        END
+    WHERE bp.assesment_id = $3 AND bp.deleted_at IS NULL
+    
+    UNION ALL
+    
+    SELECT
+        CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+        sm.scheme_code,
+        sm.name AS scheme_name,
+        CASE 
+            WHEN cm.linked_table_id = 1 THEN
+                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+            ELSE
+                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+        END AS category_id,
+        es.march_position,
+        0 AS total_accounts,
+        0 AS total_amount
+    FROM executive_summary_fresh_accounts fa
+    INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(fa.type_id, '_NPA', '')
+    LEFT JOIN category_master cm ON cm.id = sm.category_id
+    LEFT JOIN exe_summary es
+        ON es.audit_unit_id = $1
+        AND es.year_id = $2
+        AND es.gl_type_id = CASE 
+            WHEN cm.linked_table_id = 1 THEN
+                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+            ELSE
+                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+        END
+    WHERE fa.assesment_id = $3 AND fa.deleted_at IS NULL
 ) x
 GROUP BY
     scheme_type,
@@ -2313,7 +2461,8 @@ ORDER BY
             `,
             [
                 branch_id,
-                branch_id,
+                prevYearId,
+                assessmentId,
             ],
         );
 

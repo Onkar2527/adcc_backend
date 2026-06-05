@@ -76,6 +76,14 @@ export class ReportsService {
       return this.getBroaderAreaWiseScoringDefinition();
     }
 
+    if (reportSlug === 'executive-summary-audit-report') {
+      return this.getExecutiveSummaryDefinition(false);
+    }
+
+    if (reportSlug === 'executive-summary-compliance-report') {
+      return this.getExecutiveSummaryDefinition(true);
+    }
+
     throw new NotFoundException('Report is not implemented yet');
   }
 
@@ -850,6 +858,14 @@ export class ReportsService {
 
     if (reportSlug === 'broader-areawise-scoring-report') {
       return this.getBroaderAreaWiseScoringReport(query);
+    }
+
+    if (reportSlug === 'executive-summary-audit-report') {
+      return this.getExecutiveSummaryReport(query, false);
+    }
+
+    if (reportSlug === 'executive-summary-compliance-report') {
+      return this.getExecutiveSummaryReport(query, true);
     }
 
     if (reportSlug === 'audit-status-expired-report') {
@@ -3381,5 +3397,325 @@ export class ReportsService {
     }
 
     return String(value).slice(0, 10);
+  }
+
+  private async getExecutiveSummaryDefinition(isCompliance: boolean) {
+    const lookups = isCompliance
+      ? await this.getComplianceLookups()
+      : await this.getAuditCompleteLookups();
+
+    const slug = isCompliance
+      ? 'executive-summary-compliance-report'
+      : 'executive-summary-audit-report';
+
+    const title = isCompliance
+      ? 'Executive Summary Compliance Report'
+      : 'Executive Summary Audit Report';
+
+    const fileName = isCompliance
+      ? 'executive-summary-compliance-report'
+      : 'executive-summary-audit-report';
+
+    return {
+      slug,
+      title,
+      category: 'Audit Reports',
+      page: 'A4L',
+      fileName,
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        reportAuditUnit: '',
+        reportAuditAssesment: '',
+      },
+      filters: [
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Branch',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Select Audit Assessment',
+          type: 'select',
+          required: true,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+      ],
+      columns: [],
+    };
+  }
+
+  async getExecutiveSummaryReport(query: any, isCompliance: boolean) {
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if (!assessmentId) {
+      throw new BadRequestException('Audit assessment is required');
+    }
+
+    const assessmentQuery = `
+      SELECT 
+        aam.id,
+        aam.year_id,
+        aam.audit_unit_id,
+        aam.frequency,
+        aam.assesment_period_from,
+        aam.assesment_period_to,
+        aam.audit_start_date,
+        aam.audit_end_date,
+        aam.compliance_due_date,
+        aam.compliance_end_date,
+        aam.audit_status_id,
+        ym.year AS financial_year,
+        aum.name AS branch_name,
+        aum.audit_unit_code AS branch_code,
+        (
+            aam.audit_end_date::date
+            -
+            aam.audit_start_date::date
+        ) AS audit_duration_days,
+        branch_manager.name AS branch_manager_name,
+        branch_assitant_manager.name AS branch_assistant_manager,
+        auditor_name.name AS auditor_name,
+        td.deposit_target AS deposit_target,
+        td.advances_target AS advances_target,
+        td.npa_target AS npa_target,
+        esb.id AS esb_id,
+        esb.report_submitted_date AS report_submitted_date,
+        esb.staff_count As staff_count,
+        esb.manual_challans_per_day as manual_challans_per_day
+      FROM audit_assesment_master aam
+      LEFT JOIN audit_unit_master aum
+          ON aum.id = aam.audit_unit_id
+      LEFT JOIN year_master ym
+          ON ym.id = aam.year_id
+      LEFT JOIN employee_master auditor
+          ON auditor.id = aam.audit_emp_id
+      LEFT JOIN employee_master review
+          ON review.id = aam.audit_review_emp_id
+      LEFT JOIN employee_master branch_manager
+          ON branch_manager.id = aam.branch_head_id
+      LEFT JOIN employee_master branch_assitant_manager
+          ON branch_assitant_manager.id = aam.branch_subhead_id
+      LEFT JOIN employee_master auditor_name
+          ON auditor_name.id = aam.audit_head_id
+      LEFT JOIN target_details td
+          ON td.audit_unit_id = aam.audit_unit_id
+          AND td.year_id = aam.year_id
+      LEFT JOIN executive_summary_basic_details esb
+          ON esb.assesment_id = aam.id AND esb.deleted_at IS NULL
+      WHERE aam.id = $1 AND aam.deleted_at IS NULL
+      LIMIT 1;
+    `;
+
+    const assessmentResult = await this.db.query(assessmentQuery, [assessmentId]);
+
+    if (!assessmentResult.rows.length) {
+      throw new NotFoundException('Assessment not found');
+    }
+
+    const assessment = assessmentResult.rows[0];
+
+    const [
+      branchPositions,
+      freshAccounts,
+      marchPositions,
+      schemes,
+    ] = await Promise.all([
+      this.db.query(
+        `
+        SELECT
+            type_id,
+            amount,
+            year_id,
+            audit_commpliance,
+            audit_status_id AS review_action,
+            audit_reviewer_comment AS reviewer_comment
+        FROM executive_summary_branch_position
+        WHERE assesment_id = $1
+            AND deleted_at IS NULL;
+        `,
+        [assessmentId],
+      ),
+      this.db.query(
+        `
+        SELECT
+            type_id,
+            accounts,
+            year_id,
+            audit_commpliance,
+            audit_status_id AS review_action,
+            audit_reviewer_comment AS reviewer_comment
+        FROM executive_summary_fresh_accounts
+        WHERE assesment_id = $1
+            AND deleted_at IS NULL;
+        `,
+        [assessmentId],
+      ),
+      this.db.query(
+        `
+        SELECT
+            gl_type_id,
+            march_position
+        FROM exe_summary
+        WHERE audit_unit_id = $1
+            AND year_id = $2
+            AND deleted_at IS NULL;
+        `,
+        [assessment.audit_unit_id, assessment.year_id],
+      ),
+      this.db.query(
+        `
+        SELECT
+            scheme_type,
+            scheme_code,
+            scheme_name,
+            category_id
+        FROM (
+            SELECT
+                'DEPOSITS' AS scheme_type,
+                sm.scheme_code,
+                sm.name AS scheme_name,
+                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END AS category_id
+            FROM dump_deposits dd
+            INNER JOIN audit_assesment_master aam
+                ON aam.id = $1
+            LEFT JOIN scheme_master sm
+                ON sm.id = dd.scheme_id
+            WHERE
+                dd.branch_id = aam.audit_unit_id
+                AND dd.deleted_at IS NULL
+            GROUP BY
+                sm.scheme_code,
+                sm.name,
+                sm.category_id
+            UNION ALL
+            SELECT
+                'ADVANCES' AS scheme_type,
+                sm.scheme_code,
+                sm.name AS scheme_name,
+                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END AS category_id
+            FROM dump_advances da
+            INNER JOIN audit_assesment_master aam
+                ON aam.id = $1
+            LEFT JOIN scheme_master sm
+                ON sm.id = da.scheme_id
+            WHERE
+                da.branch_id = aam.audit_unit_id
+                AND da.deleted_at IS NULL
+            GROUP BY
+                sm.scheme_code,
+                sm.name,
+                sm.category_id
+            UNION ALL
+            SELECT
+                CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+                sm.scheme_code,
+                sm.name AS scheme_name,
+                CASE 
+                    WHEN cm.linked_table_id = 1 THEN
+                        CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+                    ELSE
+                        CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+                END AS category_id
+            FROM executive_summary_branch_position bp
+            INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(bp.type_id, '_NPA', '')
+            LEFT JOIN category_master cm ON cm.id = sm.category_id
+            WHERE bp.assesment_id = $1 AND bp.deleted_at IS NULL
+            UNION ALL
+            SELECT
+                CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+                sm.scheme_code,
+                sm.name AS scheme_name,
+                CASE 
+                    WHEN cm.linked_table_id = 1 THEN
+                        CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+                    ELSE
+                        CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+                END AS category_id
+            FROM executive_summary_fresh_accounts fa
+            INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(fa.type_id, '_NPA', '')
+            LEFT JOIN category_master cm ON cm.id = sm.category_id
+            WHERE fa.assesment_id = $1 AND fa.deleted_at IS NULL
+        ) x
+        GROUP BY
+            scheme_type,
+            scheme_code,
+            scheme_name,
+            category_id
+        ORDER BY
+            scheme_type,
+            scheme_code;
+        `,
+        [assessmentId],
+      ),
+    ]);
+
+    const deduplicate = (rows: any[], targetYearId: number) => {
+      const map = new Map<string, any>();
+      for (const row of rows) {
+        const key = String(row.type_id).trim();
+        const existing = map.get(key);
+        if (!existing || Number(row.year_id) === Number(targetYearId)) {
+          map.set(key, row);
+        }
+      }
+      return Array.from(map.values());
+    };
+
+    const dedupedBranchPositions = deduplicate(branchPositions.rows, assessment.year_id);
+    const dedupedFreshAccounts = deduplicate(freshAccounts.rows, assessment.year_id);
+
+    return {
+      filters: {
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: String(assessmentId),
+      },
+      generatedAt: new Date().toISOString(),
+      header: {
+        assessmentPeriod: `${this.dateOnly(assessment.assesment_period_from)} to ${this.dateOnly(assessment.assesment_period_to)}`,
+        auditUnit: `${assessment.branch_code} - ${assessment.branch_name}`,
+      },
+      rows: [{}],
+      summary: {},
+      exeData: {
+        assessment,
+        branchPositions: dedupedBranchPositions,
+        freshAccounts: dedupedFreshAccounts,
+        marchPositions: marchPositions.rows,
+        schemes: schemes.rows,
+
+        // Snake_case mappings matching getExecutiveSummary format exactly:
+        branch_positions: dedupedBranchPositions.map((row: any) => ({
+          type_id: row.type_id,
+          amount: row.amount,
+          review_action: row.review_action,
+          reviewer_comment: row.reviewer_comment,
+          audit_commpliance: row.audit_commpliance,
+        })),
+        fresh_accounts: dedupedFreshAccounts.map((row: any) => ({
+          type_id: row.type_id,
+          accounts: row.accounts,
+          review_action: row.review_action,
+          reviewer_comment: row.reviewer_comment,
+          audit_commpliance: row.audit_commpliance,
+        })),
+        march_positions: marchPositions.rows.map((row: any) => ({
+          gl_type_id: Number(row.gl_type_id),
+          march_position: Number(row.march_position || 0),
+        })),
+      },
+    };
   }
 }
