@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit, Logger, RequestTimeoutException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
@@ -19,9 +19,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       password: this.configService.get<string>('DB_PASSWORD', 'postgres'),
       database: this.configService.get<string>('DB_NAME', 'postgres'),
       ssl: isSsl ? { rejectUnauthorized: false } : false,
-      max: 20, // Increase max pool size for better concurrency
+      max: this.configService.get<number>('DB_POOL_MAX', 30), // Increased default max pool size for better concurrency
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: this.configService.get<number>('DB_CONNECTION_TIMEOUT', 10000),
     });
 
     this.pool.on('error', (err: any) => {
@@ -50,8 +50,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       const duration = Date.now() - start;
       this.logger.debug(`Executed query`, { text, duration, rows: res.rowCount });
       return res;
-    } catch (error) {
-      this.logger.error(`Error executing query: ${text}`, error);
+    } catch (error: any) {
+      const poolStatus = this.pool ? {
+        total: this.pool.totalCount,
+        idle: this.pool.idleCount,
+        waiting: this.pool.waitingCount,
+      } : 'No Pool';
+      this.logger.error(
+        `Error executing query: ${text.substring(0, 500)}... | Pool Status: ${JSON.stringify(poolStatus)}`,
+        error,
+      );
+      if (error?.message && (error.message.includes('timeout exceeded') || error.message.includes('timeout'))) {
+        throw new RequestTimeoutException(
+          'Database request timed out due to high load. Please try again in a few moments.',
+        );
+      }
       throw error;
     }
   }
@@ -73,14 +86,43 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
    * @returns The result of the callback.
    */
   async transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
-    const client = await this.pool.connect();
+    let client: PoolClient;
+    try {
+      client = await this.pool.connect();
+    } catch (error: any) {
+      const poolStatus = this.pool ? {
+        total: this.pool.totalCount,
+        idle: this.pool.idleCount,
+        waiting: this.pool.waitingCount,
+      } : 'No Pool';
+      this.logger.error(
+        `Error connecting for transaction | Pool Status: ${JSON.stringify(poolStatus)}`,
+        error,
+      );
+      if (error?.message && (error.message.includes('timeout exceeded') || error.message.includes('timeout'))) {
+        throw new RequestTimeoutException(
+          'Database request timed out due to high load. Please try again in a few moments.',
+        );
+      }
+      throw error;
+    }
+
     try {
       await client.query('BEGIN');
       const result = await callback(client);
       await client.query('COMMIT');
       return result;
-    } catch (e) {
-      await client.query('ROLLBACK');
+    } catch (e: any) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        this.logger.error('Error during transaction rollback', rollbackError);
+      }
+      if (e?.message && (e.message.includes('timeout exceeded') || e.message.includes('timeout'))) {
+        throw new RequestTimeoutException(
+          'Database request timed out due to high load. Please try again in a few moments.',
+        );
+      }
       throw e;
     } finally {
       client.release();

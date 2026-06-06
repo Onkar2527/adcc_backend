@@ -80,6 +80,10 @@ export class ReportsService {
       return this.getBroaderAreaWiseScoringDefinition();
     }
 
+    if (reportSlug === 'questionwsie-broader-areawise-report') {
+      return this.getQuestionWiseBroaderAreaDefinition();
+    }
+
     if (reportSlug === 'audit-observation-count-report') {
       return this.getAuditObservationCountDefinition();
     }
@@ -932,6 +936,16 @@ export class ReportsService {
     };
   }
 
+  private async getQuestionWiseBroaderAreaDefinition() {
+    const definition = await this.getBroaderAreaWiseScoringDefinition();
+    return {
+      ...definition,
+      slug: 'questionwsie-broader-areawise-report',
+      title: 'Question Wise BroaderArea Report',
+      fileName: 'question-wise-broader-area-report',
+    };
+  }
+
   private async getAuditObservationCountDefinition() {
     const lookups = await this.getAuditStatusLookups();
 
@@ -1095,6 +1109,10 @@ export class ReportsService {
     }
 
     if (reportSlug === 'broader-areawise-scoring-report') {
+      return this.getBroaderAreaWiseScoringReport(query);
+    }
+
+    if (reportSlug === 'questionwsie-broader-areawise-report') {
       return this.getBroaderAreaWiseScoringReport(query);
     }
 
