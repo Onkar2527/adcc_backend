@@ -84,6 +84,26 @@ export class ReportsService {
       return this.getBroaderAreaWiseScoringDefinition();
     }
 
+    if (reportSlug === 'questionwsie-broader-areawise-report') {
+      return this.getQuestionWiseBroaderAreaDefinition();
+    }
+
+    if (reportSlug === 'audit-observation-count-report') {
+      return this.getAuditObservationCountDefinition();
+    }
+
+    if (reportSlug === 'pending-compliance-detail-report') {
+      return this.getPendingComplianceDetailDefinition();
+    }
+
+    if (reportSlug === 'executive-summary-audit-report') {
+      return this.getExecutiveSummaryDefinition(false);
+    }
+
+    if (reportSlug === 'executive-summary-compliance-report') {
+      return this.getExecutiveSummaryDefinition(true);
+    }
+
     throw new NotFoundException('Report is not implemented yet');
   }
 
@@ -1007,6 +1027,153 @@ export class ReportsService {
     };
   }
 
+  private async getQuestionWiseBroaderAreaDefinition() {
+    const definition = await this.getBroaderAreaWiseScoringDefinition();
+    return {
+      ...definition,
+      slug: 'questionwsie-broader-areawise-report',
+      title: 'Question Wise BroaderArea Report',
+      fileName: 'question-wise-broader-area-report',
+    };
+  }
+
+  private async getAuditObservationCountDefinition() {
+    const lookups = await this.getAuditStatusLookups();
+
+    return {
+      slug: 'audit-observation-count-report',
+      title: 'Audit Observation Count Report',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'audit-observation-count-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        reportAuditUnit: 'all_branches',
+        startDate: '',
+        endDate: '',
+      },
+      filters: [
+        {
+          key: 'reportAuditUnit',
+          label: 'Audit Unit',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'startDate',
+          label: 'Start Date',
+          type: 'date',
+          required: true,
+        },
+        {
+          key: 'endDate',
+          label: 'End Date',
+          type: 'date',
+          required: true,
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No.', width: '5%', align: 'center' },
+        { key: 'audit_unit_name', label: 'Audit Unit', width: '20%' },
+        { key: 'assessment_period', label: 'Assesment Period', width: '15%' },
+        { key: 'audit_status_label', label: 'Audit Status', width: '20%' },
+        { key: 'audited', label: 'Audited', width: '10%', align: 'center' },
+        { key: 'pending_observations', label: 'Pending Observations', width: '10%', align: 'center' },
+        { key: 'completed', label: 'Completed', width: '10%', align: 'center' },
+      ],
+      summaryCards: [
+        { key: 'totalAssessments', label: 'Assessments' },
+        { key: 'totalAudited', label: 'Audited' },
+        { key: 'totalPending', label: 'Pending Observations' },
+        { key: 'totalCompleted', label: 'Completed' },
+      ],
+    };
+  }
+
+  private async getPendingComplianceDetailDefinition() {
+    const lookups = await this.getComplianceLookups();
+
+    return {
+      slug: 'pending-compliance-detail-report',
+      title: 'Pending Compliance Detailed Report',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'pending-compliance-detail-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        selectSearchTypeFilter: '3',
+        reportAuditUnit: '',
+        reportAuditAssesment: '',
+        startDate: '',
+        endDate: '',
+      },
+      filters: [
+        {
+          key: 'selectSearchTypeFilter',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '3', label: 'Single Branch (Assessment Wise)' },
+            { value: '4', label: 'Single Department (Assessment Wise)' },
+            { value: '5', label: 'Single Branch Wise' },
+            { value: '6', label: 'Single Head Of Department Wise' },
+          ],
+        },
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Branch / Department',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Select Assessment',
+          type: 'select',
+          required: false,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+        {
+          key: 'startDate',
+          label: 'Start Date',
+          type: 'date',
+          required: false,
+        },
+        {
+          key: 'endDate',
+          label: 'End Date',
+          type: 'date',
+          required: false,
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
+        { key: 'question', label: 'Question', width: '26%' },
+        { key: 'answer_given', label: 'Audit Point', width: '9%' },
+        { key: 'audit_comment', label: 'Audit Comment', width: '13%' },
+        { key: 'audit_commpliance', label: 'Compliance', width: '18%' },
+        { key: 'business_risk_label', label: 'Business Risk', width: '7%' },
+        { key: 'control_risk_label', label: 'Control Risk', width: '7%' },
+        { key: 'risk_category', label: 'Risk Type', width: '7%' },
+        { key: 'compliance_reviewer_comment', label: 'Reviewer Comment', width: '10%' },
+      ],
+      summaryCards: [
+        { key: 'total', label: 'Pending Points' },
+        { key: 'assessments', label: 'Assessments' },
+      ],
+    };
+  }
+
   async getReportData(reportSlug: string, query: any) {
     if (reportSlug === 'audit-complete-report') {
       return this.getAuditCompleteReport(query);
@@ -1038,6 +1205,26 @@ export class ReportsService {
 
     if (reportSlug === 'broader-areawise-scoring-report') {
       return this.getBroaderAreaWiseScoringReport(query);
+    }
+
+    if (reportSlug === 'questionwsie-broader-areawise-report') {
+      return this.getBroaderAreaWiseScoringReport(query);
+    }
+
+    if (reportSlug === 'audit-observation-count-report') {
+      return this.getAuditObservationCountReport(query);
+    }
+
+    if (reportSlug === 'pending-compliance-detail-report') {
+      return this.getPendingComplianceDetailReport(query);
+    }
+
+    if (reportSlug === 'executive-summary-audit-report') {
+      return this.getExecutiveSummaryReport(query, false);
+    }
+
+    if (reportSlug === 'executive-summary-compliance-report') {
+      return this.getExecutiveSummaryReport(query, true);
     }
 
     if (reportSlug === 'audit-status-expired-report') {
@@ -1279,6 +1466,185 @@ export class ReportsService {
           audit_unit_id: row.audit_unit_id,
         })),
       ],
+    };
+  }
+
+  async getAuditObservationCountReport(query: any) {
+    const auditUnit = String(query.reportAuditUnit || '').trim();
+    const startDate = this.dateOnly(query.startDate);
+    const endDate = this.dateOnly(query.endDate);
+
+    if (!auditUnit) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if (!startDate) {
+      throw new BadRequestException('Start date is required');
+    }
+
+    if (!endDate) {
+      throw new BadRequestException('End date is required');
+    }
+
+    const params: any[] = [startDate, endDate];
+    const where = [
+      'asm.assesment_period_from >= $1',
+      'asm.assesment_period_to <= $2',
+      'asm.audit_status_id > 1',
+      'asm.deleted_at IS NULL',
+      'aum.deleted_at IS NULL',
+    ];
+
+    if (auditUnit === 'all_branches') {
+      where.push('aum.section_type_id = 1');
+    } else if (auditUnit === 'all_head_of_dept') {
+      where.push('aum.section_type_id != 1');
+    } else {
+      params.push(Number(auditUnit));
+      where.push(`asm.audit_unit_id = $${params.length}`);
+    }
+
+    const assessmentResult = await this.db.query(
+      `
+      SELECT
+        asm.id,
+        asm.audit_unit_id,
+        asm.assesment_period_from,
+        asm.assesment_period_to,
+        asm.frequency,
+        asm.audit_status_id,
+        aum.audit_unit_code,
+        aum.name AS audit_unit_name,
+        aum.section_type_id
+      FROM audit_assesment_master asm
+      INNER JOIN audit_unit_master aum
+        ON aum.id = asm.audit_unit_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY aum.audit_unit_code ASC, asm.audit_unit_id ASC
+      `,
+      params,
+    );
+
+    const assessments = assessmentResult.rows;
+    const assessmentIds = assessments.map((row: any) => Number(row.id));
+
+    if (!assessmentIds.length) {
+      return {
+        filters: {
+          reportAuditUnit: auditUnit,
+          startDate,
+          endDate,
+        },
+        generatedAt: new Date().toISOString(),
+        rows: [],
+        summary: {
+          totalAssessments: 0,
+          totalAudited: 0,
+          totalPending: 0,
+          totalCompleted: 0,
+        },
+      };
+    }
+
+    const [answerResult, annexureResult] = await Promise.all([
+      this.db.query(
+        `
+        SELECT
+          ans.id,
+          ans.assesment_id,
+          ans.audit_status_id,
+          ans.compliance_status_id
+        FROM answers_data ans
+        INNER JOIN question_master qm
+          ON qm.id = ans.question_id
+        WHERE ans.assesment_id = ANY($1::int[])
+          AND qm.option_id != 4
+          AND ans.is_compliance = '1'
+          AND ans.deleted_at IS NULL
+        `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+        SELECT
+          ax.id,
+          ax.assesment_id,
+          ax.audit_status_id,
+          ax.compliance_status_id
+        FROM answers_data_annexure ax
+        INNER JOIN answers_data ans
+          ON ans.id = ax.answer_id
+        INNER JOIN question_master qm
+          ON qm.id = ans.question_id
+        WHERE ax.assesment_id = ANY($1::int[])
+          AND qm.option_id = 4
+          AND (
+            NULLIF(ax.business_risk::text, '')::int IN (1, 2, 3)
+            OR NULLIF(ax.control_risk::text, '')::int IN (1, 2, 3)
+          )
+          AND ax.deleted_at IS NULL
+        `,
+        [assessmentIds],
+      ),
+    ]);
+
+    const countMap = new Map<number, { audited: number; pending: number }>();
+    assessments.forEach((assessment: any) => {
+      countMap.set(Number(assessment.id), { audited: 0, pending: 0 });
+    });
+
+    [...answerResult.rows, ...annexureResult.rows].forEach((observation: any) => {
+      const assessmentId = Number(observation.assesment_id);
+      const counts = countMap.get(assessmentId);
+      const assessment = assessments.find((row: any) => Number(row.id) === assessmentId);
+
+      if (!counts || !assessment) {
+        return;
+      }
+
+      counts.audited++;
+
+      if (this.isPendingObservation(Number(assessment.audit_status_id), observation)) {
+        counts.pending++;
+      }
+    });
+
+    const rows = assessments.map((assessment: any, index: number) => {
+      const counts = countMap.get(Number(assessment.id)) || { audited: 0, pending: 0 };
+      const auditStatusId = Number(assessment.audit_status_id || 0);
+      const pending = auditStatusId === 7 ? 0 : counts.pending;
+      const completed = auditStatusId === 7 ? counts.audited : counts.audited - pending;
+
+      return {
+        sr_no: index + 1,
+        audit_unit_id: assessment.audit_unit_id,
+        audit_unit_name: this.auditUnitName(assessment),
+        assessment_period: `${this.dateOnly(assessment.assesment_period_from)} to ${this.dateOnly(assessment.assesment_period_to)} (Frequency: ${assessment.frequency || '-'} Months)`,
+        audit_status_id: auditStatusId,
+        audit_status_label: this.auditTimelineStatusLabel(auditStatusId),
+        audited: counts.audited,
+        pending_observations: pending,
+        completed,
+      };
+    });
+
+    return {
+      filters: {
+        reportAuditUnit: auditUnit,
+        startDate,
+        endDate,
+      },
+      generatedAt: new Date().toISOString(),
+      header: {
+        assessmentPeriod: `${startDate} to ${endDate}`,
+      },
+      rows,
+      summary: {
+        totalAssessments: rows.length,
+        totalAudited: rows.reduce((sum, row) => sum + row.audited, 0),
+        totalPending: rows.reduce((sum, row) => sum + row.pending_observations, 0),
+        totalCompleted: rows.reduce((sum, row) => sum + row.completed, 0),
+      },
     };
   }
 
@@ -1832,6 +2198,249 @@ export class ReportsService {
         complianceRequired: questionRows.filter((row) => Number(row.is_compliance) === 1).length,
         highBusinessRisk: questionRows.filter((row) => Number(row.business_risk) === 1).length,
         highControlRisk: questionRows.filter((row) => Number(row.control_risk) === 1).length,
+      },
+    };
+  }
+
+  async getPendingComplianceDetailReport(query: any) {
+    const searchType = String(query.selectSearchTypeFilter || '3').trim();
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+    const startDate = query.startDate ? String(query.startDate).trim() : '';
+    const endDate = query.endDate ? String(query.endDate).trim() : '';
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if ((searchType === '3' || searchType === '4') && !assessmentId) {
+      throw new BadRequestException('Audit assessment is required');
+    }
+
+    if ((searchType === '5' || searchType === '6') && (!startDate || !endDate)) {
+      throw new BadRequestException('Date range (Start Date & End Date) is required');
+    }
+
+    const assessmentParams: any[] = [auditUnitId];
+    const assessmentWhere = [
+      'audit_unit_id = $1',
+      'audit_status_id = 6',
+      'deleted_at IS NULL',
+    ];
+
+    if (searchType === '3' || searchType === '4') {
+      assessmentParams.push(assessmentId);
+      assessmentWhere.push(`id = $${assessmentParams.length}`);
+    } else {
+      assessmentParams.push(startDate, endDate);
+      assessmentWhere.push(`assesment_period_from >= $${assessmentParams.length - 1}`);
+      assessmentWhere.push(`assesment_period_to <= $${assessmentParams.length}`);
+    }
+
+    const assessmentResult = await this.db.query(
+      `
+      SELECT
+        id,
+        year_id,
+        audit_unit_id,
+        assesment_period_from,
+        assesment_period_to,
+        frequency
+      FROM audit_assesment_master
+      WHERE ${assessmentWhere.join(' AND ')}
+      ORDER BY assesment_period_from ASC, id ASC
+      `,
+      assessmentParams,
+    );
+
+    const assessments = assessmentResult.rows;
+    const assessmentIds = assessments.map((assessment: any) => Number(assessment.id));
+
+    if (!assessmentIds.length) {
+      return {
+        filters: {
+          selectSearchTypeFilter: searchType,
+          reportAuditUnit: String(auditUnitId),
+          reportAuditAssesment: assessmentId ? String(assessmentId) : '',
+          startDate,
+          endDate,
+        },
+        total: 0,
+        generatedAt: new Date().toISOString(),
+        rows: [],
+        summary: {
+          total: 0,
+          assessments: 0,
+        },
+      };
+    }
+
+    const params: any[] = [assessmentIds, auditUnitId];
+    const where = [
+      'ad.assesment_id = ANY($1::int[])',
+      'aam.audit_unit_id = $2',
+      'aam.audit_status_id = 6',
+      'ad.deleted_at IS NULL',
+      'qm.deleted_at IS NULL',
+      'ad.is_compliance = 1',
+      "(ad.compliance_status_id = 3 OR COALESCE(qm.annexure_id, 0) > 0)",
+    ];
+
+    const result = await this.db.query(
+      `
+      SELECT
+        ad.id,
+        ad.assesment_id,
+        ad.menu_id,
+        mm.name AS menu_name,
+        ad.category_id,
+        cm.name AS category_name,
+        ad.header_id,
+        qhm.name AS header_name,
+        ad.question_id,
+        qm.question,
+        qm.option_id,
+        qm.annexure_id,
+        cm.linked_table_id,
+        qm.risk_category_id,
+        rc.risk_category,
+        ad.answer_given,
+        ad.audit_comment,
+        ad.audit_commpliance,
+        ad.compliance_reviewer_comment,
+        ad.is_compliance,
+        ad.business_risk,
+        ad.control_risk,
+        ad.dump_id,
+        ac.columns_json AS annexure_columns,
+        COALESCE(dd.account_no, da.account_no) AS account_no,
+        COALESCE(dd.account_holder_name, da.account_holder_name) AS account_holder_name,
+        COALESCE(dd.ucic, da.ucic) AS ucic,
+        COALESCE(dd.customer_type, da.customer_type) AS customer_type,
+        COALESCE(dd.account_opening_date, da.account_opening_date) AS account_opening_date,
+        da.renewal_date,
+        COALESCE(dd.principal_amount, da.sanction_amount) AS account_amount,
+        COALESCE(dd.intrest_rate, da.intrest_rate) AS interest_rate,
+        COALESCE(dd.balance, da.outstanding_balance) AS outstanding_balance,
+        COALESCE(dd.balance_date, da.balance_date) AS balance_date,
+        da.due_date,
+        da.npa_status,
+        COALESCE(dd.account_status, da.account_status) AS account_status,
+        au.name AS account_branch_name,
+        au.audit_unit_code AS account_branch_code,
+        sm.name AS scheme_name,
+        sm.scheme_code
+      FROM answers_data ad
+      INNER JOIN audit_assesment_master aam
+        ON aam.id = ad.assesment_id
+      LEFT JOIN menu_master mm
+        ON mm.id = ad.menu_id
+      LEFT JOIN category_master cm
+        ON cm.id = ad.category_id
+      LEFT JOIN question_header_master qhm
+        ON qhm.id = ad.header_id
+      LEFT JOIN question_master qm
+        ON qm.id = ad.question_id
+      LEFT JOIN risk_category_master rc
+        ON rc.id = qm.risk_category_id
+      LEFT JOIN (
+        SELECT
+          ac.annexure_id,
+          jsonb_agg(
+            jsonb_build_object(
+              'id', ac.id,
+              'name', ac.name,
+              'column_type_id', ac.column_type_id
+            )
+            ORDER BY ac.id
+          ) AS columns_json
+        FROM annexure_columns ac
+        WHERE ac.deleted_at IS NULL
+        GROUP BY ac.annexure_id
+      ) ac
+        ON ac.annexure_id = qm.annexure_id
+      LEFT JOIN dump_deposits dd
+        ON cm.linked_table_id = 1
+        AND dd.id = ad.dump_id
+        AND dd.deleted_at IS NULL
+      LEFT JOIN dump_advances da
+        ON cm.linked_table_id = 2
+        AND da.id = ad.dump_id
+        AND da.deleted_at IS NULL
+      LEFT JOIN scheme_master sm
+        ON sm.id = COALESCE(dd.scheme_id, da.scheme_id)
+        AND sm.deleted_at IS NULL
+      LEFT JOIN audit_unit_master au
+        ON au.id = COALESCE(dd.branch_id, da.branch_id)
+        AND au.deleted_at IS NULL
+      WHERE ${where.join(' AND ')}
+      ORDER BY ad.assesment_id, ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
+      `,
+      params,
+    );
+
+    const answerIds = result.rows.map((row: any) => Number(row.id)).filter(Boolean);
+    const annexureRowsByAnswer = await this.getAuditCompleteAnnexureRowsForAssessments(
+      assessmentIds,
+      answerIds,
+      'aa.compliance_status_id = 3',
+    );
+
+    const assessmentHeaderById = new Map<number, any>();
+    for (const currentAssessment of assessments) {
+      assessmentHeaderById.set(
+        Number(currentAssessment.id),
+        await this.getAssessmentHeader(Number(currentAssessment.id)),
+      );
+    }
+
+    const questionRows = result.rows.map((row: any) => ({
+      sr_no: 0,
+      ...row,
+      question: row.question || 'Assessment observation',
+      answer_given: this.auditAnswerLabel(row),
+      audit_comment: row.audit_comment || '-',
+      audit_commpliance: row.audit_commpliance || '-',
+      compliance_reviewer_comment: row.compliance_reviewer_comment || '-',
+      risk_category: row.risk_category || '-',
+      business_risk_label: this.riskParameterLabel(row.business_risk),
+      control_risk_label: this.riskParameterLabel(row.control_risk),
+      __assessment_label: assessmentHeaderById.get(Number(row.assesment_id))?.assessmentPeriod || '',
+      __account_key: this.accountDetailKey(row),
+      __account_details: this.accountDetailRows(row),
+      __is_vouching: this.isVouchingTransactionRow(row),
+      __annexure_rows: this.formatAnnexureRows(
+        annexureRowsByAnswer.get(Number(row.id)) || [],
+        row.annexure_columns || [],
+      ),
+      __vouching_rows: this.formatVouchingRows(
+        annexureRowsByAnswer.get(Number(row.id)) || [],
+        row.annexure_columns || [],
+      ),
+    }));
+
+    const rows = this.buildAuditCompleteGroupedRowsWithAssessments(questionRows);
+    const header = assessmentIds.length === 1
+      ? assessmentHeaderById.get(assessmentIds[0])
+      : {
+        assessmentPeriod: `${startDate || this.dateOnly(assessments[0]?.assesment_period_from)} to ${endDate || this.dateOnly(assessments[assessments.length - 1]?.assesment_period_to)}`,
+      };
+
+    return {
+      filters: {
+        selectSearchTypeFilter: searchType,
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: assessmentId ? String(assessmentId) : '',
+        startDate,
+        endDate,
+      },
+      total: questionRows.length,
+      generatedAt: new Date().toISOString(),
+      header,
+      rows,
+      summary: {
+        total: questionRows.length,
+        assessments: assessmentIds.length,
       },
     };
   }
@@ -4379,6 +4988,46 @@ export class ReportsService {
     return 'Completed';
   }
 
+  private isPendingObservation(assessmentStatusId: number, observation: any) {
+    const auditObservationStatusId = Number(observation.audit_status_id || 0);
+    const complianceObservationStatusId = Number(observation.compliance_status_id || 0);
+
+    if ([2, 3].includes(assessmentStatusId)) {
+      return ![1, 2].includes(auditObservationStatusId);
+    }
+
+    if (assessmentStatusId === 4) {
+      return true;
+    }
+
+    if ([5, 6].includes(assessmentStatusId)) {
+      return ![1, 2].includes(complianceObservationStatusId);
+    }
+
+    return false;
+  }
+
+  private auditTimelineStatusLabel(statusId: number) {
+    const labels: Record<number, string> = {
+      1: 'AUDIT (PENDING / ACTIVE)',
+      2: 'REVIEW (PENDING / ACTIVE)',
+      3: 'RE AUDIT (PENDING / ACTIVE)',
+      4: 'COMPLIANCE (PENDING / ACTIVE)',
+      5: 'REVIEW (PENDING / ACTIVE)',
+      6: 'RE COMPLIANCE (PENDING / ACTIVE)',
+      7: 'ASSESMENT COMPLETED',
+      8: 'REVIEWER TO AUDIT (All OBSERVATIONS)',
+      9: 'REVIEWER TO COMPLIANCE (All OBSERVATIONS)',
+      10: 'ADMIN INCREASE ACCEPT / REJECT LIMIT IN AUDIT',
+      11: 'ADMIN INCREASE ACCEPT / REJECT LIMIT IN COMPLIANCE',
+      12: 'ADMIN INCREASE DUE DATE IN AUDIT',
+      13: 'ADMIN INCREASE DUE DATE IN COMPLIANCE',
+      14: 'REVIEWER TO AUDIT (ENTIRE ASSESMENT BACK TO AUDIT)',
+    };
+
+    return labels[statusId] || '-';
+  }
+
   private async getAssessmentHeader(assessmentId: number) {
     const result = await this.db.query(
       `
@@ -4612,13 +5261,59 @@ export class ReportsService {
     return rows;
   }
 
+  private buildAuditCompleteGroupedRowsWithAssessments(questionRows: any[]) {
+    const rows: any[] = [];
+    let currentAssessmentId = 0;
+    let assessmentRows: any[] = [];
+
+    const flushAssessmentRows = () => {
+      if (!assessmentRows.length) {
+        return;
+      }
+
+      rows.push(...this.buildAuditCompleteGroupedRows(assessmentRows));
+      assessmentRows = [];
+    };
+
+    questionRows.forEach((row) => {
+      const assessmentId = Number(row.assesment_id || 0);
+
+      if (assessmentId !== currentAssessmentId) {
+        flushAssessmentRows();
+        rows.push({
+          __report_group: true,
+          __group_level: 'menu',
+          __group_label: `Assessment: ${row.__assessment_label || assessmentId}`,
+        });
+        currentAssessmentId = assessmentId;
+      }
+
+      assessmentRows.push(row);
+    });
+
+    flushAssessmentRows();
+
+    return rows;
+  }
+
   private async getAuditCompleteAnnexureRows(
     assessmentId: number,
     answerIds: number[],
   ) {
+    return this.getAuditCompleteAnnexureRowsForAssessments(
+      [assessmentId],
+      answerIds,
+    );
+  }
+
+  private async getAuditCompleteAnnexureRowsForAssessments(
+    assessmentIds: number[],
+    answerIds: number[],
+    extraWhere = '',
+  ) {
     const rowsByAnswer = new Map<number, any[]>();
 
-    if (!answerIds.length) {
+    if (!assessmentIds.length || !answerIds.length) {
       return rowsByAnswer;
     }
 
@@ -4632,16 +5327,18 @@ export class ReportsService {
         aa.control_risk,
         aa.risk_cat_id,
         rc.risk_category,
-        aa.audit_commpliance
+        aa.audit_commpliance,
+        aa.compliance_reviewer_comment
       FROM answers_data_annexure aa
       LEFT JOIN risk_category_master rc
         ON rc.id = aa.risk_cat_id
-      WHERE aa.assesment_id = $1
+      WHERE aa.assesment_id = ANY($1::int[])
         AND aa.answer_id = ANY($2::int[])
         AND aa.deleted_at IS NULL
+        ${extraWhere ? `AND ${extraWhere}` : ''}
       ORDER BY aa.answer_id, aa.id
       `,
-      [assessmentId, answerIds],
+      [assessmentIds, answerIds],
     );
 
     for (const row of result.rows) {
@@ -4680,6 +5377,7 @@ export class ReportsService {
         control_risk_label: this.riskParameterLabel(row.control_risk),
         risk_category: row.risk_category || '-',
         audit_commpliance: row.audit_commpliance || '-',
+        compliance_reviewer_comment: row.compliance_reviewer_comment || '-',
       };
     });
   }
@@ -4717,6 +5415,8 @@ export class ReportsService {
           row.risk_category || '-',
         audit_commpliance:
           row.audit_commpliance || '-',
+        compliance_reviewer_comment:
+          row.compliance_reviewer_comment || '-',
       };
     });
   }
@@ -4855,5 +5555,325 @@ export class ReportsService {
     }
 
     return String(value).slice(0, 10);
+  }
+
+  private async getExecutiveSummaryDefinition(isCompliance: boolean) {
+    const lookups = isCompliance
+      ? await this.getComplianceLookups()
+      : await this.getAuditCompleteLookups();
+
+    const slug = isCompliance
+      ? 'executive-summary-compliance-report'
+      : 'executive-summary-audit-report';
+
+    const title = isCompliance
+      ? 'Executive Summary Compliance Report'
+      : 'Executive Summary Audit Report';
+
+    const fileName = isCompliance
+      ? 'executive-summary-compliance-report'
+      : 'executive-summary-audit-report';
+
+    return {
+      slug,
+      title,
+      category: 'Audit Reports',
+      page: 'A4L',
+      fileName,
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        reportAuditUnit: '',
+        reportAuditAssesment: '',
+      },
+      filters: [
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Branch',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Select Audit Assessment',
+          type: 'select',
+          required: true,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+      ],
+      columns: [],
+    };
+  }
+
+  async getExecutiveSummaryReport(query: any, isCompliance: boolean) {
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if (!assessmentId) {
+      throw new BadRequestException('Audit assessment is required');
+    }
+
+    const assessmentQuery = `
+      SELECT 
+        aam.id,
+        aam.year_id,
+        aam.audit_unit_id,
+        aam.frequency,
+        aam.assesment_period_from,
+        aam.assesment_period_to,
+        aam.audit_start_date,
+        aam.audit_end_date,
+        aam.compliance_due_date,
+        aam.compliance_end_date,
+        aam.audit_status_id,
+        ym.year AS financial_year,
+        aum.name AS branch_name,
+        aum.audit_unit_code AS branch_code,
+        (
+            aam.audit_end_date::date
+            -
+            aam.audit_start_date::date
+        ) AS audit_duration_days,
+        branch_manager.name AS branch_manager_name,
+        branch_assitant_manager.name AS branch_assistant_manager,
+        auditor_name.name AS auditor_name,
+        td.deposit_target AS deposit_target,
+        td.advances_target AS advances_target,
+        td.npa_target AS npa_target,
+        esb.id AS esb_id,
+        esb.report_submitted_date AS report_submitted_date,
+        esb.staff_count As staff_count,
+        esb.manual_challans_per_day as manual_challans_per_day
+      FROM audit_assesment_master aam
+      LEFT JOIN audit_unit_master aum
+          ON aum.id = aam.audit_unit_id
+      LEFT JOIN year_master ym
+          ON ym.id = aam.year_id
+      LEFT JOIN employee_master auditor
+          ON auditor.id = aam.audit_emp_id
+      LEFT JOIN employee_master review
+          ON review.id = aam.audit_review_emp_id
+      LEFT JOIN employee_master branch_manager
+          ON branch_manager.id = aam.branch_head_id
+      LEFT JOIN employee_master branch_assitant_manager
+          ON branch_assitant_manager.id = aam.branch_subhead_id
+      LEFT JOIN employee_master auditor_name
+          ON auditor_name.id = aam.audit_head_id
+      LEFT JOIN target_details td
+          ON td.audit_unit_id = aam.audit_unit_id
+          AND td.year_id = aam.year_id
+      LEFT JOIN executive_summary_basic_details esb
+          ON esb.assesment_id = aam.id AND esb.deleted_at IS NULL
+      WHERE aam.id = $1 AND aam.deleted_at IS NULL
+      LIMIT 1;
+    `;
+
+    const assessmentResult = await this.db.query(assessmentQuery, [assessmentId]);
+
+    if (!assessmentResult.rows.length) {
+      throw new NotFoundException('Assessment not found');
+    }
+
+    const assessment = assessmentResult.rows[0];
+
+    const [
+      branchPositions,
+      freshAccounts,
+      marchPositions,
+      schemes,
+    ] = await Promise.all([
+      this.db.query(
+        `
+        SELECT
+            type_id,
+            amount,
+            year_id,
+            audit_commpliance,
+            audit_status_id AS review_action,
+            audit_reviewer_comment AS reviewer_comment
+        FROM executive_summary_branch_position
+        WHERE assesment_id = $1
+            AND deleted_at IS NULL;
+        `,
+        [assessmentId],
+      ),
+      this.db.query(
+        `
+        SELECT
+            type_id,
+            accounts,
+            year_id,
+            audit_commpliance,
+            audit_status_id AS review_action,
+            audit_reviewer_comment AS reviewer_comment
+        FROM executive_summary_fresh_accounts
+        WHERE assesment_id = $1
+            AND deleted_at IS NULL;
+        `,
+        [assessmentId],
+      ),
+      this.db.query(
+        `
+        SELECT
+            gl_type_id,
+            march_position
+        FROM exe_summary
+        WHERE audit_unit_id = $1
+            AND year_id = $2
+            AND deleted_at IS NULL;
+        `,
+        [assessment.audit_unit_id, assessment.year_id],
+      ),
+      this.db.query(
+        `
+        SELECT
+            scheme_type,
+            scheme_code,
+            scheme_name,
+            category_id
+        FROM (
+            SELECT
+                'DEPOSITS' AS scheme_type,
+                sm.scheme_code,
+                sm.name AS scheme_name,
+                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END AS category_id
+            FROM dump_deposits dd
+            INNER JOIN audit_assesment_master aam
+                ON aam.id = $1
+            LEFT JOIN scheme_master sm
+                ON sm.id = dd.scheme_id
+            WHERE
+                dd.branch_id = aam.audit_unit_id
+                AND dd.deleted_at IS NULL
+            GROUP BY
+                sm.scheme_code,
+                sm.name,
+                sm.category_id
+            UNION ALL
+            SELECT
+                'ADVANCES' AS scheme_type,
+                sm.scheme_code,
+                sm.name AS scheme_name,
+                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END AS category_id
+            FROM dump_advances da
+            INNER JOIN audit_assesment_master aam
+                ON aam.id = $1
+            LEFT JOIN scheme_master sm
+                ON sm.id = da.scheme_id
+            WHERE
+                da.branch_id = aam.audit_unit_id
+                AND da.deleted_at IS NULL
+            GROUP BY
+                sm.scheme_code,
+                sm.name,
+                sm.category_id
+            UNION ALL
+            SELECT
+                CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+                sm.scheme_code,
+                sm.name AS scheme_name,
+                CASE 
+                    WHEN cm.linked_table_id = 1 THEN
+                        CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+                    ELSE
+                        CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+                END AS category_id
+            FROM executive_summary_branch_position bp
+            INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(bp.type_id, '_NPA', '')
+            LEFT JOIN category_master cm ON cm.id = sm.category_id
+            WHERE bp.assesment_id = $1 AND bp.deleted_at IS NULL
+            UNION ALL
+            SELECT
+                CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+                sm.scheme_code,
+                sm.name AS scheme_name,
+                CASE 
+                    WHEN cm.linked_table_id = 1 THEN
+                        CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+                    ELSE
+                        CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+                END AS category_id
+            FROM executive_summary_fresh_accounts fa
+            INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(fa.type_id, '_NPA', '')
+            LEFT JOIN category_master cm ON cm.id = sm.category_id
+            WHERE fa.assesment_id = $1 AND fa.deleted_at IS NULL
+        ) x
+        GROUP BY
+            scheme_type,
+            scheme_code,
+            scheme_name,
+            category_id
+        ORDER BY
+            scheme_type,
+            scheme_code;
+        `,
+        [assessmentId],
+      ),
+    ]);
+
+    const deduplicate = (rows: any[], targetYearId: number) => {
+      const map = new Map<string, any>();
+      for (const row of rows) {
+        const key = String(row.type_id).trim();
+        const existing = map.get(key);
+        if (!existing || Number(row.year_id) === Number(targetYearId)) {
+          map.set(key, row);
+        }
+      }
+      return Array.from(map.values());
+    };
+
+    const dedupedBranchPositions = deduplicate(branchPositions.rows, assessment.year_id);
+    const dedupedFreshAccounts = deduplicate(freshAccounts.rows, assessment.year_id);
+
+    return {
+      filters: {
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: String(assessmentId),
+      },
+      generatedAt: new Date().toISOString(),
+      header: {
+        assessmentPeriod: `${this.dateOnly(assessment.assesment_period_from)} to ${this.dateOnly(assessment.assesment_period_to)}`,
+        auditUnit: `${assessment.branch_code} - ${assessment.branch_name}`,
+      },
+      rows: [{}],
+      summary: {},
+      exeData: {
+        assessment,
+        branchPositions: dedupedBranchPositions,
+        freshAccounts: dedupedFreshAccounts,
+        marchPositions: marchPositions.rows,
+        schemes: schemes.rows,
+
+        // Snake_case mappings matching getExecutiveSummary format exactly:
+        branch_positions: dedupedBranchPositions.map((row: any) => ({
+          type_id: row.type_id,
+          amount: row.amount,
+          review_action: row.review_action,
+          reviewer_comment: row.reviewer_comment,
+          audit_commpliance: row.audit_commpliance,
+        })),
+        fresh_accounts: dedupedFreshAccounts.map((row: any) => ({
+          type_id: row.type_id,
+          accounts: row.accounts,
+          review_action: row.review_action,
+          reviewer_comment: row.reviewer_comment,
+          audit_commpliance: row.audit_commpliance,
+        })),
+        march_positions: marchPositions.rows.map((row: any) => ({
+          gl_type_id: Number(row.gl_type_id),
+          march_position: Number(row.march_position || 0),
+        })),
+      },
+    };
   }
 }
