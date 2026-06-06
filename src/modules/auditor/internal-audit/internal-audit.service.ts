@@ -5102,6 +5102,8 @@ ORDER BY id DESC;
     }
 
     if (
+      [1, 2].includes(Number(category.linked_table_id))
+      &&
       dumpId
       &&
       !accounts.some(
