@@ -68,6 +68,10 @@ export class UpdateAuditUnitDto {
   @IsInt()
   frequency?: number;
 
+  @IsNotEmpty()
+  @IsString()
+  last_audit_date!: string;
+
   @IsOptional()
   @IsInt()
   is_active?: number;

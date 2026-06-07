@@ -206,9 +206,10 @@ export class AuditUnitsService {
           name = COALESCE($4, name),
           branch_head_id = COALESCE($5, branch_head_id),
           branch_subhead_id = COALESCE($6, branch_subhead_id),
-          frequency = COALESCE($6, frequency),
-          is_active = COALESCE($7, is_active),
-          admin_id = COALESCE($8, admin_id),
+          frequency = COALESCE($7, frequency),
+          is_active = COALESCE($8, is_active),
+          admin_id = COALESCE($9, admin_id),
+          last_audit_date = COALESCE($10, last_audit_date),
           updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         RETURNING *
@@ -223,6 +224,7 @@ export class AuditUnitsService {
           data.frequency ?? null,
           data.is_active ?? null,
           data.admin_id ?? 1,
+          data.last_audit_date ?? null,
         ],
       );
 
