@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../core/database/database.service';
 
 type ReportStatusOption = {
@@ -33,7 +37,7 @@ export class ReportsService {
     { value: '4', label: 'No Risk' },
   ];
 
-  constructor(private readonly db: DatabaseService) { }
+  constructor(private readonly db: DatabaseService) {}
 
   async getReportDefinition(reportSlug: string) {
     if (reportSlug === 'audit-status-report') {
@@ -173,9 +177,24 @@ export class ReportsService {
         { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
         { key: 'audit_unit_name', label: 'Audit Unit', width: '10%' },
         { key: 'auditor_name', label: 'Auditor', width: '15%' },
-        { key: 'audit_start_date', label: 'Audit Start Date', width: '8%', type: 'date' },
-        { key: 'audit_end_date', label: 'Audit End Date', width: '8%', type: 'date' },
-        { key: 'assessment_period', label: 'Assessment Period', width: '15%', type: 'assessmentPeriod' },
+        {
+          key: 'audit_start_date',
+          label: 'Audit Start Date',
+          width: '8%',
+          type: 'date',
+        },
+        {
+          key: 'audit_end_date',
+          label: 'Audit End Date',
+          width: '8%',
+          type: 'date',
+        },
+        {
+          key: 'assessment_period',
+          label: 'Assessment Period',
+          width: '15%',
+          type: 'assessmentPeriod',
+        },
         {
           key: 'audit_status_label',
           label: 'Audit Status',
@@ -185,8 +204,18 @@ export class ReportsService {
           expiredKey: 'audit_expired',
           dueDateKey: 'audit_due_date',
         },
-        { key: 'compliance_start_date', label: 'Compliance Start Date', width: '8%', type: 'date' },
-        { key: 'compliance_end_date', label: 'Compliance End Date', width: '8%', type: 'date' },
+        {
+          key: 'compliance_start_date',
+          label: 'Compliance Start Date',
+          width: '8%',
+          type: 'date',
+        },
+        {
+          key: 'compliance_end_date',
+          label: 'Compliance End Date',
+          width: '8%',
+          type: 'date',
+        },
         {
           key: 'compliance_status_label',
           label: 'Compliance Status',
@@ -254,9 +283,24 @@ export class ReportsService {
         { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
         { key: 'audit_unit_name', label: 'Audit Unit', width: '10%' },
         { key: 'auditor_name', label: 'Auditor', width: '15%' },
-        { key: 'audit_start_date', label: 'Audit Start Date', width: '8%', type: 'date' },
-        { key: 'audit_end_date', label: 'Audit End Date', width: '8%', type: 'date' },
-        { key: 'assessment_period', label: 'Assessment Period', width: '15%', type: 'assessmentPeriod' },
+        {
+          key: 'audit_start_date',
+          label: 'Audit Start Date',
+          width: '8%',
+          type: 'date',
+        },
+        {
+          key: 'audit_end_date',
+          label: 'Audit End Date',
+          width: '8%',
+          type: 'date',
+        },
+        {
+          key: 'assessment_period',
+          label: 'Assessment Period',
+          width: '15%',
+          type: 'assessmentPeriod',
+        },
         {
           key: 'audit_status_label',
           label: 'Audit Status',
@@ -266,8 +310,18 @@ export class ReportsService {
           expiredKey: 'audit_expired',
           dueDateKey: 'audit_due_date',
         },
-        { key: 'compliance_start_date', label: 'Compliance Start Date', width: '8%', type: 'date' },
-        { key: 'compliance_end_date', label: 'Compliance End Date', width: '8%', type: 'date' },
+        {
+          key: 'compliance_start_date',
+          label: 'Compliance Start Date',
+          width: '8%',
+          type: 'date',
+        },
+        {
+          key: 'compliance_end_date',
+          label: 'Compliance End Date',
+          width: '8%',
+          type: 'date',
+        },
         {
           key: 'compliance_status_label',
           label: 'Compliance Status',
@@ -323,10 +377,20 @@ export class ReportsService {
       columns: [
         { key: 'sr_no', label: 'Sr. No.', width: '10%', align: 'center' },
         { key: 'inspection_type', label: 'Inspection Type', width: '20%' },
-        { key: 'rejected_count', label: 'Rejected Count', width: '10%', align: 'center' },
+        {
+          key: 'rejected_count',
+          label: 'Rejected Count',
+          width: '10%',
+          align: 'center',
+        },
         { key: 'employee_name', label: 'Employee Name', width: '10%' },
         { key: 'status_label', label: 'Status', width: '40%' },
-        { key: 'created_at', label: 'Status Changed On', width: '20%', type: 'date' },
+        {
+          key: 'created_at',
+          label: 'Status Changed On',
+          width: '20%',
+          type: 'date',
+        },
       ],
       summaryCards: [
         { key: 'total', label: 'Timeline Entries' },
@@ -366,12 +430,15 @@ export class ReportsService {
         { key: 'sr_no', label: 'Sr. No', width: '10%', align: 'center' },
         { key: 'audit_unit_name', label: 'Audit Unit', width: '25%' },
         { key: 'assessment_period', label: 'Assessment Period', width: '25%' },
-        { key: 'frequency_label', label: 'Frequency', width: '10%', align: 'center' },
+        {
+          key: 'frequency_label',
+          label: 'Frequency',
+          width: '10%',
+          align: 'center',
+        },
         { key: 'audit_status_label', label: 'Audit Status', width: '30%' },
       ],
-      summaryCards: [
-        { key: 'total', label: 'Not Started' },
-      ],
+      summaryCards: [{ key: 'total', label: 'Not Started' }],
     };
   }
 
@@ -739,46 +806,78 @@ export class ReportsService {
         },
       ],
       columns: [
-        { key: 'branch_code', label: 'Branch Code', width: '10%', align: 'center' },
+        {
+          key: 'branch_code',
+          label: 'Branch Code',
+          width: '10%',
+          align: 'center',
+        },
         { key: 'branch_name', label: 'Branch Name', width: '20%' },
         { key: 'category_name', label: 'Category', width: '10%' },
         { key: 'risk_type', label: 'Risk Type', width: '15%' },
-        { key: 'total_score', label: 'Total Score', width: '10%', align: 'center' },
-        { key: 'no_of_assessment', label: 'Number of Audits Conducted', width: '10%', align: 'center' },
-        { key: 'avg_tot_score_per_audit', label: 'Averaged Total Score Per Audit', width: '10%', align: 'right' },
-        { key: 'risk_weight', label: 'Risk Weight', width: '5%', align: 'center' },
-        { key: 'weighted_score', label: 'Weighted Score', width: '10%', align: 'right' },
-        { key: 'percent_to_total', label: '% To Total Weighted Score', width: '10%', align: 'right' },
+        {
+          key: 'total_score',
+          label: 'Total Score',
+          width: '10%',
+          align: 'center',
+        },
+        {
+          key: 'no_of_assessment',
+          label: 'Number of Audits Conducted',
+          width: '10%',
+          align: 'center',
+        },
+        {
+          key: 'avg_tot_score_per_audit',
+          label: 'Averaged Total Score Per Audit',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'risk_weight',
+          label: 'Risk Weight',
+          width: '5%',
+          align: 'center',
+        },
+        {
+          key: 'weighted_score',
+          label: 'Weighted Score',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'percent_to_total',
+          label: '% To Total Weighted Score',
+          width: '10%',
+          align: 'right',
+        },
       ],
-      summaryCards: [
-        { key: 'total', label: 'Total Weighted Score' },
-      ],
+      summaryCards: [{ key: 'total', label: 'Total Weighted Score' }],
     };
   }
 
   private async getRiskWiseAuditUnitsDefinition() {
     const lookups = await this.getComplianceLookups();
-    const riskColumns =
-      lookups.riskCategories.flatMap((riskCategory: any) => [
-        {
-          key: `risk_${riskCategory.value}_score`,
-          label: `${riskCategory.label} - Total Risk Score`,
-          width: '10%',
-          align: 'right',
-        },
-        {
-          key: `risk_${riskCategory.value}_branch_percent`,
-          label: `${riskCategory.label} (%) To Total Branch Risk`,
-          width: '10%',
-          align: 'right',
-        },
-        {
-          key: `risk_${riskCategory.value}_all_percent`,
-          label: `${riskCategory.label} (%) To All Branch Risk`,
-          width: '10%',
-          align: 'right',
-        },
-      ]);
+    const riskColumns = lookups.riskCategories.flatMap((riskCategory: any) => [
+      {
+        key: `risk_${riskCategory.value}_score`,
+        label: `${riskCategory.label} - Total Risk Score`,
+        width: '10%',
+        align: 'right',
+      },
+      {
+        key: `risk_${riskCategory.value}_branch_percent`,
+        label: `${riskCategory.label} (%) To Total Branch Risk`,
+        width: '10%',
+        align: 'right',
+      },
+      {
+        key: `risk_${riskCategory.value}_all_percent`,
+        label: `${riskCategory.label} (%) To All Branch Risk`,
+        width: '10%',
+        align: 'right',
+      },
+    ]);
 
     return {
       slug: 'risk-wise-audit-units-report',
@@ -827,12 +926,32 @@ export class ReportsService {
         },
       ],
       columns: [
-        { key: 'audit_unit_code', label: 'BR Code', width: '8%', align: 'center' },
+        {
+          key: 'audit_unit_code',
+          label: 'BR Code',
+          width: '8%',
+          align: 'center',
+        },
         { key: 'audit_unit_name', label: 'Branch / HO', width: '16%' },
         ...riskColumns,
-        { key: 'total_score', label: 'Total Score', width: '9%', align: 'right' },
-        { key: 'total_score_all_percent', label: 'Total Score % to All Branches / HO Departments', width: '10%', align: 'right' },
-        { key: 'branch_rating', label: 'Branch Rating', width: '10%', align: 'center' },
+        {
+          key: 'total_score',
+          label: 'Total Score',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_score_all_percent',
+          label: 'Total Score % to All Branches / HO Departments',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'branch_rating',
+          label: 'Branch Rating',
+          width: '10%',
+          align: 'center',
+        },
       ],
       summaryCards: [
         { key: 'totalAuditUnits', label: 'Audit Units' },
@@ -918,16 +1037,46 @@ export class ReportsService {
         },
       ],
       columns: [
-        { key: 'audit_unit_code', label: 'BR Code', width: '8%', align: 'center' },
+        {
+          key: 'audit_unit_code',
+          label: 'BR Code',
+          width: '8%',
+          align: 'center',
+        },
         { key: 'name', label: 'Branch / HO', width: '16%' },
-        { key: 'no_of_audits', label: 'No of Audits', width: '8%', align: 'center' },
+        {
+          key: 'no_of_audits',
+          label: 'No of Audits',
+          width: '8%',
+          align: 'center',
+        },
         ...riskColumns,
-        { key: 'total_highest_score_weighted', label: 'Total Score', width: '8%', align: 'right' },
-        { key: 'total_obtained_score_weighted', label: 'Out of Score', width: '8%', align: 'right' },
+        {
+          key: 'total_highest_score_weighted',
+          label: 'Total Score',
+          width: '8%',
+          align: 'right',
+        },
+        {
+          key: 'total_obtained_score_weighted',
+          label: 'Out of Score',
+          width: '8%',
+          align: 'right',
+        },
         { key: 'total_percent', label: '%', width: '8%', align: 'right' },
         { key: 'total_rating', label: 'Risk', width: '8%', align: 'center' },
-        { key: 'total_score_all_percent', label: 'Total Score % to All Branches / HO Departments', width: '10%', align: 'right' },
-        { key: 'total_all_rating', label: 'Total Risk', width: '8%', align: 'center' },
+        {
+          key: 'total_score_all_percent',
+          label: 'Total Score % to All Branches / HO Departments',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'total_all_rating',
+          label: 'Total Risk',
+          width: '8%',
+          align: 'center',
+        },
       ],
       summaryCards: [],
     };
@@ -1005,16 +1154,66 @@ export class ReportsService {
       columns: [
         { key: 'sr_no', label: 'Sr. No.', width: '5%', align: 'center' },
         { key: 'risk_type', label: 'Risk Type', width: '15%' },
-        { key: 'risk_weight', label: 'Risk Weight', width: '7%', align: 'right' },
-        { key: 'total_questions', label: 'Total Questions Available', width: '9%', align: 'right' },
-        { key: 'total_na_questions', label: 'Questions Not Applicable', width: '9%', align: 'right' },
-        { key: 'total_questions_t1', label: 'Total Questions Applicable (T1)', width: '9%', align: 'right' },
-        { key: 'total_annex_t2', label: 'Total Annexures (T2)', width: '8%', align: 'right' },
-        { key: 'total_questions_t1_t2', label: 'Total Questions (T1 + T2)', width: '9%', align: 'right' },
-        { key: 'total_highest_score_weighted', label: 'Highest Possible Score (Weighted)', width: '10%', align: 'right' },
-        { key: 'total_obtained_score_weighted', label: 'Total Score Obtained (Weighted)', width: '10%', align: 'right' },
-        { key: 'relative_performance', label: 'Relative Performance (%)', width: '9%', align: 'right' },
-        { key: 'percent_to_total', label: '% To Total Score Obtained (Weighted)', width: '10%', align: 'right' },
+        {
+          key: 'risk_weight',
+          label: 'Risk Weight',
+          width: '7%',
+          align: 'right',
+        },
+        {
+          key: 'total_questions',
+          label: 'Total Questions Available',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_na_questions',
+          label: 'Questions Not Applicable',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_questions_t1',
+          label: 'Total Questions Applicable (T1)',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_annex_t2',
+          label: 'Total Annexures (T2)',
+          width: '8%',
+          align: 'right',
+        },
+        {
+          key: 'total_questions_t1_t2',
+          label: 'Total Questions (T1 + T2)',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_highest_score_weighted',
+          label: 'Highest Possible Score (Weighted)',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'total_obtained_score_weighted',
+          label: 'Total Score Obtained (Weighted)',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'relative_performance',
+          label: 'Relative Performance (%)',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'percent_to_total',
+          label: '% To Total Score Obtained (Weighted)',
+          width: '10%',
+          align: 'right',
+        },
       ],
       summaryCards: [],
     };
@@ -1092,16 +1291,66 @@ export class ReportsService {
       columns: [
         { key: 'category', label: 'Category', width: '10%', align: 'left' },
         { key: 'risk_type', label: 'Risk Type', width: '14%', align: 'left' },
-        { key: 'risk_weight', label: 'Risk Weight', width: '7%', align: 'right' },
-        { key: 'total_questions', label: 'Total Questions Available', width: '9%', align: 'right' },
-        { key: 'total_na_questions', label: 'Questions Not Applicable', width: '9%', align: 'right' },
-        { key: 'total_questions_t1', label: 'Total Questions Applicable (T1)', width: '9%', align: 'right' },
-        { key: 'total_annex_t2', label: 'Total Annexures (T2)', width: '8%', align: 'right' },
-        { key: 'total_questions_t1_t2', label: 'Total Questions (T1 + T2)', width: '9%', align: 'right' },
-        { key: 'total_highest_score_weighted', label: 'Highest Possible Score (Weighted)', width: '10%', align: 'right' },
-        { key: 'total_obtained_score_weighted', label: 'Total Score Obtained (Weighted)', width: '10%', align: 'right' },
-        { key: 'relative_performance', label: 'Relative Performance (%)', width: '9%', align: 'right' },
-        { key: 'percent_to_total', label: '% To Total Score Obtained (Weighted)', width: '10%', align: 'right' },
+        {
+          key: 'risk_weight',
+          label: 'Risk Weight',
+          width: '7%',
+          align: 'right',
+        },
+        {
+          key: 'total_questions',
+          label: 'Total Questions Available',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_na_questions',
+          label: 'Questions Not Applicable',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_questions_t1',
+          label: 'Total Questions Applicable (T1)',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_annex_t2',
+          label: 'Total Annexures (T2)',
+          width: '8%',
+          align: 'right',
+        },
+        {
+          key: 'total_questions_t1_t2',
+          label: 'Total Questions (T1 + T2)',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_highest_score_weighted',
+          label: 'Highest Possible Score (Weighted)',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'total_obtained_score_weighted',
+          label: 'Total Score Obtained (Weighted)',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'relative_performance',
+          label: 'Relative Performance (%)',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'percent_to_total',
+          label: '% To Total Score Obtained (Weighted)',
+          width: '10%',
+          align: 'right',
+        },
       ],
       summaryCards: [],
     };
@@ -1147,22 +1396,81 @@ export class ReportsService {
             { value: 'rswt', label: 'Risk Score Wise Trend' },
           ],
         },
-        { key: 'startMonth', label: 'Trend Period - 1 Start Month [YYYY-MM]', type: 'text', required: true },
-        { key: 'endMonth', label: 'Trend Period - 1 End Month [YYYY-MM]', type: 'text', required: true },
-        { key: 'startMonth2', label: 'Trend Period - 2 Start Month [YYYY-MM]', type: 'text', required: true },
-        { key: 'endMonth2', label: 'Trend Period - 2 End Month [YYYY-MM]', type: 'text', required: true },
+        {
+          key: 'startMonth',
+          label: 'Trend Period - 1 Start Month [YYYY-MM]',
+          type: 'text',
+          required: true,
+        },
+        {
+          key: 'endMonth',
+          label: 'Trend Period - 1 End Month [YYYY-MM]',
+          type: 'text',
+          required: true,
+        },
+        {
+          key: 'startMonth2',
+          label: 'Trend Period - 2 Start Month [YYYY-MM]',
+          type: 'text',
+          required: true,
+        },
+        {
+          key: 'endMonth2',
+          label: 'Trend Period - 2 End Month [YYYY-MM]',
+          type: 'text',
+          required: true,
+        },
       ],
       columns: [
         { key: 'sr_no', label: 'Sr. No.', width: '5%', align: 'center' },
-        { key: 'audit_unit_details', label: 'Audit Unit Details', width: '18%' },
-        { key: 'period1_total_risk', label: 'Total Risk', width: '9%', align: 'right' },
-        { key: 'period1_percent', label: 'Period 1 - % To All Branch Risk', width: '12%', align: 'right' },
-        { key: 'period1_risk', label: 'Period 1 - Risk Rating', width: '10%', align: 'center' },
-        { key: 'period2_percent', label: 'Period 2 - % To All Branch Risk', width: '12%', align: 'right' },
-        { key: 'period2_risk', label: 'Period 2 - Risk Rating', width: '10%', align: 'center' },
-        { key: 'period2_total_risk', label: 'Total Risk', width: '9%', align: 'right' },
+        {
+          key: 'audit_unit_details',
+          label: 'Audit Unit Details',
+          width: '18%',
+        },
+        {
+          key: 'period1_total_risk',
+          label: 'Total Risk',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'period1_percent',
+          label: 'Period 1 - % To All Branch Risk',
+          width: '12%',
+          align: 'right',
+        },
+        {
+          key: 'period1_risk',
+          label: 'Period 1 - Risk Rating',
+          width: '10%',
+          align: 'center',
+        },
+        {
+          key: 'period2_percent',
+          label: 'Period 2 - % To All Branch Risk',
+          width: '12%',
+          align: 'right',
+        },
+        {
+          key: 'period2_risk',
+          label: 'Period 2 - Risk Rating',
+          width: '10%',
+          align: 'center',
+        },
+        {
+          key: 'period2_total_risk',
+          label: 'Total Risk',
+          width: '9%',
+          align: 'right',
+        },
         { key: 'trend_label', label: 'Trend', width: '8%', align: 'center' },
-        { key: 'change_in_risk_score', label: 'Change in Risk Score', width: '10%', align: 'right' },
+        {
+          key: 'change_in_risk_score',
+          label: 'Change in Risk Score',
+          width: '10%',
+          align: 'right',
+        },
       ],
       summaryCards: [
         { key: 'totalAuditUnits', label: 'Audit Units' },
@@ -1241,11 +1549,20 @@ export class ReportsService {
         },
       ],
       columns: [
-        { key: 'branch_code', label: 'Audit Unit Code', width: '5%', align: 'center' },
+        {
+          key: 'branch_code',
+          label: 'Audit Unit Code',
+          width: '5%',
+          align: 'center',
+        },
         { key: 'branch_name', label: 'Branch', width: '8%' },
         { key: 'risk_type', label: 'Risk Type', width: '6%' },
         { key: 'category_name', label: 'Category', width: '6%' },
-        { key: 'broader_area_name', label: 'Broader Area of Audit Non-Compliance', width: '12%' },
+        {
+          key: 'broader_area_name',
+          label: 'Broader Area of Audit Non-Compliance',
+          width: '12%',
+        },
 
         { key: 'qual_1_1', label: 'BR-H Qual H', width: '3%', align: 'center' },
         { key: 'qual_1_2', label: 'BR-H Qual M', width: '3%', align: 'center' },
@@ -1268,21 +1585,74 @@ export class ReportsService {
         { key: 'quan_3_2', label: 'BR-L Quan M', width: '3%', align: 'center' },
         { key: 'quan_3_3', label: 'BR-L Quan L', width: '3%', align: 'center' },
 
-        { key: 'qual_tot', label: 'Qualitative Score', width: '4%', align: 'center' },
-        { key: 'quan_tot', label: 'Quantitative Score', width: '4%', align: 'center' },
-        { key: 'total_qual_quan', label: 'Total Score Before Averaging', width: '5%', align: 'center' },
-        { key: 'acc_non_compliant', label: 'No. Of Accounts Non-Compliant', width: '4%', align: 'center' },
-        { key: 'no_of_acc_checked', label: 'No Of Accounts Checked', width: '4%', align: 'center' },
-        { key: 'avg_quan_score', label: 'Averaged Quantitative Score', width: '4%', align: 'right' },
-        { key: 'tot_avg_score', label: 'Total Averaged Score', width: '4%', align: 'right' },
-        { key: 'no_of_audit_conduct', label: 'Number of Audits Conducted', width: '4%', align: 'center' },
-        { key: 'avg_tot_score_per_audit', label: 'Averaged Total Score Per Audit', width: '4%', align: 'right' },
-        { key: 'risk_weight', label: 'Risk Weight', width: '3%', align: 'center' },
-        { key: 'weighted_score', label: 'Weighted Score', width: '4%', align: 'right' },
+        {
+          key: 'qual_tot',
+          label: 'Qualitative Score',
+          width: '4%',
+          align: 'center',
+        },
+        {
+          key: 'quan_tot',
+          label: 'Quantitative Score',
+          width: '4%',
+          align: 'center',
+        },
+        {
+          key: 'total_qual_quan',
+          label: 'Total Score Before Averaging',
+          width: '5%',
+          align: 'center',
+        },
+        {
+          key: 'acc_non_compliant',
+          label: 'No. Of Accounts Non-Compliant',
+          width: '4%',
+          align: 'center',
+        },
+        {
+          key: 'no_of_acc_checked',
+          label: 'No Of Accounts Checked',
+          width: '4%',
+          align: 'center',
+        },
+        {
+          key: 'avg_quan_score',
+          label: 'Averaged Quantitative Score',
+          width: '4%',
+          align: 'right',
+        },
+        {
+          key: 'tot_avg_score',
+          label: 'Total Averaged Score',
+          width: '4%',
+          align: 'right',
+        },
+        {
+          key: 'no_of_audit_conduct',
+          label: 'Number of Audits Conducted',
+          width: '4%',
+          align: 'center',
+        },
+        {
+          key: 'avg_tot_score_per_audit',
+          label: 'Averaged Total Score Per Audit',
+          width: '4%',
+          align: 'right',
+        },
+        {
+          key: 'risk_weight',
+          label: 'Risk Weight',
+          width: '3%',
+          align: 'center',
+        },
+        {
+          key: 'weighted_score',
+          label: 'Weighted Score',
+          width: '4%',
+          align: 'right',
+        },
       ],
-      summaryCards: [
-        { key: 'total', label: 'Total Weighted Score' },
-      ],
+      summaryCards: [{ key: 'total', label: 'Total Weighted Score' }],
     };
   }
 
@@ -1341,7 +1711,12 @@ export class ReportsService {
         { key: 'assessment_period', label: 'Assesment Period', width: '15%' },
         { key: 'audit_status_label', label: 'Audit Status', width: '20%' },
         { key: 'audited', label: 'Audited', width: '10%', align: 'center' },
-        { key: 'pending_observations', label: 'Pending Observations', width: '10%', align: 'center' },
+        {
+          key: 'pending_observations',
+          label: 'Pending Observations',
+          width: '10%',
+          align: 'center',
+        },
         { key: 'completed', label: 'Completed', width: '10%', align: 'center' },
       ],
       summaryCards: [
@@ -1424,7 +1799,11 @@ export class ReportsService {
         { key: 'business_risk_label', label: 'Business Risk', width: '7%' },
         { key: 'control_risk_label', label: 'Control Risk', width: '7%' },
         { key: 'risk_category', label: 'Risk Type', width: '7%' },
-        { key: 'compliance_reviewer_comment', label: 'Reviewer Comment', width: '10%' },
+        {
+          key: 'compliance_reviewer_comment',
+          label: 'Reviewer Comment',
+          width: '10%',
+        },
       ],
       summaryCards: [
         { key: 'total', label: 'Pending Points' },
@@ -1868,27 +2247,40 @@ export class ReportsService {
       countMap.set(Number(assessment.id), { audited: 0, pending: 0 });
     });
 
-    [...answerResult.rows, ...annexureResult.rows].forEach((observation: any) => {
-      const assessmentId = Number(observation.assesment_id);
-      const counts = countMap.get(assessmentId);
-      const assessment = assessments.find((row: any) => Number(row.id) === assessmentId);
+    [...answerResult.rows, ...annexureResult.rows].forEach(
+      (observation: any) => {
+        const assessmentId = Number(observation.assesment_id);
+        const counts = countMap.get(assessmentId);
+        const assessment = assessments.find(
+          (row: any) => Number(row.id) === assessmentId,
+        );
 
-      if (!counts || !assessment) {
-        return;
-      }
+        if (!counts || !assessment) {
+          return;
+        }
 
-      counts.audited++;
+        counts.audited++;
 
-      if (this.isPendingObservation(Number(assessment.audit_status_id), observation)) {
-        counts.pending++;
-      }
-    });
+        if (
+          this.isPendingObservation(
+            Number(assessment.audit_status_id),
+            observation,
+          )
+        ) {
+          counts.pending++;
+        }
+      },
+    );
 
     const rows = assessments.map((assessment: any, index: number) => {
-      const counts = countMap.get(Number(assessment.id)) || { audited: 0, pending: 0 };
+      const counts = countMap.get(Number(assessment.id)) || {
+        audited: 0,
+        pending: 0,
+      };
       const auditStatusId = Number(assessment.audit_status_id || 0);
       const pending = auditStatusId === 7 ? 0 : counts.pending;
-      const completed = auditStatusId === 7 ? counts.audited : counts.audited - pending;
+      const completed =
+        auditStatusId === 7 ? counts.audited : counts.audited - pending;
 
       return {
         sr_no: index + 1,
@@ -1917,7 +2309,10 @@ export class ReportsService {
       summary: {
         totalAssessments: rows.length,
         totalAudited: rows.reduce((sum, row) => sum + row.audited, 0),
-        totalPending: rows.reduce((sum, row) => sum + row.pending_observations, 0),
+        totalPending: rows.reduce(
+          (sum, row) => sum + row.pending_observations,
+          0,
+        ),
         totalCompleted: rows.reduce((sum, row) => sum + row.completed, 0),
       },
     };
@@ -1954,12 +2349,16 @@ export class ReportsService {
 
     if (businessRiskIds.length) {
       params.push(businessRiskIds);
-      where.push(`NULLIF(ad.business_risk::text, '')::int = ANY($${params.length}::int[])`);
+      where.push(
+        `NULLIF(ad.business_risk::text, '')::int = ANY($${params.length}::int[])`,
+      );
     }
 
     if (controlRiskIds.length) {
       params.push(controlRiskIds);
-      where.push(`NULLIF(ad.control_risk::text, '')::int = ANY($${params.length}::int[])`);
+      where.push(
+        `NULLIF(ad.control_risk::text, '')::int = ANY($${params.length}::int[])`,
+      );
     }
 
     const result = await this.db.query(
@@ -2052,7 +2451,9 @@ export class ReportsService {
       params,
     );
 
-    const answerIds = result.rows.map((row: any) => Number(row.id)).filter(Boolean);
+    const answerIds = result.rows
+      .map((row: any) => Number(row.id))
+      .filter(Boolean);
     const annexureRowsByAnswer = await this.getAuditCompleteAnnexureRows(
       assessmentId,
       answerIds,
@@ -2069,8 +2470,7 @@ export class ReportsService {
       control_risk_label: this.riskParameterLabel(row.control_risk),
       __account_key: this.accountDetailKey(row),
       __account_details: this.accountDetailRows(row),
-      __is_vouching:
-        this.isVouchingTransactionRow(row),
+      __is_vouching: this.isVouchingTransactionRow(row),
       __annexure_rows: this.formatAnnexureRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
         row.annexure_columns || [],
@@ -2098,9 +2498,15 @@ export class ReportsService {
       rows,
       summary: {
         total: questionRows.length,
-        complianceRequired: questionRows.filter((row) => Number(row.is_compliance) === 1).length,
-        highBusinessRisk: questionRows.filter((row) => Number(row.business_risk) === 1).length,
-        highControlRisk: questionRows.filter((row) => Number(row.control_risk) === 1).length,
+        complianceRequired: questionRows.filter(
+          (row) => Number(row.is_compliance) === 1,
+        ).length,
+        highBusinessRisk: questionRows.filter(
+          (row) => Number(row.business_risk) === 1,
+        ).length,
+        highControlRisk: questionRows.filter(
+          (row) => Number(row.control_risk) === 1,
+        ).length,
       },
     };
   }
@@ -2141,12 +2547,16 @@ export class ReportsService {
 
     if (businessRiskIds.length) {
       params.push(businessRiskIds);
-      where.push(`NULLIF(ad.business_risk::text, '')::int = ANY($${params.length}::int[])`);
+      where.push(
+        `NULLIF(ad.business_risk::text, '')::int = ANY($${params.length}::int[])`,
+      );
     }
 
     if (controlRiskIds.length) {
       params.push(controlRiskIds);
-      where.push(`NULLIF(ad.control_risk::text, '')::int = ANY($${params.length}::int[])`);
+      where.push(
+        `NULLIF(ad.control_risk::text, '')::int = ANY($${params.length}::int[])`,
+      );
     }
 
     const result = await this.db.query(
@@ -2239,7 +2649,9 @@ export class ReportsService {
       params,
     );
 
-    const answerIds = result.rows.map((row: any) => Number(row.id)).filter(Boolean);
+    const answerIds = result.rows
+      .map((row: any) => Number(row.id))
+      .filter(Boolean);
     const annexureRowsByAnswer = await this.getAuditCompleteAnnexureRows(
       assessmentId,
       answerIds,
@@ -2256,8 +2668,7 @@ export class ReportsService {
       control_risk_label: this.riskParameterLabel(row.control_risk),
       __account_key: this.accountDetailKey(row),
       __account_details: this.accountDetailRows(row),
-      __is_vouching:
-        this.isVouchingTransactionRow(row),
+      __is_vouching: this.isVouchingTransactionRow(row),
       __annexure_rows: this.formatAnnexureRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
         row.annexure_columns || [],
@@ -2285,9 +2696,15 @@ export class ReportsService {
       rows,
       summary: {
         total: questionRows.length,
-        complianceRequired: questionRows.filter((row) => Number(row.is_compliance) === 1).length,
-        highBusinessRisk: questionRows.filter((row) => Number(row.business_risk) === 1).length,
-        highControlRisk: questionRows.filter((row) => Number(row.control_risk) === 1).length,
+        complianceRequired: questionRows.filter(
+          (row) => Number(row.is_compliance) === 1,
+        ).length,
+        highBusinessRisk: questionRows.filter(
+          (row) => Number(row.business_risk) === 1,
+        ).length,
+        highControlRisk: questionRows.filter(
+          (row) => Number(row.control_risk) === 1,
+        ).length,
       },
     };
   }
@@ -2324,12 +2741,16 @@ export class ReportsService {
 
     if (businessRiskIds.length) {
       params.push(businessRiskIds);
-      where.push(`NULLIF(ad.business_risk::text, '')::int = ANY($${params.length}::int[])`);
+      where.push(
+        `NULLIF(ad.business_risk::text, '')::int = ANY($${params.length}::int[])`,
+      );
     }
 
     if (controlRiskIds.length) {
       params.push(controlRiskIds);
-      where.push(`NULLIF(ad.control_risk::text, '')::int = ANY($${params.length}::int[])`);
+      where.push(
+        `NULLIF(ad.control_risk::text, '')::int = ANY($${params.length}::int[])`,
+      );
     }
 
     const result = await this.db.query(
@@ -2423,7 +2844,9 @@ export class ReportsService {
       params,
     );
 
-    const answerIds = result.rows.map((row: any) => Number(row.id)).filter(Boolean);
+    const answerIds = result.rows
+      .map((row: any) => Number(row.id))
+      .filter(Boolean);
     const annexureRowsByAnswer = await this.getAuditCompleteAnnexureRows(
       assessmentId,
       answerIds,
@@ -2441,8 +2864,7 @@ export class ReportsService {
       control_risk_label: this.riskParameterLabel(row.control_risk),
       __account_key: this.accountDetailKey(row),
       __account_details: this.accountDetailRows(row),
-      __is_vouching:
-        this.isVouchingTransactionRow(row),
+      __is_vouching: this.isVouchingTransactionRow(row),
       __annexure_rows: this.formatAnnexureRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
         row.annexure_columns || [],
@@ -2470,9 +2892,15 @@ export class ReportsService {
       rows,
       summary: {
         total: questionRows.length,
-        complianceRequired: questionRows.filter((row) => Number(row.is_compliance) === 1).length,
-        highBusinessRisk: questionRows.filter((row) => Number(row.business_risk) === 1).length,
-        highControlRisk: questionRows.filter((row) => Number(row.control_risk) === 1).length,
+        complianceRequired: questionRows.filter(
+          (row) => Number(row.is_compliance) === 1,
+        ).length,
+        highBusinessRisk: questionRows.filter(
+          (row) => Number(row.business_risk) === 1,
+        ).length,
+        highControlRisk: questionRows.filter(
+          (row) => Number(row.control_risk) === 1,
+        ).length,
       },
     };
   }
@@ -2492,8 +2920,13 @@ export class ReportsService {
       throw new BadRequestException('Audit assessment is required');
     }
 
-    if ((searchType === '5' || searchType === '6') && (!startDate || !endDate)) {
-      throw new BadRequestException('Date range (Start Date & End Date) is required');
+    if (
+      (searchType === '5' || searchType === '6') &&
+      (!startDate || !endDate)
+    ) {
+      throw new BadRequestException(
+        'Date range (Start Date & End Date) is required',
+      );
     }
 
     const assessmentParams: any[] = [auditUnitId];
@@ -2508,8 +2941,12 @@ export class ReportsService {
       assessmentWhere.push(`id = $${assessmentParams.length}`);
     } else {
       assessmentParams.push(startDate, endDate);
-      assessmentWhere.push(`assesment_period_from >= $${assessmentParams.length - 1}`);
-      assessmentWhere.push(`assesment_period_to <= $${assessmentParams.length}`);
+      assessmentWhere.push(
+        `assesment_period_from >= $${assessmentParams.length - 1}`,
+      );
+      assessmentWhere.push(
+        `assesment_period_to <= $${assessmentParams.length}`,
+      );
     }
 
     const assessmentResult = await this.db.query(
@@ -2529,7 +2966,9 @@ export class ReportsService {
     );
 
     const assessments = assessmentResult.rows;
-    const assessmentIds = assessments.map((assessment: any) => Number(assessment.id));
+    const assessmentIds = assessments.map((assessment: any) =>
+      Number(assessment.id),
+    );
 
     if (!assessmentIds.length) {
       return {
@@ -2558,7 +2997,7 @@ export class ReportsService {
       'ad.deleted_at IS NULL',
       'qm.deleted_at IS NULL',
       'ad.is_compliance = 1',
-      "(ad.compliance_status_id = 3 OR COALESCE(qm.annexure_id, 0) > 0)",
+      '(ad.compliance_status_id = 3 OR COALESCE(qm.annexure_id, 0) > 0)',
     ];
 
     const result = await this.db.query(
@@ -2654,12 +3093,15 @@ export class ReportsService {
       params,
     );
 
-    const answerIds = result.rows.map((row: any) => Number(row.id)).filter(Boolean);
-    const annexureRowsByAnswer = await this.getAuditCompleteAnnexureRowsForAssessments(
-      assessmentIds,
-      answerIds,
-      'aa.compliance_status_id = 3',
-    );
+    const answerIds = result.rows
+      .map((row: any) => Number(row.id))
+      .filter(Boolean);
+    const annexureRowsByAnswer =
+      await this.getAuditCompleteAnnexureRowsForAssessments(
+        assessmentIds,
+        answerIds,
+        'aa.compliance_status_id = 3',
+      );
 
     const assessmentHeaderById = new Map<number, any>();
     for (const currentAssessment of assessments) {
@@ -2680,7 +3122,9 @@ export class ReportsService {
       risk_category: row.risk_category || '-',
       business_risk_label: this.riskParameterLabel(row.business_risk),
       control_risk_label: this.riskParameterLabel(row.control_risk),
-      __assessment_label: assessmentHeaderById.get(Number(row.assesment_id))?.assessmentPeriod || '',
+      __assessment_label:
+        assessmentHeaderById.get(Number(row.assesment_id))?.assessmentPeriod ||
+        '',
       __account_key: this.accountDetailKey(row),
       __account_details: this.accountDetailRows(row),
       __is_vouching: this.isVouchingTransactionRow(row),
@@ -2694,12 +3138,14 @@ export class ReportsService {
       ),
     }));
 
-    const rows = this.buildAuditCompleteGroupedRowsWithAssessments(questionRows);
-    const header = assessmentIds.length === 1
-      ? assessmentHeaderById.get(assessmentIds[0])
-      : {
-        assessmentPeriod: `${startDate || this.dateOnly(assessments[0]?.assesment_period_from)} to ${endDate || this.dateOnly(assessments[assessments.length - 1]?.assesment_period_to)}`,
-      };
+    const rows =
+      this.buildAuditCompleteGroupedRowsWithAssessments(questionRows);
+    const header =
+      assessmentIds.length === 1
+        ? assessmentHeaderById.get(assessmentIds[0])
+        : {
+            assessmentPeriod: `${startDate || this.dateOnly(assessments[0]?.assesment_period_from)} to ${endDate || this.dateOnly(assessments[assessments.length - 1]?.assesment_period_to)}`,
+          };
 
     return {
       filters: {
@@ -2738,8 +3184,13 @@ export class ReportsService {
       throw new BadRequestException('Audit assessment is required');
     }
 
-    if ((searchType === '5' || searchType === '6') && (!startDate || !endDate)) {
-      throw new BadRequestException('Date range (Start Date & End Date) is required');
+    if (
+      (searchType === '5' || searchType === '6') &&
+      (!startDate || !endDate)
+    ) {
+      throw new BadRequestException(
+        'Date range (Start Date & End Date) is required',
+      );
     }
 
     // Step 1: Find matching assessments
@@ -2753,12 +3204,14 @@ export class ReportsService {
           AND audit_unit_id = $2
           AND deleted_at IS NULL
         `,
-        [assessmentId, auditUnitId]
+        [assessmentId, auditUnitId],
       );
       assessments = result.rows;
     } else {
       // searchType 5 or 6 (date range filter)
-      const statusCondition = removePending ? 'AND audit_status_id > 4' : 'AND audit_status_id > 1';
+      const statusCondition = removePending
+        ? 'AND audit_status_id > 4'
+        : 'AND audit_status_id > 1';
       const result = await this.db.query(
         `
         SELECT id, year_id, audit_unit_id, assesment_period_from, assesment_period_to, frequency
@@ -2770,13 +3223,15 @@ export class ReportsService {
           AND deleted_at IS NULL
         ORDER BY id ASC
         `,
-        [auditUnitId, startDate, endDate]
+        [auditUnitId, startDate, endDate],
       );
       assessments = result.rows;
     }
 
     if (!assessments.length) {
-      throw new BadRequestException('No assessments found for selected filters.');
+      throw new BadRequestException(
+        'No assessments found for selected filters.',
+      );
     }
 
     const assessmentIds = assessments.map((a) => Number(a.id));
@@ -2785,9 +3240,12 @@ export class ReportsService {
     // Fetch branch info
     const branchResult = await this.db.query(
       `SELECT name, audit_unit_code FROM audit_unit_master WHERE id = $1 AND deleted_at IS NULL`,
-      [auditUnitId]
+      [auditUnitId],
     );
-    const branchInfo = branchResult.rows[0] || { name: 'Unknown', audit_unit_code: '-' };
+    const branchInfo = branchResult.rows[0] || {
+      name: 'Unknown',
+      audit_unit_code: '-',
+    };
 
     // Step 2: Fetch Risk Category weightages for the financial year
     const riskCategoriesResult = await this.db.query(
@@ -2806,14 +3264,14 @@ export class ReportsService {
         AND rcm.deleted_at IS NULL
       ORDER BY rcm.id ASC
       `,
-      [firstYearId]
+      [firstYearId],
     );
     const riskCategories = riskCategoriesResult.rows;
 
     // Step 3: Fetch Risk Matrix
     const riskMatrixResult = await this.db.query(
       `SELECT risk_parameter, business_risk_score, control_risk_score FROM risk_matrix WHERE year_id = $1 AND deleted_at IS NULL`,
-      [firstYearId]
+      [firstYearId],
     );
     const riskMatrixList = riskMatrixResult.rows;
     const businessRiskScores = new Map<number, number>();
@@ -2828,7 +3286,14 @@ export class ReportsService {
     const getMatrixScore = (br: any, cr: any): number => {
       const bRisk = Number(br);
       const cRisk = Number(cr);
-      if (!bRisk || !cRisk || bRisk < 1 || bRisk > 4 || cRisk < 1 || cRisk > 4) {
+      if (
+        !bRisk ||
+        !cRisk ||
+        bRisk < 1 ||
+        bRisk > 4 ||
+        cRisk < 1 ||
+        cRisk > 4
+      ) {
         return 0;
       }
       const bScore = businessRiskScores.get(bRisk) || 0;
@@ -2846,7 +3311,7 @@ export class ReportsService {
         AND deleted_at IS NULL
       GROUP BY assesment_period_id
       `,
-      [assessmentIds]
+      [assessmentIds],
     );
     const advancesSamplingResult = await this.db.query(
       `
@@ -2857,16 +3322,22 @@ export class ReportsService {
         AND deleted_at IS NULL
       GROUP BY assesment_period_id
       `,
-      [assessmentIds]
+      [assessmentIds],
     );
 
     const depositsSamplingByAssessment = new Map<number, number>();
     for (const r of depositsSamplingResult.rows) {
-      depositsSamplingByAssessment.set(Number(r.assesment_period_id), Number(r.count || 0));
+      depositsSamplingByAssessment.set(
+        Number(r.assesment_period_id),
+        Number(r.count || 0),
+      );
     }
     const advancesSamplingByAssessment = new Map<number, number>();
     for (const r of advancesSamplingResult.rows) {
-      advancesSamplingByAssessment.set(Number(r.assesment_period_id), Number(r.count || 0));
+      advancesSamplingByAssessment.set(
+        Number(r.assesment_period_id),
+        Number(r.count || 0),
+      );
     }
 
     // Step 5: Fetch Answers
@@ -2894,11 +3365,13 @@ export class ReportsService {
         AND ans.deleted_at IS NULL
         AND qm.deleted_at IS NULL
       `,
-      [assessmentIds]
+      [assessmentIds],
     );
     const answers = answersResult.rows;
 
-    const annexureAnswerIds = answers.filter((ans: any) => Number(ans.option_id) === 4).map((ans: any) => Number(ans.id));
+    const annexureAnswerIds = answers
+      .filter((ans: any) => Number(ans.option_id) === 4)
+      .map((ans: any) => Number(ans.id));
 
     // Fetch Annexure Answers if any
     let annexures: any[] = [];
@@ -2930,16 +3403,37 @@ export class ReportsService {
           AND (ax.business_risk IN ('1', '2', '3') OR ax.control_risk IN ('1', '2', '3'))
           AND ax.deleted_at IS NULL
         `,
-        [annexureAnswerIds, assessmentIds]
+        [annexureAnswerIds, assessmentIds],
       );
       annexures = annexuresResult.rows;
     }
 
     // Step 6: Perform Aggregations
     // Structure: assessmentId -> category -> broaderAreaId -> riskCategoryId -> { qualScoreSum, quanScoreSum, totalAnnexRows }
-    const assessmentStats = new Map<number, Map<string, Map<number, Map<number, { qualScoreSum: number; quanScoreSum: number; totalAnnexRows: number }>>>>();
+    const assessmentStats = new Map<
+      number,
+      Map<
+        string,
+        Map<
+          number,
+          Map<
+            number,
+            {
+              qualScoreSum: number;
+              quanScoreSum: number;
+              totalAnnexRows: number;
+            }
+          >
+        >
+      >
+    >();
 
-    const getStats = (assesId: number, category: string, broaderAreaId: number, riskCatId: number) => {
+    const getStats = (
+      assesId: number,
+      category: string,
+      broaderAreaId: number,
+      riskCatId: number,
+    ) => {
       if (!assessmentStats.has(assesId)) {
         assessmentStats.set(assesId, new Map());
       }
@@ -2953,7 +3447,11 @@ export class ReportsService {
       }
       const riskMap = areaMap.get(broaderAreaId)!;
       if (!riskMap.has(riskCatId)) {
-        riskMap.set(riskCatId, { qualScoreSum: 0, quanScoreSum: 0, totalAnnexRows: 0 });
+        riskMap.set(riskCatId, {
+          qualScoreSum: 0,
+          quanScoreSum: 0,
+          totalAnnexRows: 0,
+        });
       }
       return riskMap.get(riskCatId)!;
     };
@@ -3008,13 +3506,29 @@ export class ReportsService {
 
     // Now mix and aggregate over all assessments for each category and risk category
     // Structure: category -> riskCategoryId -> { tot_avg_score: number; qual_tot_sum: number; quan_tot_sum: number }
-    const finalMetrics = new Map<string, Map<number, { tot_avg_score: number; avg_tot_score_per_audit: number; weighted_score: number }>>();
+    const finalMetrics = new Map<
+      string,
+      Map<
+        number,
+        {
+          tot_avg_score: number;
+          avg_tot_score_per_audit: number;
+          weighted_score: number;
+        }
+      >
+    >();
 
     const categoriesList = ['general', 'deposits', 'advances'];
     for (const catKey of categoriesList) {
       finalMetrics.set(catKey, new Map());
       for (const rc of riskCategories) {
-        finalMetrics.get(catKey)!.set(Number(rc.id), { tot_avg_score: 0, avg_tot_score_per_audit: 0, weighted_score: 0 });
+        finalMetrics
+          .get(catKey)!
+          .set(Number(rc.id), {
+            tot_avg_score: 0,
+            avg_tot_score_per_audit: 0,
+            weighted_score: 0,
+          });
       }
     }
 
@@ -3079,9 +3593,13 @@ export class ReportsService {
             no_of_acc_checked_all = totalAnnexRows_all;
           }
 
-          const avg_quan_score_all = quanScoreSum_all > 0 ? (quanScoreSum_all / (no_of_acc_checked_all || 1)) : 0;
+          const avg_quan_score_all =
+            quanScoreSum_all > 0
+              ? quanScoreSum_all / (no_of_acc_checked_all || 1)
+              : 0;
           const tot_avg_score_all = qualScoreSum_all + avg_quan_score_all;
-          const avg_tot_score_per_audit_all = tot_avg_score_all / noOfAssessments;
+          const avg_tot_score_per_audit_all =
+            tot_avg_score_all / noOfAssessments;
           const weighted_score_all = riskWeight * avg_tot_score_per_audit_all;
 
           // Accumulate for this Category + Risk Category
@@ -3114,7 +3632,10 @@ export class ReportsService {
           continue;
         }
 
-        const percent_to_total = tot_weighted_score > 0 ? ((metrics.weighted_score / tot_weighted_score) * 100) : 0;
+        const percent_to_total =
+          tot_weighted_score > 0
+            ? (metrics.weighted_score / tot_weighted_score) * 100
+            : 0;
 
         rows.push({
           branch_code: branchInfo.audit_unit_code,
@@ -3123,7 +3644,10 @@ export class ReportsService {
           risk_type: rc.title,
           total_score: this.formatDecimal(metrics.tot_avg_score, 2),
           no_of_assessment: noOfAssessments,
-          avg_tot_score_per_audit: this.formatDecimal(metrics.avg_tot_score_per_audit, 2),
+          avg_tot_score_per_audit: this.formatDecimal(
+            metrics.avg_tot_score_per_audit,
+            2,
+          ),
           risk_weight: rc.risk_weight,
           weighted_score: this.formatDecimal(metrics.weighted_score, 2),
           percent_to_total: `${this.formatDecimal(percent_to_total, 2)}%`,
@@ -3145,9 +3669,10 @@ export class ReportsService {
       total: rows.length,
       generatedAt: new Date().toISOString(),
       header: {
-        assessmentPeriod: searchType === '3' || searchType === '4'
-          ? `${this.dateOnly(assessments[0].assesment_period_from)} to ${this.dateOnly(assessments[0].assesment_period_to)}`
-          : `${startDate} to ${endDate}`,
+        assessmentPeriod:
+          searchType === '3' || searchType === '4'
+            ? `${this.dateOnly(assessments[0].assesment_period_from)} to ${this.dateOnly(assessments[0].assesment_period_to)}`
+            : `${startDate} to ${endDate}`,
         auditUnit: branchInfo.name,
       },
       rows,
@@ -3170,7 +3695,9 @@ export class ReportsService {
     }
 
     if (!startDate || !endDate) {
-      throw new BadRequestException('Date range (Start Date & End Date) is required');
+      throw new BadRequestException(
+        'Date range (Start Date & End Date) is required',
+      );
     }
 
     const riskCategoriesResult = await this.db.query(
@@ -3184,8 +3711,7 @@ export class ReportsService {
       [],
     );
 
-    const unitTypeId =
-      searchType === '2' ? 2 : 1;
+    const unitTypeId = searchType === '2' ? 2 : 1;
 
     const unitsResult = await this.db.query(
       `
@@ -3200,7 +3726,9 @@ export class ReportsService {
     );
 
     if (!unitsResult.rows.length) {
-      throw new BadRequestException('No audit units found for selected search type.');
+      throw new BadRequestException(
+        'No audit units found for selected search type.',
+      );
     }
 
     const statusCondition = removePending
@@ -3230,19 +3758,17 @@ export class ReportsService {
       throw new BadRequestException('No data found for selected filters.');
     }
 
-    const assessmentIds =
-      assessmentsResult.rows.map((row: any) => Number(row.id));
-    const firstYearId =
-      Number(assessmentsResult.rows[0].year_id || 0);
+    const assessmentIds = assessmentsResult.rows.map((row: any) =>
+      Number(row.id),
+    );
+    const firstYearId = Number(assessmentsResult.rows[0].year_id || 0);
 
     const assessmentById = new Map<number, any>();
     const assessmentCountByUnit = new Map<number, number>();
 
     assessmentsResult.rows.forEach((row: any) => {
-      const assessmentId =
-        Number(row.id);
-      const auditUnitId =
-        Number(row.audit_unit_id);
+      const assessmentId = Number(row.id);
+      const auditUnitId = Number(row.audit_unit_id);
 
       assessmentById.set(assessmentId, row);
       assessmentCountByUnit.set(
@@ -3251,24 +3777,29 @@ export class ReportsService {
       );
     });
 
-    const [riskMatrixResult, riskWeightsResult, depositsSamplingResult, advancesSamplingResult, answersResult] =
-      await Promise.all([
-        this.db.query(
-          `SELECT risk_parameter, business_risk_score, control_risk_score FROM risk_matrix WHERE year_id = $1 AND deleted_at IS NULL`,
-          [firstYearId],
-        ),
-        this.db.query(
-          `
+    const [
+      riskMatrixResult,
+      riskWeightsResult,
+      depositsSamplingResult,
+      advancesSamplingResult,
+      answersResult,
+    ] = await Promise.all([
+      this.db.query(
+        `SELECT risk_parameter, business_risk_score, control_risk_score FROM risk_matrix WHERE year_id = $1 AND deleted_at IS NULL`,
+        [firstYearId],
+      ),
+      this.db.query(
+        `
           SELECT risk_category_id, risk_weight
           FROM risk_category_weights
           WHERE year_id = $1
             AND is_active = 1
             AND deleted_at IS NULL
           `,
-          [firstYearId],
-        ),
-        this.db.query(
-          `
+        [firstYearId],
+      ),
+      this.db.query(
+        `
           SELECT assesment_period_id, COUNT(*)::int AS count
           FROM dump_deposits
           WHERE sampling_filter = 1
@@ -3276,10 +3807,10 @@ export class ReportsService {
             AND deleted_at IS NULL
           GROUP BY assesment_period_id
           `,
-          [assessmentIds],
-        ),
-        this.db.query(
-          `
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
           SELECT assesment_period_id, COUNT(*)::int AS count
           FROM dump_advances
           WHERE sampling_filter = 1
@@ -3287,10 +3818,10 @@ export class ReportsService {
             AND deleted_at IS NULL
           GROUP BY assesment_period_id
           `,
-          [assessmentIds],
-        ),
-        this.db.query(
-          `
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
           SELECT
             ans.id,
             ans.category_id,
@@ -3317,25 +3848,18 @@ export class ReportsService {
             AND ans.deleted_at IS NULL
             AND qm.deleted_at IS NULL
           `,
-          [assessmentIds],
-        ),
-      ]);
+        [assessmentIds],
+      ),
+    ]);
 
     const businessRiskScores = new Map<number, number>();
     const controlRiskScores = new Map<number, number>();
 
     riskMatrixResult.rows.forEach((row: any) => {
-      const parameter =
-        Number(row.risk_parameter);
+      const parameter = Number(row.risk_parameter);
 
-      businessRiskScores.set(
-        parameter,
-        Number(row.business_risk_score || 0),
-      );
-      controlRiskScores.set(
-        parameter,
-        Number(row.control_risk_score || 0),
-      );
+      businessRiskScores.set(parameter, Number(row.business_risk_score || 0));
+      controlRiskScores.set(parameter, Number(row.control_risk_score || 0));
     });
 
     const riskWeightMap = new Map<number, number>();
@@ -3348,24 +3872,24 @@ export class ReportsService {
     });
 
     const matrixScore = (businessRisk: any, controlRisk: any) => {
-      const businessRiskId =
-        Number(businessRisk);
-      const controlRiskId =
-        Number(controlRisk);
+      const businessRiskId = Number(businessRisk);
+      const controlRiskId = Number(controlRisk);
 
       if (
-        !businessRiskId
-        || !controlRiskId
-        || businessRiskId < 1
-        || businessRiskId > 4
-        || controlRiskId < 1
-        || controlRiskId > 4
+        !businessRiskId ||
+        !controlRiskId ||
+        businessRiskId < 1 ||
+        businessRiskId > 4 ||
+        controlRiskId < 1 ||
+        controlRiskId > 4
       ) {
         return 0;
       }
 
-      return Number(businessRiskScores.get(businessRiskId) || 0)
-        + Number(controlRiskScores.get(controlRiskId) || 0);
+      return (
+        Number(businessRiskScores.get(businessRiskId) || 0) +
+        Number(controlRiskScores.get(controlRiskId) || 0)
+      );
     };
 
     const depositsSamplingByAssessment = new Map<number, number>();
@@ -3384,14 +3908,13 @@ export class ReportsService {
       );
     });
 
-    const annexureAnswerIds =
-      answersResult.rows
-        .filter((row: any) => Number(row.option_id) === 4)
-        .map((row: any) => Number(row.id));
+    const annexureAnswerIds = answersResult.rows
+      .filter((row: any) => Number(row.option_id) === 4)
+      .map((row: any) => Number(row.id));
 
     const annexuresResult = annexureAnswerIds.length
       ? await this.db.query(
-        `
+          `
         SELECT
           ax.answer_id,
           ax.business_risk,
@@ -3416,15 +3939,33 @@ export class ReportsService {
           )
           AND ax.deleted_at IS NULL
         `,
-        [annexureAnswerIds, assessmentIds],
-      )
+          [annexureAnswerIds, assessmentIds],
+        )
       : { rows: [] };
 
-    const assessmentStats = new Map<number, Map<number, Map<string, Map<number, Map<number, { qualScoreSum: number; quanScoreSum: number; totalAnnexRows: number }>>>>>();
+    const assessmentStats = new Map<
+      number,
+      Map<
+        number,
+        Map<
+          string,
+          Map<
+            number,
+            Map<
+              number,
+              {
+                qualScoreSum: number;
+                quanScoreSum: number;
+                totalAnnexRows: number;
+              }
+            >
+          >
+        >
+      >
+    >();
 
     const categoryKey = (row: any) => {
-      const linkedTableId =
-        Number(row.linked_table_id || 0);
+      const linkedTableId = Number(row.linked_table_id || 0);
 
       if (linkedTableId === 1) {
         return 'deposits';
@@ -3469,48 +4010,39 @@ export class ReportsService {
       const areaMap = categoryMap.get(broaderAreaId)!;
 
       if (!areaMap.has(riskCategoryId)) {
-        areaMap.set(
-          riskCategoryId,
-          {
-            qualScoreSum: 0,
-            quanScoreSum: 0,
-            totalAnnexRows: 0,
-          },
-        );
+        areaMap.set(riskCategoryId, {
+          qualScoreSum: 0,
+          quanScoreSum: 0,
+          totalAnnexRows: 0,
+        });
       }
 
       return areaMap.get(riskCategoryId)!;
     };
 
     answersResult.rows.forEach((answer: any) => {
-      const assessment =
-        assessmentById.get(Number(answer.assesment_id));
+      const assessment = assessmentById.get(Number(answer.assesment_id));
 
       if (!assessment) {
         return;
       }
 
-      const broaderAreaId =
-        Number(answer.audit_area_id);
-      const riskCategoryId =
-        Number(answer.risk_category_id);
+      const broaderAreaId = Number(answer.audit_area_id);
+      const riskCategoryId = Number(answer.risk_category_id);
 
       if (!broaderAreaId || !riskCategoryId) {
         return;
       }
 
-      const catKey =
-        categoryKey(answer);
-      const stats =
-        statsFor(
-          Number(assessment.audit_unit_id),
-          Number(answer.assesment_id),
-          catKey,
-          broaderAreaId,
-          riskCategoryId,
-        );
-      const score =
-        matrixScore(answer.business_risk, answer.control_risk);
+      const catKey = categoryKey(answer);
+      const stats = statsFor(
+        Number(assessment.audit_unit_id),
+        Number(answer.assesment_id),
+        catKey,
+        broaderAreaId,
+        riskCategoryId,
+      );
+      const score = matrixScore(answer.business_risk, answer.control_risk);
 
       if (catKey === 'general' && Number(answer.option_id) !== 4) {
         stats.qualScoreSum += score;
@@ -3520,33 +4052,31 @@ export class ReportsService {
     });
 
     annexuresResult.rows.forEach((annexure: any) => {
-      const assessment =
-        assessmentById.get(Number(annexure.assesment_id));
+      const assessment = assessmentById.get(Number(annexure.assesment_id));
 
       if (!assessment) {
         return;
       }
 
-      const broaderAreaId =
-        Number(annexure.audit_area_id);
-      const riskCategoryId =
-        Number(annexure.risk_category_id);
+      const broaderAreaId = Number(annexure.audit_area_id);
+      const riskCategoryId = Number(annexure.risk_category_id);
 
       if (!broaderAreaId || !riskCategoryId) {
         return;
       }
 
-      const stats =
-        statsFor(
-          Number(assessment.audit_unit_id),
-          Number(annexure.assesment_id),
-          categoryKey(annexure),
-          broaderAreaId,
-          riskCategoryId,
-        );
+      const stats = statsFor(
+        Number(assessment.audit_unit_id),
+        Number(annexure.assesment_id),
+        categoryKey(annexure),
+        broaderAreaId,
+        riskCategoryId,
+      );
 
-      stats.quanScoreSum +=
-        matrixScore(annexure.business_risk, annexure.control_risk);
+      stats.quanScoreSum += matrixScore(
+        annexure.business_risk,
+        annexure.control_risk,
+      );
       stats.totalAnnexRows++;
     });
 
@@ -3567,27 +4097,25 @@ export class ReportsService {
       [startDate, endDate, unitTypeId],
     );
 
-    const ratingYearId =
-      Number(ratingYearResult.rows[0]?.year_id || 0);
+    const ratingYearId = Number(ratingYearResult.rows[0]?.year_id || 0);
 
     const ratingsResult = ratingYearId
       ? await this.db.query(
-        `
+          `
         SELECT audit_unit_id, risk_type_id, range_from, range_to
         FROM risk_branch_rating
         WHERE year_id = $1
           AND audit_type_id = 1
           AND deleted_at IS NULL
         `,
-        [ratingYearId],
-      )
+          [ratingYearId],
+        )
       : { rows: [] };
 
     const ratingMap = new Map<number, any[]>();
 
     ratingsResult.rows.forEach((rating: any) => {
-      const auditUnitId =
-        Number(rating.audit_unit_id);
+      const auditUnitId = Number(rating.audit_unit_id);
 
       if (!ratingMap.has(auditUnitId)) {
         ratingMap.set(auditUnitId, []);
@@ -3607,17 +4135,16 @@ export class ReportsService {
     const categoryKeys = ['general', 'deposits', 'advances'];
 
     unitsResult.rows.forEach((unit: any) => {
-      const auditUnitId =
-        Number(unit.id);
-      const unitAssessmentStats =
-        assessmentStats.get(auditUnitId);
+      const auditUnitId = Number(unit.id);
+      const unitAssessmentStats = assessmentStats.get(auditUnitId);
 
       if (!unitAssessmentStats) {
         return;
       }
 
-      const noOfAssessments =
-        Number(assessmentCountByUnit.get(auditUnitId) || 0);
+      const noOfAssessments = Number(
+        assessmentCountByUnit.get(auditUnitId) || 0,
+      );
 
       if (!noOfAssessments) {
         return;
@@ -3632,19 +4159,22 @@ export class ReportsService {
       let totalDepositsSampling = 0;
       let totalAdvancesSampling = 0;
 
-      unitAssessmentStats.forEach((_assessmentMap: any, assessmentId: number) => {
-        totalDepositsSampling +=
-          Number(depositsSamplingByAssessment.get(Number(assessmentId)) || 0);
-        totalAdvancesSampling +=
-          Number(advancesSamplingByAssessment.get(Number(assessmentId)) || 0);
-      });
+      unitAssessmentStats.forEach(
+        (_assessmentMap: any, assessmentId: number) => {
+          totalDepositsSampling += Number(
+            depositsSamplingByAssessment.get(Number(assessmentId)) || 0,
+          );
+          totalAdvancesSampling += Number(
+            advancesSamplingByAssessment.get(Number(assessmentId)) || 0,
+          );
+        },
+      );
 
       categoryKeys.forEach((catKey) => {
         const broaderAreaIds = new Set<number>();
 
         unitAssessmentStats.forEach((assessmentMap: any) => {
-          const catMap =
-            assessmentMap.get(catKey);
+          const catMap = assessmentMap.get(catKey);
 
           if (!catMap) {
             return;
@@ -3657,29 +4187,24 @@ export class ReportsService {
 
         broaderAreaIds.forEach((broaderAreaId) => {
           riskCategoriesResult.rows.forEach((riskCategory: any) => {
-            const riskCategoryId =
-              Number(riskCategory.id);
+            const riskCategoryId = Number(riskCategory.id);
             let qualScoreSumAll = 0;
             let quanScoreSumAll = 0;
             let totalAnnexRowsAll = 0;
 
             unitAssessmentStats.forEach((assessmentMap: any) => {
-              const stats =
-                assessmentMap
-                  .get(catKey)
-                  ?.get(broaderAreaId)
-                  ?.get(riskCategoryId);
+              const stats = assessmentMap
+                .get(catKey)
+                ?.get(broaderAreaId)
+                ?.get(riskCategoryId);
 
               if (!stats) {
                 return;
               }
 
-              qualScoreSumAll +=
-                Number(stats.qualScoreSum || 0);
-              quanScoreSumAll +=
-                Number(stats.quanScoreSum || 0);
-              totalAnnexRowsAll +=
-                Number(stats.totalAnnexRows || 0);
+              qualScoreSumAll += Number(stats.qualScoreSum || 0);
+              quanScoreSumAll += Number(stats.quanScoreSum || 0);
+              totalAnnexRowsAll += Number(stats.totalAnnexRows || 0);
             });
 
             if (qualScoreSumAll === 0 && quanScoreSumAll === 0) {
@@ -3689,28 +4214,21 @@ export class ReportsService {
             let noOfAccountsChecked = 0;
 
             if (catKey === 'advances') {
-              noOfAccountsChecked =
-                totalAdvancesSampling + totalAnnexRowsAll;
+              noOfAccountsChecked = totalAdvancesSampling + totalAnnexRowsAll;
             } else if (catKey === 'deposits') {
-              noOfAccountsChecked =
-                totalDepositsSampling + totalAnnexRowsAll;
+              noOfAccountsChecked = totalDepositsSampling + totalAnnexRowsAll;
             } else {
-              noOfAccountsChecked =
-                totalAnnexRowsAll;
+              noOfAccountsChecked = totalAnnexRowsAll;
             }
 
             const avgQuanScore =
               quanScoreSumAll > 0
                 ? quanScoreSumAll / (noOfAccountsChecked || 1)
                 : 0;
-            const totalAvgScore =
-              qualScoreSumAll + avgQuanScore;
-            const avgTotalScorePerAudit =
-              totalAvgScore / noOfAssessments;
-            const riskWeight =
-              Number(riskWeightMap.get(riskCategoryId) || 0);
-            const weightedScore =
-              riskWeight * avgTotalScorePerAudit;
+            const totalAvgScore = qualScoreSumAll + avgQuanScore;
+            const avgTotalScorePerAudit = totalAvgScore / noOfAssessments;
+            const riskWeight = Number(riskWeightMap.get(riskCategoryId) || 0);
+            const weightedScore = riskWeight * avgTotalScorePerAudit;
 
             unitScores.set(
               riskCategoryId,
@@ -3720,9 +4238,10 @@ export class ReportsService {
         });
       });
 
-      const totalScore =
-        Array.from(unitScores.values())
-          .reduce((sum, value) => sum + Number(value || 0), 0);
+      const totalScore = Array.from(unitScores.values()).reduce(
+        (sum, value) => sum + Number(value || 0),
+        0,
+      );
 
       if (totalScore <= 0) {
         return;
@@ -3740,13 +4259,10 @@ export class ReportsService {
       };
 
       riskCategoriesResult.rows.forEach((riskCategory: any) => {
-        const riskCategoryId =
-          Number(riskCategory.id);
-        const score =
-          Number(unitScores.get(riskCategoryId) || 0);
+        const riskCategoryId = Number(riskCategory.id);
+        const score = Number(unitScores.get(riskCategoryId) || 0);
 
-        row[`risk_${riskCategoryId}_score`] =
-          this.formatDecimal(score, 2);
+        row[`risk_${riskCategoryId}_score`] = this.formatDecimal(score, 2);
         row[`risk_${riskCategoryId}_branch_percent`] =
           totalScore > 0
             ? this.formatDecimal((score * 100) / totalScore, 2)
@@ -3762,16 +4278,14 @@ export class ReportsService {
     });
 
     for (const row of rows) {
-      const totalScore =
-        Number(row.__total_score_value || 0);
+      const totalScore = Number(row.__total_score_value || 0);
 
       riskCategoriesResult.rows.forEach((riskCategory: any) => {
-        const riskCategoryId =
-          Number(riskCategory.id);
-        const score =
-          Number(row.__risk_scores?.[riskCategoryId] || 0);
-        const allRiskTotal =
-          Number(allBranchRiskTotals.get(riskCategoryId) || 0);
+        const riskCategoryId = Number(riskCategory.id);
+        const score = Number(row.__risk_scores?.[riskCategoryId] || 0);
+        const allRiskTotal = Number(
+          allBranchRiskTotals.get(riskCategoryId) || 0,
+        );
 
         row[`risk_${riskCategoryId}_all_percent`] =
           allRiskTotal > 0
@@ -3779,18 +4293,16 @@ export class ReportsService {
             : '0.00';
       });
 
-      row.total_score =
-        this.formatDecimal(totalScore, 2);
+      row.total_score = this.formatDecimal(totalScore, 2);
       row.total_score_all_percent =
         totalAllScore > 0
           ? this.formatDecimal((totalScore * 100) / totalAllScore, 2)
           : '0.00';
 
-      row.branch_rating =
-        this.matchBranchRiskRatingByPercent(
-          Number(row.total_score_all_percent || 0),
-          row.__rating_rows || [],
-        );
+      row.branch_rating = this.matchBranchRiskRatingByPercent(
+        Number(row.total_score_all_percent || 0),
+        row.__rating_rows || [],
+      );
 
       delete row.__risk_scores;
       delete row.__total_score_value;
@@ -3810,25 +4322,19 @@ export class ReportsService {
     };
 
     riskCategoriesResult.rows.forEach((riskCategory: any) => {
-      const riskCategoryId =
-        Number(riskCategory.id);
+      const riskCategoryId = Number(riskCategory.id);
 
-      totalRow[`risk_${riskCategoryId}_score`] =
-        this.formatDecimal(
-          Number(allBranchRiskTotals.get(riskCategoryId) || 0),
-          2,
-        );
+      totalRow[`risk_${riskCategoryId}_score`] = this.formatDecimal(
+        Number(allBranchRiskTotals.get(riskCategoryId) || 0),
+        2,
+      );
       totalRow[`risk_${riskCategoryId}_branch_percent`] = '';
       totalRow[`risk_${riskCategoryId}_all_percent`] = '';
     });
 
-    const outputRows = [
-      ...rows,
-      totalRow,
-    ];
+    const outputRows = [...rows, totalRow];
 
-    const summaryRows =
-      rows;
+    const summaryRows = rows;
 
     return {
       filters: {
@@ -3851,8 +4357,7 @@ export class ReportsService {
   }
 
   private financialYearDateRange(year: any) {
-    const match =
-      String(year || '').match(/(\d{4})\D+(\d{4})/);
+    const match = String(year || '').match(/(\d{4})\D+(\d{4})/);
 
     if (!match) {
       return null;
@@ -3928,34 +4433,24 @@ export class ReportsService {
     return result.rows;
   }
 
-  private matchBranchRiskRatingByPercent(
-    score: number,
-    ratings: any[],
-  ) {
+  private matchBranchRiskRatingByPercent(score: number, ratings: any[]) {
     for (const rating of ratings) {
-      const upperBound =
-        Number(rating.range_from || 0);
-      const lowerBound =
-        Number(rating.range_to || 0);
+      const upperBound = Number(rating.range_from || 0);
+      const lowerBound = Number(rating.range_to || 0);
 
-      if (
-        score <= upperBound
-        && score > lowerBound
-      ) {
+      if (score <= upperBound && score > lowerBound) {
         return this.riskWiseRiskLabel(rating.risk_type_id).toUpperCase();
       }
     }
 
-    const maxUpper =
-      Math.max(
-        ...ratings.map((rating: any) => Number(rating.range_from || 0)),
-        0,
-      );
-    const maxLower =
-      Math.max(
-        ...ratings.map((rating: any) => Number(rating.range_to || 0)),
-        0,
-      );
+    const maxUpper = Math.max(
+      ...ratings.map((rating: any) => Number(rating.range_from || 0)),
+      0,
+    );
+    const maxLower = Math.max(
+      ...ratings.map((rating: any) => Number(rating.range_to || 0)),
+      0,
+    );
 
     if (score >= maxUpper && maxUpper > 0) {
       return 'HIGH RISK';
@@ -3968,20 +4463,13 @@ export class ReportsService {
     return '';
   }
 
-  private matchBranchRiskRating(
-    weightedScore: number,
-    ratings: any[],
-  ) {
-    const matched =
-      ratings.find((rating: any) => {
-        const from =
-          Number(rating.range_from || 0);
-        const to =
-          Number(rating.range_to || 0);
+  private matchBranchRiskRating(weightedScore: number, ratings: any[]) {
+    const matched = ratings.find((rating: any) => {
+      const from = Number(rating.range_from || 0);
+      const to = Number(rating.range_to || 0);
 
-        return weightedScore >= from
-          && weightedScore <= to;
-      });
+      return weightedScore >= from && weightedScore <= to;
+    });
 
     if (!matched) {
       return {
@@ -4034,7 +4522,9 @@ export class ReportsService {
     }
 
     if (!startDate || !endDate) {
-      throw new BadRequestException('Date range (Start Date & End Date) is required');
+      throw new BadRequestException(
+        'Date range (Start Date & End Date) is required',
+      );
     }
 
     const unitTypeId = searchType === '2' ? 2 : 1;
@@ -4071,7 +4561,9 @@ export class ReportsService {
       throw new BadRequestException('No data found for selected filters.');
     }
 
-    const assessmentIds = assessmentsResult.rows.map((row: any) => Number(row.id));
+    const assessmentIds = assessmentsResult.rows.map((row: any) =>
+      Number(row.id),
+    );
     const firstYearId = Number(assessmentsResult.rows[0].year_id || 0);
 
     const [
@@ -4206,15 +4698,19 @@ export class ReportsService {
       ) {
         return 0;
       }
-      return Number(businessRiskScores.get(businessRiskId) || 0) + Number(controlRiskScores.get(controlRiskId) || 0);
+      return (
+        Number(businessRiskScores.get(businessRiskId) || 0) +
+        Number(controlRiskScores.get(controlRiskId) || 0)
+      );
     };
 
     const highestPossibleScore = Math.max(
       0,
-      ...Array.from({ length: 4 }, (_, index) => index + 1).flatMap((businessRisk) =>
-        Array.from({ length: 4 }, (__, index) => index + 1).map((controlRisk) =>
-          matrixScore(businessRisk, controlRisk),
-        ),
+      ...Array.from({ length: 4 }, (_, index) => index + 1).flatMap(
+        (businessRisk) =>
+          Array.from({ length: 4 }, (__, index) => index + 1).map(
+            (controlRisk) => matrixScore(businessRisk, controlRisk),
+          ),
       ),
     );
 
@@ -4239,18 +4735,24 @@ export class ReportsService {
 
     const depositsSamplingMap = new Map<number, number>();
     depositsSamplingResult.rows.forEach((row: any) => {
-      depositsSamplingMap.set(Number(row.assesment_period_id), Number(row.count || 0));
+      depositsSamplingMap.set(
+        Number(row.assesment_period_id),
+        Number(row.count || 0),
+      );
     });
 
     const advancesSamplingMap = new Map<number, number>();
     advancesSamplingResult.rows.forEach((row: any) => {
-      advancesSamplingMap.set(Number(row.assesment_period_id), Number(row.count || 0));
+      advancesSamplingMap.set(
+        Number(row.assesment_period_id),
+        Number(row.count || 0),
+      );
     });
 
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-        `
+          `
           SELECT
             ax.business_risk,
             ax.control_risk,
@@ -4262,8 +4764,8 @@ export class ReportsService {
             AND ax.assesment_id = ANY($2::int[])
             AND ax.deleted_at IS NULL
           `,
-        [answerIds, assessmentIds],
-      )
+          [answerIds, assessmentIds],
+        )
       : { rows: [] };
 
     // Group answers and annexures by assessment
@@ -4307,7 +4809,9 @@ export class ReportsService {
     assessmentsByUnit.forEach((unitAssessments, unitId) => {
       const firstAssess = unitAssessments[0];
       const name = String(firstAssess.audit_unit_name || '').toUpperCase();
-      const audit_unit_code = String(firstAssess.audit_unit_code || '').toUpperCase();
+      const audit_unit_code = String(
+        firstAssess.audit_unit_code || '',
+      ).toUpperCase();
 
       const unitRow: any = {
         audit_unit_id: unitId,
@@ -4325,13 +4829,16 @@ export class ReportsService {
       };
 
       // Initialize stats per risk category for this unit
-      const statsByRisk = new Map<number, {
-        totalQuestions: number;
-        totalNaQuestions: number;
-        totalQuestionsT1: number;
-        totalAnnexT2: number;
-        obtainedScore: number;
-      }>();
+      const statsByRisk = new Map<
+        number,
+        {
+          totalQuestions: number;
+          totalNaQuestions: number;
+          totalQuestionsT1: number;
+          totalAnnexT2: number;
+          obtainedScore: number;
+        }
+      >();
 
       const getStatsObj = (rcId: number) => {
         if (!statsByRisk.has(rcId)) {
@@ -4359,8 +4866,15 @@ export class ReportsService {
           const stats = getStatsObj(rcId);
           stats.totalQuestions++;
 
-          const answerStr = String(ans.answer_given || '').trim().toUpperCase();
-          const isNA = ['NOT APPLICABLE', 'N/A', 'NA', 'NOTAPPLICABLE'].includes(answerStr);
+          const answerStr = String(ans.answer_given || '')
+            .trim()
+            .toUpperCase();
+          const isNA = [
+            'NOT APPLICABLE',
+            'N/A',
+            'NA',
+            'NOTAPPLICABLE',
+          ].includes(answerStr);
           const isAnnex = Number(ans.option_id) === 4;
 
           if (isNA) {
@@ -4370,7 +4884,10 @@ export class ReportsService {
 
           if (!isAnnex) {
             stats.totalQuestionsT1++;
-            stats.obtainedScore += matrixScore(ans.business_risk, ans.control_risk);
+            stats.obtainedScore += matrixScore(
+              ans.business_risk,
+              ans.control_risk,
+            );
           }
         });
 
@@ -4380,7 +4897,10 @@ export class ReportsService {
 
           const stats = getStatsObj(rcId);
           stats.totalAnnexT2++;
-          stats.obtainedScore += matrixScore(ann.business_risk, ann.control_risk);
+          stats.obtainedScore += matrixScore(
+            ann.business_risk,
+            ann.control_risk,
+          );
         });
       });
 
@@ -4394,22 +4914,36 @@ export class ReportsService {
         const riskWeight = rc.risk_weightage;
 
         const totalQuestionsT1T2 = stats.totalQuestionsT1 + stats.totalAnnexT2;
-        const highestScoreWeighted = highestPossibleScore * totalQuestionsT1T2 * riskWeight;
+        const highestScoreWeighted =
+          highestPossibleScore * totalQuestionsT1T2 * riskWeight;
         const obtainedScoreWeighted = stats.obtainedScore * riskWeight;
 
         unitHighestTotal += highestScoreWeighted;
         unitObtainedTotal += obtainedScoreWeighted;
 
-        const relativePerformance = highestScoreWeighted > 0
-          ? (obtainedScoreWeighted / highestScoreWeighted) * 100
-          : 0;
+        const relativePerformance =
+          highestScoreWeighted > 0
+            ? (obtainedScoreWeighted / highestScoreWeighted) * 100
+            : 0;
 
         const ratings = ratingMap.get(unitId) || [];
-        const riskRating = this.matchBranchRiskRatingByPercent(relativePerformance, ratings);
+        const riskRating = this.matchBranchRiskRatingByPercent(
+          relativePerformance,
+          ratings,
+        );
 
-        unitRow[`risk_${rcId}_highest_score`] = this.formatDecimal(highestScoreWeighted, 2);
-        unitRow[`risk_${rcId}_obtained_score`] = this.formatDecimal(obtainedScoreWeighted, 2);
-        unitRow[`risk_${rcId}_percent`] = this.formatDecimal(relativePerformance, 2);
+        unitRow[`risk_${rcId}_highest_score`] = this.formatDecimal(
+          highestScoreWeighted,
+          2,
+        );
+        unitRow[`risk_${rcId}_obtained_score`] = this.formatDecimal(
+          obtainedScoreWeighted,
+          2,
+        );
+        unitRow[`risk_${rcId}_percent`] = this.formatDecimal(
+          relativePerformance,
+          2,
+        );
         unitRow[`risk_${rcId}_rating`] = riskRating || '-';
 
         unitRow.risk_category[rcId] = {
@@ -4420,15 +4954,23 @@ export class ReportsService {
         };
       });
 
-      const totalPercent = unitHighestTotal > 0
-        ? (unitObtainedTotal / unitHighestTotal) * 100
-        : 0;
+      const totalPercent =
+        unitHighestTotal > 0 ? (unitObtainedTotal / unitHighestTotal) * 100 : 0;
 
       const ratings = ratingMap.get(unitId) || [];
-      const totalRating = this.matchBranchRiskRatingByPercent(totalPercent, ratings);
+      const totalRating = this.matchBranchRiskRatingByPercent(
+        totalPercent,
+        ratings,
+      );
 
-      unitRow.total_highest_score_weighted = this.formatDecimal(unitHighestTotal, 2);
-      unitRow.total_obtained_score_weighted = this.formatDecimal(unitObtainedTotal, 2);
+      unitRow.total_highest_score_weighted = this.formatDecimal(
+        unitHighestTotal,
+        2,
+      );
+      unitRow.total_obtained_score_weighted = this.formatDecimal(
+        unitObtainedTotal,
+        2,
+      );
       unitRow.total_percent = this.formatDecimal(totalPercent, 2);
       unitRow.total_rating = totalRating || '-';
 
@@ -4443,12 +4985,16 @@ export class ReportsService {
     // Second pass to calculate percentages relative to all units
     rows.forEach((row) => {
       const obtained = row.__total_obtained_score_val;
-      const allPercent = allUnitsTotalObtainedScoreWeighted > 0
-        ? (obtained / allUnitsTotalObtainedScoreWeighted) * 100
-        : 0;
+      const allPercent =
+        allUnitsTotalObtainedScoreWeighted > 0
+          ? (obtained / allUnitsTotalObtainedScoreWeighted) * 100
+          : 0;
 
       const ratings = ratingMap.get(row.audit_unit_id) || [];
-      const allRating = this.matchBranchRiskRatingByPercent(allPercent, ratings);
+      const allRating = this.matchBranchRiskRatingByPercent(
+        allPercent,
+        ratings,
+      );
 
       row.total_score_all_percent = this.formatDecimal(allPercent, 2);
       row.total_all_rating = allRating || '-';
@@ -4486,7 +5032,10 @@ export class ReportsService {
 
       hasDataRiskCategory.forEach((rc) => {
         const rcId = rc.id;
-        const uRc = row.risk_category[rcId] || { total_highest_score_weighted: 0, total_obtained_score_weighted: 0 };
+        const uRc = row.risk_category[rcId] || {
+          total_highest_score_weighted: 0,
+          total_obtained_score_weighted: 0,
+        };
         const rT = riskTotals.get(rcId)!;
         rT.highest += uRc.total_highest_score_weighted;
         rT.obtained += uRc.total_obtained_score_weighted;
@@ -4498,15 +5047,28 @@ export class ReportsService {
       const rT = riskTotals.get(rcId)!;
       const pct = rT.highest > 0 ? (rT.obtained / rT.highest) * 100 : 0;
 
-      totalsRow[`risk_${rcId}_highest_score`] = this.formatDecimal(rT.highest, 2);
-      totalsRow[`risk_${rcId}_obtained_score`] = this.formatDecimal(rT.obtained, 2);
+      totalsRow[`risk_${rcId}_highest_score`] = this.formatDecimal(
+        rT.highest,
+        2,
+      );
+      totalsRow[`risk_${rcId}_obtained_score`] = this.formatDecimal(
+        rT.obtained,
+        2,
+      );
       totalsRow[`risk_${rcId}_percent`] = this.formatDecimal(pct, 2);
       totalsRow[`risk_${rcId}_rating`] = '';
     });
 
-    const grandPct = grandHighest > 0 ? (grandObtained / grandHighest) * 100 : 0;
-    totalsRow.total_highest_score_weighted = this.formatDecimal(grandHighest, 2);
-    totalsRow.total_obtained_score_weighted = this.formatDecimal(grandObtained, 2);
+    const grandPct =
+      grandHighest > 0 ? (grandObtained / grandHighest) * 100 : 0;
+    totalsRow.total_highest_score_weighted = this.formatDecimal(
+      grandHighest,
+      2,
+    );
+    totalsRow.total_obtained_score_weighted = this.formatDecimal(
+      grandObtained,
+      2,
+    );
     totalsRow.total_percent = this.formatDecimal(grandPct, 2);
     totalsRow.total_score_all_percent = this.formatDecimal(grandAllPercent, 2);
 
@@ -4540,7 +5102,8 @@ export class ReportsService {
       generatedAt: new Date().toISOString(),
       header: {
         assessmentPeriod: periodText,
-        auditUnit: searchType === '2' ? 'ALL HEAD OF DEPARTMENTS' : 'ALL BRANCHES',
+        auditUnit:
+          searchType === '2' ? 'ALL HEAD OF DEPARTMENTS' : 'ALL BRANCHES',
       },
       rows,
       summary: {
@@ -4567,9 +5130,10 @@ export class ReportsService {
     };
   }
 
-
   async getAuditCommitteeBoardReport1(query: any) {
-    const auditUnitFilter = String(query.audit_unit_id || 'all_branches').trim();
+    const auditUnitFilter = String(
+      query.audit_unit_id || 'all_branches',
+    ).trim();
     const trend = String(query.trend || '').trim();
     const startMonth = String(query.startMonth || '').trim();
     const endMonth = String(query.endMonth || '').trim();
@@ -4580,10 +5144,21 @@ export class ReportsService {
       throw new BadRequestException('Trend on is required');
     }
 
-    const period1 = this.monthPeriodRange(startMonth, endMonth, 'Trend Period - 1');
-    const period2 = this.monthPeriodRange(startMonth2, endMonth2, 'Trend Period - 2');
+    const period1 = this.monthPeriodRange(
+      startMonth,
+      endMonth,
+      'Trend Period - 1',
+    );
+    const period2 = this.monthPeriodRange(
+      startMonth2,
+      endMonth2,
+      'Trend Period - 2',
+    );
 
-    if (period1.startDate <= period2.endDate && period2.startDate <= period1.endDate) {
+    if (
+      period1.startDate <= period2.endDate &&
+      period2.startDate <= period1.endDate
+    ) {
       throw new BadRequestException('Trend periods must not overlap.');
     }
 
@@ -4610,12 +5185,16 @@ export class ReportsService {
     );
 
     if (!unitsResult.rows.length) {
-      throw new BadRequestException('No audit units found for selected filters.');
+      throw new BadRequestException(
+        'No audit units found for selected filters.',
+      );
     }
 
     const auditUnitIds = unitsResult.rows.map((row: any) => Number(row.id));
     const unitsById = new Map<number, any>();
-    unitsResult.rows.forEach((unit: any) => unitsById.set(Number(unit.id), unit));
+    unitsResult.rows.forEach((unit: any) =>
+      unitsById.set(Number(unit.id), unit),
+    );
 
     const scoringResult = await this.db.query(
       `
@@ -4641,43 +5220,58 @@ export class ReportsService {
         )
       ORDER BY rsm.audit_unit_id ASC, rsm.assesment_period_from ASC
       `,
-      [auditUnitIds, period1.startDate, period1.endDate, period2.startDate, period2.endDate],
+      [
+        auditUnitIds,
+        period1.startDate,
+        period1.endDate,
+        period2.startDate,
+        period2.endDate,
+      ],
     );
 
     if (!scoringResult.rows.length) {
       throw new BadRequestException('No data found for selected filters.');
     }
 
-    const yearIds = Array.from(new Set(scoringResult.rows.map((row: any) => Number(row.year_id || 0)).filter(Boolean)));
+    const yearIds = Array.from(
+      new Set(
+        scoringResult.rows
+          .map((row: any) => Number(row.year_id || 0))
+          .filter(Boolean),
+      ),
+    );
     const riskWeightsResult = yearIds.length
       ? await this.db.query(
-        `
+          `
         SELECT year_id, risk_category_id, risk_weight
         FROM risk_category_weights
         WHERE year_id = ANY($1::int[])
           AND is_active = 1
           AND deleted_at IS NULL
         `,
-        [yearIds],
-      )
+          [yearIds],
+        )
       : { rows: [] };
 
     const riskWeightMap = new Map<string, number>();
     riskWeightsResult.rows.forEach((row: any) => {
-      riskWeightMap.set(`${Number(row.year_id)}:${Number(row.risk_category_id)}`, Number(row.risk_weight || 0));
+      riskWeightMap.set(
+        `${Number(row.year_id)}:${Number(row.risk_category_id)}`,
+        Number(row.risk_weight || 0),
+      );
     });
 
     const ratingsResult = yearIds.length
       ? await this.db.query(
-        `
+          `
         SELECT audit_unit_id, year_id, risk_type_id, range_from, range_to
         FROM risk_branch_rating
         WHERE year_id = ANY($1::int[])
           AND audit_type_id = 1
           AND deleted_at IS NULL
         `,
-        [yearIds],
-      )
+          [yearIds],
+        )
       : { rows: [] };
 
     const ratingsMap = new Map<string, any[]>();
@@ -4693,8 +5287,18 @@ export class ReportsService {
     const statsFor = (auditUnitId: number) => {
       if (!statsByUnit.has(auditUnitId)) {
         statsByUnit.set(auditUnitId, {
-          period1: { audits: new Set<number>(), yearId: 0, totalScoreByRisk: new Map<number, number>(), score: 0 },
-          period2: { audits: new Set<number>(), yearId: 0, totalScoreByRisk: new Map<number, number>(), score: 0 },
+          period1: {
+            audits: new Set<number>(),
+            yearId: 0,
+            totalScoreByRisk: new Map<number, number>(),
+            score: 0,
+          },
+          period2: {
+            audits: new Set<number>(),
+            yearId: 0,
+            totalScoreByRisk: new Map<number, number>(),
+            score: 0,
+          },
         });
       }
       return statsByUnit.get(auditUnitId);
@@ -4703,11 +5307,13 @@ export class ReportsService {
     scoringResult.rows.forEach((row: any) => {
       const assessmentFrom = this.dateOnly(row.assesment_period_from);
       const assessmentTo = this.dateOnly(row.assesment_period_to);
-      const periodKey = assessmentFrom >= period1.startDate && assessmentTo <= period1.endDate
-        ? 'period1'
-        : assessmentFrom >= period2.startDate && assessmentTo <= period2.endDate
-          ? 'period2'
-          : '';
+      const periodKey =
+        assessmentFrom >= period1.startDate && assessmentTo <= period1.endDate
+          ? 'period1'
+          : assessmentFrom >= period2.startDate &&
+              assessmentTo <= period2.endDate
+            ? 'period2'
+            : '';
 
       if (!periodKey) {
         return;
@@ -4723,16 +5329,20 @@ export class ReportsService {
       }
 
       const riskData = this.parseRiskData(row.risk_data);
-      Object.entries(riskData).forEach(([riskIdText, riskDetails]: [string, any]) => {
-        const riskId = Number(riskIdText);
-        if (!riskId) {
-          return;
-        }
+      Object.entries(riskData).forEach(
+        ([riskIdText, riskDetails]: [string, any]) => {
+          const riskId = Number(riskIdText);
+          if (!riskId) {
+            return;
+          }
 
-        const avgScore = Number(riskDetails?.avg_sc ?? riskDetails?.avg ?? riskDetails?.score ?? 0);
-        const current = Number(periodStats.totalScoreByRisk.get(riskId) || 0);
-        periodStats.totalScoreByRisk.set(riskId, current + avgScore);
-      });
+          const avgScore = Number(
+            riskDetails?.avg_sc ?? riskDetails?.avg ?? riskDetails?.score ?? 0,
+          );
+          const current = Number(periodStats.totalScoreByRisk.get(riskId) || 0);
+          periodStats.totalScoreByRisk.set(riskId, current + avgScore);
+        },
+      );
     });
 
     let period1Total = 0;
@@ -4744,11 +5354,15 @@ export class ReportsService {
         const auditCount = Math.max(periodStats.audits.size, 1);
         let weightedScore = 0;
 
-        periodStats.totalScoreByRisk.forEach((score: number, riskId: number) => {
-          const avgScore = Number((score / auditCount).toFixed(2));
-          const riskWeight = Number(riskWeightMap.get(`${periodStats.yearId}:${riskId}`) || 0);
-          weightedScore += Number((avgScore * riskWeight).toFixed(2));
-        });
+        periodStats.totalScoreByRisk.forEach(
+          (score: number, riskId: number) => {
+            const avgScore = Number((score / auditCount).toFixed(2));
+            const riskWeight = Number(
+              riskWeightMap.get(`${periodStats.yearId}:${riskId}`) || 0,
+            );
+            weightedScore += Number((avgScore * riskWeight).toFixed(2));
+          },
+        );
 
         periodStats.score = Number(weightedScore.toFixed(2));
       });
@@ -4783,7 +5397,13 @@ export class ReportsService {
         p2Percent,
         ratingsMap.get(`${auditUnitId}:${unitStats.period2.yearId}`) || [],
       );
-      const trendLabel = this.committeeTrendLabel(trend, p1Score, p2Score, p1Risk, p2Risk);
+      const trendLabel = this.committeeTrendLabel(
+        trend,
+        p1Score,
+        p2Score,
+        p1Risk,
+        p2Risk,
+      );
       trendCounts[trendLabel.key as 'increasing' | 'decreasing' | 'stable']++;
       const unit = unitsById.get(auditUnitId) || {};
 
@@ -4798,7 +5418,10 @@ export class ReportsService {
         period2_risk: p2Risk || '-',
         period2_total_risk: this.formatDecimal(p2Score, 2),
         trend_label: trendLabel.label,
-        change_in_risk_score: this.formatDecimal(Math.abs(p2Score - p1Score), 2),
+        change_in_risk_score: this.formatDecimal(
+          Math.abs(p2Score - p1Score),
+          2,
+        ),
       });
     });
 
@@ -4806,7 +5429,13 @@ export class ReportsService {
       throw new BadRequestException('No data found for selected filters.');
     }
 
-    const overallTrend = this.committeeTrendLabel('rswt', period1Total, period2Total, '', '');
+    const overallTrend = this.committeeTrendLabel(
+      'rswt',
+      period1Total,
+      period2Total,
+      '',
+      '',
+    );
 
     return {
       filters: {
@@ -4828,7 +5457,10 @@ export class ReportsService {
         period1TotalRisk: this.formatDecimal(period1Total, 2),
         period2TotalRisk: this.formatDecimal(period2Total, 2),
         overallTrend: overallTrend.label,
-        changeInRiskScore: this.formatDecimal(Math.abs(period2Total - period1Total), 2),
+        changeInRiskScore: this.formatDecimal(
+          Math.abs(period2Total - period1Total),
+          2,
+        ),
         increasing: trendCounts.increasing,
         decreasing: trendCounts.decreasing,
         stable: trendCounts.stable,
@@ -4836,10 +5468,16 @@ export class ReportsService {
     };
   }
 
-  private monthPeriodRange(startMonth: string, endMonth: string, label: string) {
+  private monthPeriodRange(
+    startMonth: string,
+    endMonth: string,
+    label: string,
+  ) {
     const monthPattern = /^\d{4}-\d{2}$/;
     if (!monthPattern.test(startMonth) || !monthPattern.test(endMonth)) {
-      throw new BadRequestException(`${label} month must be in YYYY-MM format.`);
+      throw new BadRequestException(
+        `${label} month must be in YYYY-MM format.`,
+      );
     }
 
     const startDate = `${startMonth}-01`;
@@ -4848,7 +5486,9 @@ export class ReportsService {
     const endDate = `${endMonth}-${String(endDay).padStart(2, '0')}`;
 
     if (startDate > endDate) {
-      throw new BadRequestException(`${label} start month cannot be after end month.`);
+      throw new BadRequestException(
+        `${label} start month cannot be after end month.`,
+      );
     }
 
     return { startDate, endDate };
@@ -4877,7 +5517,12 @@ export class ReportsService {
     period1Risk: string,
     period2Risk: string,
   ) {
-    if (trend === 'rwt' && period1Risk && period2Risk && period1Risk === period2Risk) {
+    if (
+      trend === 'rwt' &&
+      period1Risk &&
+      period2Risk &&
+      period1Risk === period2Risk
+    ) {
       return { key: 'stable', label: 'Stable' };
     }
 
@@ -4885,7 +5530,11 @@ export class ReportsService {
       return { key: 'stable', label: 'Stable' };
     }
 
-    if (trend === 'rwt' && (!period1Risk || !period2Risk) && Number(period1Score) === Number(period2Score)) {
+    if (
+      trend === 'rwt' &&
+      (!period1Risk || !period2Risk) &&
+      Number(period1Score) === Number(period2Score)
+    ) {
       return { key: 'stable', label: 'Stable' };
     }
 
@@ -4915,8 +5564,13 @@ export class ReportsService {
       throw new BadRequestException('Audit assessment is required');
     }
 
-    if ((searchType === '5' || searchType === '6') && (!startDate || !endDate)) {
-      throw new BadRequestException('Date range (Start Date & End Date) is required');
+    if (
+      (searchType === '5' || searchType === '6') &&
+      (!startDate || !endDate)
+    ) {
+      throw new BadRequestException(
+        'Date range (Start Date & End Date) is required',
+      );
     }
 
     let assessmentsResult: any;
@@ -4968,7 +5622,9 @@ export class ReportsService {
       throw new BadRequestException('No data found for selected filters.');
     }
 
-    const assessmentIds = assessmentsResult.rows.map((row: any) => Number(row.id));
+    const assessmentIds = assessmentsResult.rows.map((row: any) =>
+      Number(row.id),
+    );
     const firstYearId = Number(assessmentsResult.rows[0].year_id || 0);
 
     const branchResult = await this.db.query(
@@ -5094,36 +5750,42 @@ export class ReportsService {
       const controlRiskId = Number(controlRisk);
 
       if (
-        !businessRiskId
-        || !controlRiskId
-        || businessRiskId < 1
-        || businessRiskId > 4
-        || controlRiskId < 1
-        || controlRiskId > 4
+        !businessRiskId ||
+        !controlRiskId ||
+        businessRiskId < 1 ||
+        businessRiskId > 4 ||
+        controlRiskId < 1 ||
+        controlRiskId > 4
       ) {
         return 0;
       }
 
-      return Number(businessRiskScores.get(businessRiskId) || 0)
-        + Number(controlRiskScores.get(controlRiskId) || 0);
+      return (
+        Number(businessRiskScores.get(businessRiskId) || 0) +
+        Number(controlRiskScores.get(controlRiskId) || 0)
+      );
     };
 
     const highestPossibleScore = Math.max(
       0,
-      ...Array.from({ length: 4 }, (_value, index) => index + 1)
-        .flatMap((businessRisk) =>
-          Array.from({ length: 4 }, (__value, index) => index + 1)
-            .map((controlRisk) => matrixScore(businessRisk, controlRisk)),
-        ),
+      ...Array.from({ length: 4 }, (_value, index) => index + 1).flatMap(
+        (businessRisk) =>
+          Array.from({ length: 4 }, (__value, index) => index + 1).map(
+            (controlRisk) => matrixScore(businessRisk, controlRisk),
+          ),
+      ),
     );
 
-    const statsByRiskCategory = new Map<number, {
-      totalQuestions: number;
-      totalNaQuestions: number;
-      totalQuestionsT1: number;
-      totalAnnexT2: number;
-      obtainedScore: number;
-    }>();
+    const statsByRiskCategory = new Map<
+      number,
+      {
+        totalQuestions: number;
+        totalNaQuestions: number;
+        totalQuestionsT1: number;
+        totalAnnexT2: number;
+        obtainedScore: number;
+      }
+    >();
 
     const getStats = (riskCategoryId: number) => {
       if (!statsByRiskCategory.has(riskCategoryId)) {
@@ -5142,7 +5804,7 @@ export class ReportsService {
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-        `
+          `
         SELECT
           ax.business_risk,
           ax.control_risk,
@@ -5152,8 +5814,8 @@ export class ReportsService {
           AND ax.assesment_id = ANY($2::int[])
           AND ax.deleted_at IS NULL
         `,
-        [answerIds, assessmentIds],
-      )
+          [answerIds, assessmentIds],
+        )
       : { rows: [] };
 
     answersResult.rows.forEach((row: any) => {
@@ -5163,9 +5825,15 @@ export class ReportsService {
       }
 
       const stats = getStats(riskCategoryId);
-      const answer = String(row.answer_given || '').trim().toUpperCase();
-      const isNotApplicable =
-        ['NOT APPLICABLE', 'N/A', 'NA', 'NOTAPPLICABLE'].includes(answer);
+      const answer = String(row.answer_given || '')
+        .trim()
+        .toUpperCase();
+      const isNotApplicable = [
+        'NOT APPLICABLE',
+        'N/A',
+        'NA',
+        'NOTAPPLICABLE',
+      ].includes(answer);
       const isAnnexureAnswer = Number(row.option_id) === 4;
 
       stats.totalQuestions++;
@@ -5201,8 +5869,7 @@ export class ReportsService {
         const totalQuestionsT1T2 = stats.totalQuestionsT1 + stats.totalAnnexT2;
         const highestScoreWeighted =
           highestPossibleScore * totalQuestionsT1T2 * riskWeight;
-        const obtainedScoreWeighted =
-          stats.obtainedScore * riskWeight;
+        const obtainedScoreWeighted = stats.obtainedScore * riskWeight;
 
         totalObtainedScoreWeighted += obtainedScoreWeighted;
 
@@ -5215,8 +5882,14 @@ export class ReportsService {
           total_questions_t1: stats.totalQuestionsT1,
           total_annex_t2: stats.totalAnnexT2,
           total_questions_t1_t2: totalQuestionsT1T2,
-          total_highest_score_weighted: this.formatDecimal(highestScoreWeighted, 2),
-          total_obtained_score_weighted: this.formatDecimal(obtainedScoreWeighted, 2),
+          total_highest_score_weighted: this.formatDecimal(
+            highestScoreWeighted,
+            2,
+          ),
+          total_obtained_score_weighted: this.formatDecimal(
+            obtainedScoreWeighted,
+            2,
+          ),
           relative_performance: this.formatDecimal(
             highestScoreWeighted > 0
               ? (obtainedScoreWeighted / highestScoreWeighted) * 100
@@ -5227,16 +5900,19 @@ export class ReportsService {
           __obtained_weighted_value: obtainedScoreWeighted,
         };
       })
-      .filter((row: any) =>
-        row.total_questions > 0
-        || row.total_annex_t2 > 0
-        || Number(row.total_obtained_score_weighted) > 0,
+      .filter(
+        (row: any) =>
+          row.total_questions > 0 ||
+          row.total_annex_t2 > 0 ||
+          Number(row.total_obtained_score_weighted) > 0,
       )
       .map((row: any) => ({
         ...row,
         percent_to_total: this.formatDecimal(
           totalObtainedScoreWeighted > 0
-            ? (Number(row.__obtained_weighted_value || 0) / totalObtainedScoreWeighted) * 100
+            ? (Number(row.__obtained_weighted_value || 0) /
+                totalObtainedScoreWeighted) *
+                100
             : 0,
           2,
         ),
@@ -5248,8 +5924,12 @@ export class ReportsService {
         acc.totalNaQuestions += Number(row.total_na_questions || 0);
         acc.totalQuestionsT1 += Number(row.total_questions_t1 || 0);
         acc.totalAnnexT2 += Number(row.total_annex_t2 || 0);
-        acc.totalHighestScoreWeighted += Number(row.total_highest_score_weighted || 0);
-        acc.totalObtainedScoreWeighted += Number(row.total_obtained_score_weighted || 0);
+        acc.totalHighestScoreWeighted += Number(
+          row.total_highest_score_weighted || 0,
+        );
+        acc.totalObtainedScoreWeighted += Number(
+          row.total_obtained_score_weighted || 0,
+        );
         acc.percentToTotal += Number(row.percent_to_total || 0);
         return acc;
       },
@@ -5274,8 +5954,14 @@ export class ReportsService {
         total_questions_t1: totals.totalQuestionsT1,
         total_annex_t2: totals.totalAnnexT2,
         total_questions_t1_t2: totals.totalQuestionsT1 + totals.totalAnnexT2,
-        total_highest_score_weighted: this.formatDecimal(totals.totalHighestScoreWeighted, 2),
-        total_obtained_score_weighted: this.formatDecimal(totals.totalObtainedScoreWeighted, 2),
+        total_highest_score_weighted: this.formatDecimal(
+          totals.totalHighestScoreWeighted,
+          2,
+        ),
+        total_obtained_score_weighted: this.formatDecimal(
+          totals.totalObtainedScoreWeighted,
+          2,
+        ),
         relative_performance: '',
         percent_to_total: this.formatDecimal(totals.percentToTotal, 2),
       });
@@ -5285,9 +5971,10 @@ export class ReportsService {
       ? ` - ( BR. ${branchInfo.audit_unit_code} )`
       : '';
     const combinedName = `${branchInfo.name || 'Selected Audit Unit'}${branchCode}`;
-    const periodText = searchType === '3' || searchType === '4'
-      ? `${this.dateOnly(assessmentsResult.rows[0].assesment_period_from)} to ${this.dateOnly(assessmentsResult.rows[0].assesment_period_to)}`
-      : `${startDate} to ${endDate}`;
+    const periodText =
+      searchType === '3' || searchType === '4'
+        ? `${this.dateOnly(assessmentsResult.rows[0].assesment_period_from)} to ${this.dateOnly(assessmentsResult.rows[0].assesment_period_to)}`
+        : `${startDate} to ${endDate}`;
 
     return {
       filters: {
@@ -5308,9 +5995,16 @@ export class ReportsService {
       summary: {
         auditsConducted: assessmentIds.length,
         totalQuestions: totals.totalQuestions,
-        totalObtainedScore: this.formatDecimal(totals.totalObtainedScoreWeighted, 2),
-        totalDepositsSampling: Number(depositsSamplingResult.rows[0]?.count || 0),
-        totalAdvancesSampling: Number(advancesSamplingResult.rows[0]?.count || 0),
+        totalObtainedScore: this.formatDecimal(
+          totals.totalObtainedScoreWeighted,
+          2,
+        ),
+        totalDepositsSampling: Number(
+          depositsSamplingResult.rows[0]?.count || 0,
+        ),
+        totalAdvancesSampling: Number(
+          advancesSamplingResult.rows[0]?.count || 0,
+        ),
       },
       meta: {
         totalDeposits: Number(depositsResult.rows[0]?.count || 0),
@@ -5341,8 +6035,13 @@ export class ReportsService {
       throw new BadRequestException('Audit assessment is required');
     }
 
-    if ((searchType === '5' || searchType === '6') && (!startDate || !endDate)) {
-      throw new BadRequestException('Date range (Start Date & End Date) is required');
+    if (
+      (searchType === '5' || searchType === '6') &&
+      (!startDate || !endDate)
+    ) {
+      throw new BadRequestException(
+        'Date range (Start Date & End Date) is required',
+      );
     }
 
     let assessmentsResult: any;
@@ -5394,7 +6093,9 @@ export class ReportsService {
       throw new BadRequestException('No data found for selected filters.');
     }
 
-    const assessmentIds = assessmentsResult.rows.map((row: any) => Number(row.id));
+    const assessmentIds = assessmentsResult.rows.map((row: any) =>
+      Number(row.id),
+    );
     const firstYearId = Number(assessmentsResult.rows[0].year_id || 0);
 
     const branchResult = await this.db.query(
@@ -5524,27 +6225,30 @@ export class ReportsService {
       const controlRiskId = Number(controlRisk);
 
       if (
-        !businessRiskId
-        || !controlRiskId
-        || businessRiskId < 1
-        || businessRiskId > 4
-        || controlRiskId < 1
-        || controlRiskId > 4
+        !businessRiskId ||
+        !controlRiskId ||
+        businessRiskId < 1 ||
+        businessRiskId > 4 ||
+        controlRiskId < 1 ||
+        controlRiskId > 4
       ) {
         return 0;
       }
 
-      return Number(businessRiskScores.get(businessRiskId) || 0)
-        + Number(controlRiskScores.get(controlRiskId) || 0);
+      return (
+        Number(businessRiskScores.get(businessRiskId) || 0) +
+        Number(controlRiskScores.get(controlRiskId) || 0)
+      );
     };
 
     const highestPossibleScore = Math.max(
       0,
-      ...Array.from({ length: 4 }, (_value, index) => index + 1)
-        .flatMap((businessRisk) =>
-          Array.from({ length: 4 }, (__value, index) => index + 1)
-            .map((controlRisk) => matrixScore(businessRisk, controlRisk)),
-        ),
+      ...Array.from({ length: 4 }, (_value, index) => index + 1).flatMap(
+        (businessRisk) =>
+          Array.from({ length: 4 }, (__value, index) => index + 1).map(
+            (controlRisk) => matrixScore(businessRisk, controlRisk),
+          ),
+      ),
     );
 
     const categoryKey = (dumpId: any, linkedTableId: any) => {
@@ -5555,13 +6259,16 @@ export class ReportsService {
       return Number(linkedTableId || 0) === 1 ? 'DEPOSITS' : 'ADVANCES';
     };
 
-    const statsByCategoryRisk = new Map<string, {
-      totalQuestions: number;
-      totalNaQuestions: number;
-      totalQuestionsT1: number;
-      totalAnnexT2: number;
-      obtainedScore: number;
-    }>();
+    const statsByCategoryRisk = new Map<
+      string,
+      {
+        totalQuestions: number;
+        totalNaQuestions: number;
+        totalQuestionsT1: number;
+        totalAnnexT2: number;
+        obtainedScore: number;
+      }
+    >();
 
     const getStats = (category: string, riskCategoryId: number) => {
       const key = `${category}:${riskCategoryId}`;
@@ -5582,7 +6289,7 @@ export class ReportsService {
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-        `
+          `
         SELECT
           ax.business_risk,
           ax.control_risk,
@@ -5599,8 +6306,8 @@ export class ReportsService {
           AND ax.assesment_id = ANY($2::int[])
           AND ax.deleted_at IS NULL
         `,
-        [answerIds, assessmentIds],
-      )
+          [answerIds, assessmentIds],
+        )
       : { rows: [] };
 
     answersResult.rows.forEach((row: any) => {
@@ -5609,10 +6316,19 @@ export class ReportsService {
         return;
       }
 
-      const stats = getStats(categoryKey(row.dump_id, row.linked_table_id), riskCategoryId);
-      const answer = String(row.answer_given || '').trim().toUpperCase();
-      const isNotApplicable =
-        ['NOT APPLICABLE', 'N/A', 'NA', 'NOTAPPLICABLE'].includes(answer);
+      const stats = getStats(
+        categoryKey(row.dump_id, row.linked_table_id),
+        riskCategoryId,
+      );
+      const answer = String(row.answer_given || '')
+        .trim()
+        .toUpperCase();
+      const isNotApplicable = [
+        'NOT APPLICABLE',
+        'N/A',
+        'NA',
+        'NOTAPPLICABLE',
+      ].includes(answer);
       const isAnnexureAnswer = Number(row.option_id) === 4;
 
       stats.totalQuestions++;
@@ -5634,7 +6350,10 @@ export class ReportsService {
         return;
       }
 
-      const stats = getStats(categoryKey(row.dump_id, row.linked_table_id), riskCategoryId);
+      const stats = getStats(
+        categoryKey(row.dump_id, row.linked_table_id),
+        riskCategoryId,
+      );
       stats.totalAnnexT2++;
       stats.obtainedScore += matrixScore(row.business_risk, row.control_risk);
     });
@@ -5649,8 +6368,10 @@ export class ReportsService {
 
         return categories.map((category) => {
           const stats = getStats(category, riskCategoryId);
-          const totalQuestionsT1T2 = stats.totalQuestionsT1 + stats.totalAnnexT2;
-          const highestScoreWeighted = highestPossibleScore * totalQuestionsT1T2 * riskWeight;
+          const totalQuestionsT1T2 =
+            stats.totalQuestionsT1 + stats.totalAnnexT2;
+          const highestScoreWeighted =
+            highestPossibleScore * totalQuestionsT1T2 * riskWeight;
           const obtainedScoreWeighted = stats.obtainedScore * riskWeight;
 
           totalObtainedScoreWeighted += obtainedScoreWeighted;
@@ -5664,8 +6385,14 @@ export class ReportsService {
             total_questions_t1: stats.totalQuestionsT1,
             total_annex_t2: stats.totalAnnexT2,
             total_questions_t1_t2: totalQuestionsT1T2,
-            total_highest_score_weighted: this.formatDecimal(highestScoreWeighted, 2),
-            total_obtained_score_weighted: this.formatDecimal(obtainedScoreWeighted, 2),
+            total_highest_score_weighted: this.formatDecimal(
+              highestScoreWeighted,
+              2,
+            ),
+            total_obtained_score_weighted: this.formatDecimal(
+              obtainedScoreWeighted,
+              2,
+            ),
             relative_performance: this.formatDecimal(
               highestScoreWeighted > 0
                 ? (obtainedScoreWeighted / highestScoreWeighted) * 100
@@ -5679,24 +6406,30 @@ export class ReportsService {
           };
         });
       })
-      .filter((row: any) =>
-        row.total_questions > 0
-        || row.total_annex_t2 > 0
-        || Number(row.total_obtained_score_weighted) > 0,
+      .filter(
+        (row: any) =>
+          row.total_questions > 0 ||
+          row.total_annex_t2 > 0 ||
+          Number(row.total_obtained_score_weighted) > 0,
       )
       .sort((a: any, b: any) => {
-        const riskDiff = Number(a.__risk_order || 0) - Number(b.__risk_order || 0);
+        const riskDiff =
+          Number(a.__risk_order || 0) - Number(b.__risk_order || 0);
         if (riskDiff !== 0) {
           return riskDiff;
         }
 
-        return Number(a.__category_order || 0) - Number(b.__category_order || 0);
+        return (
+          Number(a.__category_order || 0) - Number(b.__category_order || 0)
+        );
       })
       .map((row: any) => ({
         ...row,
         percent_to_total: this.formatDecimal(
           totalObtainedScoreWeighted > 0
-            ? (Number(row.__obtained_weighted_value || 0) / totalObtainedScoreWeighted) * 100
+            ? (Number(row.__obtained_weighted_value || 0) /
+                totalObtainedScoreWeighted) *
+                100
             : 0,
           2,
         ),
@@ -5708,8 +6441,12 @@ export class ReportsService {
         acc.totalNaQuestions += Number(row.total_na_questions || 0);
         acc.totalQuestionsT1 += Number(row.total_questions_t1 || 0);
         acc.totalAnnexT2 += Number(row.total_annex_t2 || 0);
-        acc.totalHighestScoreWeighted += Number(row.total_highest_score_weighted || 0);
-        acc.totalObtainedScoreWeighted += Number(row.total_obtained_score_weighted || 0);
+        acc.totalHighestScoreWeighted += Number(
+          row.total_highest_score_weighted || 0,
+        );
+        acc.totalObtainedScoreWeighted += Number(
+          row.total_obtained_score_weighted || 0,
+        );
         acc.percentToTotal += Number(row.percent_to_total || 0);
         return acc;
       },
@@ -5734,8 +6471,14 @@ export class ReportsService {
         total_questions_t1: totals.totalQuestionsT1,
         total_annex_t2: totals.totalAnnexT2,
         total_questions_t1_t2: totals.totalQuestionsT1 + totals.totalAnnexT2,
-        total_highest_score_weighted: this.formatDecimal(totals.totalHighestScoreWeighted, 2),
-        total_obtained_score_weighted: this.formatDecimal(totals.totalObtainedScoreWeighted, 2),
+        total_highest_score_weighted: this.formatDecimal(
+          totals.totalHighestScoreWeighted,
+          2,
+        ),
+        total_obtained_score_weighted: this.formatDecimal(
+          totals.totalObtainedScoreWeighted,
+          2,
+        ),
         relative_performance: '',
         percent_to_total: this.formatDecimal(totals.percentToTotal, 2),
       });
@@ -5745,9 +6488,10 @@ export class ReportsService {
       ? ` - ( BR. ${branchInfo.audit_unit_code} )`
       : '';
     const combinedName = `${branchInfo.name || 'Selected Audit Unit'}${branchCode}`;
-    const periodText = searchType === '3' || searchType === '4'
-      ? `${this.dateOnly(assessmentsResult.rows[0].assesment_period_from)} to ${this.dateOnly(assessmentsResult.rows[0].assesment_period_to)}`
-      : `${startDate} to ${endDate}`;
+    const periodText =
+      searchType === '3' || searchType === '4'
+        ? `${this.dateOnly(assessmentsResult.rows[0].assesment_period_from)} to ${this.dateOnly(assessmentsResult.rows[0].assesment_period_to)}`
+        : `${startDate} to ${endDate}`;
 
     return {
       filters: {
@@ -5768,9 +6512,16 @@ export class ReportsService {
       summary: {
         auditsConducted: assessmentIds.length,
         totalQuestions: totals.totalQuestions,
-        totalObtainedScore: this.formatDecimal(totals.totalObtainedScoreWeighted, 2),
-        totalDepositsSampling: Number(depositsSamplingResult.rows[0]?.count || 0),
-        totalAdvancesSampling: Number(advancesSamplingResult.rows[0]?.count || 0),
+        totalObtainedScore: this.formatDecimal(
+          totals.totalObtainedScoreWeighted,
+          2,
+        ),
+        totalDepositsSampling: Number(
+          depositsSamplingResult.rows[0]?.count || 0,
+        ),
+        totalAdvancesSampling: Number(
+          advancesSamplingResult.rows[0]?.count || 0,
+        ),
       },
       meta: {
         totalDeposits: Number(depositsResult.rows[0]?.count || 0),
@@ -5796,8 +6547,13 @@ export class ReportsService {
       throw new BadRequestException('Audit assessment is required');
     }
 
-    if ((searchType === '5' || searchType === '6') && (!startDate || !endDate)) {
-      throw new BadRequestException('Date range (Start Date & End Date) is required');
+    if (
+      (searchType === '5' || searchType === '6') &&
+      (!startDate || !endDate)
+    ) {
+      throw new BadRequestException(
+        'Date range (Start Date & End Date) is required',
+      );
     }
 
     // Step 1: Find matching assessments
@@ -5811,11 +6567,13 @@ export class ReportsService {
           AND audit_unit_id = $2
           AND deleted_at IS NULL
         `,
-        [assessmentId, auditUnitId]
+        [assessmentId, auditUnitId],
       );
       assessments = result.rows;
     } else {
-      const statusCondition = removePending ? 'AND audit_status_id > 4' : 'AND audit_status_id > 1';
+      const statusCondition = removePending
+        ? 'AND audit_status_id > 4'
+        : 'AND audit_status_id > 1';
       const result = await this.db.query(
         `
         SELECT id, year_id, audit_unit_id, assesment_period_from, assesment_period_to, frequency
@@ -5827,13 +6585,15 @@ export class ReportsService {
           AND deleted_at IS NULL
         ORDER BY id ASC
         `,
-        [auditUnitId, startDate, endDate]
+        [auditUnitId, startDate, endDate],
       );
       assessments = result.rows;
     }
 
     if (!assessments.length) {
-      throw new BadRequestException('No assessments found for selected filters.');
+      throw new BadRequestException(
+        'No assessments found for selected filters.',
+      );
     }
 
     const assessmentIds = assessments.map((a) => Number(a.id));
@@ -5842,9 +6602,12 @@ export class ReportsService {
     // Fetch branch info
     const branchResult = await this.db.query(
       `SELECT name, audit_unit_code FROM audit_unit_master WHERE id = $1 AND deleted_at IS NULL`,
-      [auditUnitId]
+      [auditUnitId],
     );
-    const branchInfo = branchResult.rows[0] || { name: 'Unknown', audit_unit_code: '-' };
+    const branchInfo = branchResult.rows[0] || {
+      name: 'Unknown',
+      audit_unit_code: '-',
+    };
 
     // Step 2: Fetch Risk Category weightages for the financial year
     const riskCategoriesResult = await this.db.query(
@@ -5863,7 +6626,7 @@ export class ReportsService {
         AND rcm.deleted_at IS NULL
       ORDER BY rcm.id ASC
       `,
-      [firstYearId]
+      [firstYearId],
     );
     const riskCategories = riskCategoriesResult.rows;
 
@@ -5877,7 +6640,7 @@ export class ReportsService {
           AND assesment_period_id = ANY($1::int[])
           AND deleted_at IS NULL
         `,
-        [assessmentIds]
+        [assessmentIds],
       ),
       this.db.query(
         `
@@ -5887,16 +6650,20 @@ export class ReportsService {
           AND assesment_period_id = ANY($1::int[])
           AND deleted_at IS NULL
         `,
-        [assessmentIds]
+        [assessmentIds],
       ),
     ]);
 
-    const totalDepositsSampling = Number(depositsSamplingResult.rows[0]?.count || 0);
-    const totalAdvancesSampling = Number(advancesSamplingResult.rows[0]?.count || 0);
+    const totalDepositsSampling = Number(
+      depositsSamplingResult.rows[0]?.count || 0,
+    );
+    const totalAdvancesSampling = Number(
+      advancesSamplingResult.rows[0]?.count || 0,
+    );
 
     // Fetch Broader Area names
     const broaderAreasResult = await this.db.query(
-      `SELECT id, name FROM audit_area_master WHERE deleted_at IS NULL`
+      `SELECT id, name FROM audit_area_master WHERE deleted_at IS NULL`,
     );
     const broaderAreasMap = new Map();
     for (const row of broaderAreasResult.rows) {
@@ -6008,7 +6775,7 @@ export class ReportsService {
       FROM answers_with_scores
       GROUP BY cat_key, audit_area_id, risk_category_id
       `,
-      [assessmentIds, firstYearId]
+      [assessmentIds, firstYearId],
     );
 
     const rows = [];
@@ -6027,14 +6794,26 @@ export class ReportsService {
 
       // Sum totals
       const qual_tot =
-        dbRow.qual_1_1 + dbRow.qual_1_2 + dbRow.qual_1_3 +
-        dbRow.qual_2_1 + dbRow.qual_2_2 + dbRow.qual_2_3 +
-        dbRow.qual_3_1 + dbRow.qual_3_2 + dbRow.qual_3_3;
+        dbRow.qual_1_1 +
+        dbRow.qual_1_2 +
+        dbRow.qual_1_3 +
+        dbRow.qual_2_1 +
+        dbRow.qual_2_2 +
+        dbRow.qual_2_3 +
+        dbRow.qual_3_1 +
+        dbRow.qual_3_2 +
+        dbRow.qual_3_3;
 
       const quan_tot =
-        dbRow.quan_1_1 + dbRow.quan_1_2 + dbRow.quan_1_3 +
-        dbRow.quan_2_1 + dbRow.quan_2_2 + dbRow.quan_2_3 +
-        dbRow.quan_3_1 + dbRow.quan_3_2 + dbRow.quan_3_3;
+        dbRow.quan_1_1 +
+        dbRow.quan_1_2 +
+        dbRow.quan_1_3 +
+        dbRow.quan_2_1 +
+        dbRow.quan_2_2 +
+        dbRow.quan_2_3 +
+        dbRow.quan_3_1 +
+        dbRow.quan_3_2 +
+        dbRow.quan_3_3;
 
       if (qual_tot === 0 && quan_tot === 0) {
         continue; // Skip blank rows
@@ -6053,9 +6832,8 @@ export class ReportsService {
       }
 
       // avg_quan_score
-      const avg_quan_score = quan_tot > 0
-        ? (quan_tot / (no_of_acc_checked || 1))
-        : 0;
+      const avg_quan_score =
+        quan_tot > 0 ? quan_tot / (no_of_acc_checked || 1) : 0;
 
       // tot_avg_score
       const tot_avg_score = qual_tot + avg_quan_score;
@@ -6073,7 +6851,8 @@ export class ReportsService {
         branch_name: branchInfo.name,
         risk_type: title,
         category_name: catKey.toUpperCase(),
-        broader_area_name: broaderAreasMap.get(broaderAreaId) || `Area #${broaderAreaId}`,
+        broader_area_name:
+          broaderAreasMap.get(broaderAreaId) || `Area #${broaderAreaId}`,
 
         qual_1_1: dbRow.qual_1_1 || 0,
         qual_1_2: dbRow.qual_1_2 || 0,
@@ -6113,9 +6892,14 @@ export class ReportsService {
     }
 
     // Sort matching legacy looping hierarchy
-    const catOrder: Record<string, number> = { GENERAL: 1, DEPOSITS: 2, ADVANCES: 3 };
+    const catOrder: Record<string, number> = {
+      GENERAL: 1,
+      DEPOSITS: 2,
+      ADVANCES: 3,
+    };
     rows.sort((a, b) => {
-      const catDiff = (catOrder[a.category_name] || 99) - (catOrder[b.category_name] || 99);
+      const catDiff =
+        (catOrder[a.category_name] || 99) - (catOrder[b.category_name] || 99);
       if (catDiff !== 0) return catDiff;
       const areaDiff = a.__broader_area_id - b.__broader_area_id;
       if (areaDiff !== 0) return areaDiff;
@@ -6134,9 +6918,10 @@ export class ReportsService {
       total: rows.length,
       generatedAt: new Date().toISOString(),
       header: {
-        assessmentPeriod: searchType === '3' || searchType === '4'
-          ? `${this.dateOnly(assessments[0].assesment_period_from)} to ${this.dateOnly(assessments[0].assesment_period_to)}`
-          : `${startDate} to ${endDate}`,
+        assessmentPeriod:
+          searchType === '3' || searchType === '4'
+            ? `${this.dateOnly(assessments[0].assesment_period_from)} to ${this.dateOnly(assessments[0].assesment_period_to)}`
+            : `${startDate} to ${endDate}`,
         auditUnit: branchInfo.name,
       },
       rows,
@@ -6285,10 +7070,9 @@ export class ReportsService {
     const rows = result.rows.map((row: any, index: number) => ({
       sr_no: index + 1,
       inspection_type: this.timelineTypeLabel(row.type_id),
-      rejected_count:
-        [3, 6].includes(Number(row.status_id))
-          ? row.rejected_cnt || 0
-          : '-',
+      rejected_count: [3, 6].includes(Number(row.status_id))
+        ? row.rejected_cnt || 0
+        : '-',
       employee_name: row.employee_name || '-',
       status_label: this.timelineStatusLabel(row.status_id),
       created_at: row.created_at,
@@ -6467,12 +7251,17 @@ export class ReportsService {
         auditPending: rows.filter((row) => row.audit_status_id === 1).length,
         reviewPending: rows.filter((row) => row.audit_status_id === 2).length,
         reAuditNeeded: rows.filter((row) => row.audit_status_id === 3).length,
-        compliancePending: rows.filter((row) => row.audit_status_id === 4).length,
-        complianceReviewPending: rows.filter((row) => row.audit_status_id === 5).length,
-        reComplianceNeeded: rows.filter((row) => row.audit_status_id === 6).length,
+        compliancePending: rows.filter((row) => row.audit_status_id === 4)
+          .length,
+        complianceReviewPending: rows.filter((row) => row.audit_status_id === 5)
+          .length,
+        reComplianceNeeded: rows.filter((row) => row.audit_status_id === 6)
+          .length,
         completed: rows.filter((row) => row.audit_status_id === 7).length,
         blocked: rows.filter((row) => row.is_limit_blocked === 1).length,
-        expired: rows.filter((row) => row.audit_expired || row.compliance_expired).length,
+        expired: rows.filter(
+          (row) => row.audit_expired || row.compliance_expired,
+        ).length,
       },
     };
   }
@@ -6515,19 +7304,21 @@ export class ReportsService {
     const auditDueDate = this.dateOnly(row.audit_due_date);
     const complianceDueDate = this.dateOnly(row.compliance_due_date);
     const auditCompleted = auditStatusId >= 4;
-    const auditExpired =
-      Boolean(!auditCompleted &&
-        [1, 3].includes(auditStatusId) &&
-        !isBlocked &&
-        auditDueDate &&
-        auditDueDate < today &&
-        !row.audit_end_date);
-    const complianceExpired =
-      Boolean(auditCompleted &&
-        [4, 6].includes(auditStatusId) &&
-        !isBlocked &&
-        complianceDueDate &&
-        complianceDueDate < today);
+    const auditExpired = Boolean(
+      !auditCompleted &&
+      [1, 3].includes(auditStatusId) &&
+      !isBlocked &&
+      auditDueDate &&
+      auditDueDate < today &&
+      !row.audit_end_date,
+    );
+    const complianceExpired = Boolean(
+      auditCompleted &&
+      [4, 6].includes(auditStatusId) &&
+      !isBlocked &&
+      complianceDueDate &&
+      complianceDueDate < today,
+    );
 
     return {
       sr_no: srNo,
@@ -6544,21 +7335,33 @@ export class ReportsService {
       assesment_period_to: row.assesment_period_to,
       frequency: row.frequency,
       audit_status_id: auditStatusId,
-      audit_status_label: this.auditStatusLabel(auditStatusId, isBlocked, auditExpired),
+      audit_status_label: this.auditStatusLabel(
+        auditStatusId,
+        isBlocked,
+        auditExpired,
+      ),
       audit_due_date: row.audit_due_date,
       audit_expired: auditExpired,
       compliance_start_date: auditCompleted ? row.compliance_start_date : null,
       compliance_end_date: auditCompleted ? row.compliance_end_date : null,
       compliance_due_date: row.compliance_due_date,
       compliance_status_label: auditCompleted
-        ? this.complianceStatusLabel(auditStatusId, isBlocked, complianceExpired)
+        ? this.complianceStatusLabel(
+            auditStatusId,
+            isBlocked,
+            complianceExpired,
+          )
         : '-',
       compliance_expired: complianceExpired,
       is_limit_blocked: isBlocked ? 1 : 0,
     };
   }
 
-  private auditStatusLabel(statusId: number, blocked: boolean, expired: boolean) {
+  private auditStatusLabel(
+    statusId: number,
+    blocked: boolean,
+    expired: boolean,
+  ) {
     if ([1, 2, 3].includes(statusId)) {
       if (blocked) {
         return 'Blocked';
@@ -6576,7 +7379,11 @@ export class ReportsService {
     return 'Completed';
   }
 
-  private complianceStatusLabel(statusId: number, blocked: boolean, expired: boolean) {
+  private complianceStatusLabel(
+    statusId: number,
+    blocked: boolean,
+    expired: boolean,
+  ) {
     if ([4, 5, 6].includes(statusId)) {
       if (blocked) {
         return 'Blocked';
@@ -6596,7 +7403,9 @@ export class ReportsService {
 
   private isPendingObservation(assessmentStatusId: number, observation: any) {
     const auditObservationStatusId = Number(observation.audit_status_id || 0);
-    const complianceObservationStatusId = Number(observation.compliance_status_id || 0);
+    const complianceObservationStatusId = Number(
+      observation.compliance_status_id || 0,
+    );
 
     if ([2, 3].includes(assessmentStatusId)) {
       return ![1, 2].includes(auditObservationStatusId);
@@ -6749,10 +7558,7 @@ export class ReportsService {
         this.addMonths(lastAuditDate, index * frequency),
         1,
       );
-      const endDate = this.addDays(
-        this.addMonths(startDate, frequency),
-        -1,
-      );
+      const endDate = this.addDays(this.addMonths(startDate, frequency), -1);
 
       rows.push({
         audit_unit_name: this.auditUnitName(unit),
@@ -6783,8 +7589,10 @@ export class ReportsService {
     const from = new Date(`${fromDate}T00:00:00`);
     const to = new Date(`${toDate}T00:00:00`);
 
-    return (to.getFullYear() - from.getFullYear()) * 12
-      + (to.getMonth() - from.getMonth());
+    return (
+      (to.getFullYear() - from.getFullYear()) * 12 +
+      (to.getMonth() - from.getMonth())
+    );
   }
 
   private buildAuditCompleteGroupedRows(questionRows: any[]) {
@@ -6856,10 +7664,8 @@ export class ReportsService {
       if ((row.__vouching_rows || []).length) {
         rows.push({
           __report_vouching: true,
-          __vouching_columns:
-            row.__vouching_rows[0].columns || [],
-          __vouching_rows:
-            row.__vouching_rows,
+          __vouching_columns: row.__vouching_rows[0].columns || [],
+          __vouching_rows: row.__vouching_rows,
         });
       }
     });
@@ -6962,8 +7768,9 @@ export class ReportsService {
 
   private formatAnnexureRows(rows: any[], columns: any[]) {
     const annexureColumns = this.parseJsonArray(columns);
-    const firstColumnName =
-      String(annexureColumns[0]?.name || 'Annexure Details').trim();
+    const firstColumnName = String(
+      annexureColumns[0]?.name || 'Annexure Details',
+    ).trim();
 
     return rows.map((row, index) => {
       const values = this.parseJsonArray(row.answer_given);
@@ -6991,49 +7798,34 @@ export class ReportsService {
   private formatVouchingRows(rows: any[], columns: any[]) {
     const vouchingColumns = this.parseJsonArray(columns).map(
       (column: any, index: number) => ({
-        label:
-          String(column?.name || `Column ${index + 1}`).trim(),
+        label: String(column?.name || `Column ${index + 1}`).trim(),
       }),
     );
 
     return rows.map((row, index) => {
-      const values =
-        this.parseJsonArray(row.answer_given);
-      const cells =
-        vouchingColumns.map((_column: any, columnIndex: number) => {
-          const value =
-            String(values[columnIndex] || '').trim();
+      const values = this.parseJsonArray(row.answer_given);
+      const cells = vouchingColumns.map((_column: any, columnIndex: number) => {
+        const value = String(values[columnIndex] || '').trim();
 
-          return columnIndex === 0
-            ? `${index + 1}) ${value || '-'}`
-            : value || '-';
-        });
+        return columnIndex === 0
+          ? `${index + 1}) ${value || '-'}`
+          : value || '-';
+      });
 
       return {
-        columns:
-          vouchingColumns,
+        columns: vouchingColumns,
         cells,
-        business_risk_label:
-          this.riskParameterLabel(row.business_risk),
-        control_risk_label:
-          this.riskParameterLabel(row.control_risk),
-        risk_category:
-          row.risk_category || '-',
-        audit_commpliance:
-          row.audit_commpliance || '-',
-        compliance_reviewer_comment:
-          row.compliance_reviewer_comment || '-',
+        business_risk_label: this.riskParameterLabel(row.business_risk),
+        control_risk_label: this.riskParameterLabel(row.control_risk),
+        risk_category: row.risk_category || '-',
+        audit_commpliance: row.audit_commpliance || '-',
+        compliance_reviewer_comment: row.compliance_reviewer_comment || '-',
       };
     });
   }
 
   private isVouchingTransactionRow(row: any) {
-    return [
-      row.menu_name,
-      row.category_name,
-      row.header_name,
-      row.question,
-    ]
+    return [row.menu_name, row.category_name, row.header_name, row.question]
       .map((item) => String(item || '').toLowerCase())
       .some((item) => item.includes('vouching'));
   }
@@ -7043,12 +7835,7 @@ export class ReportsService {
       return '';
     }
 
-    return [
-      row.scheme_code,
-      row.account_no,
-      row.ucic,
-      row.account_holder_name,
-    ]
+    return [row.scheme_code, row.account_no, row.ucic, row.account_holder_name]
       .map((item) => String(item || '').trim())
       .filter(Boolean)
       .join(':');
@@ -7060,8 +7847,7 @@ export class ReportsService {
     }
 
     return {
-      title:
-        `Account Details: ${String(row.account_holder_name || row.account_no || '').trim() || '-'}`,
+      title: `Account Details: ${String(row.account_holder_name || row.account_no || '').trim() || '-'}`,
       rows: [
         [
           this.detailCell(
@@ -7074,7 +7860,10 @@ export class ReportsService {
         [
           this.detailCell('Account Number', row.account_no),
           this.detailCell('UCIC', row.ucic),
-          this.detailCell('Account Open Date', this.dateOnly(row.account_opening_date)),
+          this.detailCell(
+            'Account Open Date',
+            this.dateOnly(row.account_opening_date),
+          ),
         ],
         [
           this.detailCell('Interest Rate', row.interest_rate),
@@ -7098,7 +7887,8 @@ export class ReportsService {
   private detailCell(label: string, value: any) {
     return {
       label,
-      value: value === null || value === undefined || value === '' ? '-' : value,
+      value:
+        value === null || value === undefined || value === '' ? '-' : value,
     };
   }
 
@@ -7283,7 +8073,9 @@ export class ReportsService {
       LIMIT 1;
     `;
 
-    const assessmentResult = await this.db.query(assessmentQuery, [assessmentId]);
+    const assessmentResult = await this.db.query(assessmentQuery, [
+      assessmentId,
+    ]);
 
     if (!assessmentResult.rows.length) {
       throw new NotFoundException('Assessment not found');
@@ -7291,14 +8083,10 @@ export class ReportsService {
 
     const assessment = assessmentResult.rows[0];
 
-    const [
-      branchPositions,
-      freshAccounts,
-      marchPositions,
-      schemes,
-    ] = await Promise.all([
-      this.db.query(
-        `
+    const [branchPositions, freshAccounts, marchPositions, schemes] =
+      await Promise.all([
+        this.db.query(
+          `
         SELECT
             type_id,
             amount,
@@ -7310,10 +8098,10 @@ export class ReportsService {
         WHERE assesment_id = $1
             AND deleted_at IS NULL;
         `,
-        [assessmentId],
-      ),
-      this.db.query(
-        `
+          [assessmentId],
+        ),
+        this.db.query(
+          `
         SELECT
             type_id,
             accounts,
@@ -7325,10 +8113,10 @@ export class ReportsService {
         WHERE assesment_id = $1
             AND deleted_at IS NULL;
         `,
-        [assessmentId],
-      ),
-      this.db.query(
-        `
+          [assessmentId],
+        ),
+        this.db.query(
+          `
         SELECT
             gl_type_id,
             march_position
@@ -7337,10 +8125,10 @@ export class ReportsService {
             AND year_id = $2
             AND deleted_at IS NULL;
         `,
-        [assessment.audit_unit_id, assessment.year_id],
-      ),
-      this.db.query(
-        `
+          [assessment.audit_unit_id, assessment.year_id],
+        ),
+        this.db.query(
+          `
         SELECT
             scheme_type,
             scheme_code,
@@ -7422,9 +8210,9 @@ export class ReportsService {
             scheme_type,
             scheme_code;
         `,
-        [assessmentId],
-      ),
-    ]);
+          [assessmentId],
+        ),
+      ]);
 
     const deduplicate = (rows: any[], targetYearId: number) => {
       const map = new Map<string, any>();
@@ -7438,8 +8226,14 @@ export class ReportsService {
       return Array.from(map.values());
     };
 
-    const dedupedBranchPositions = deduplicate(branchPositions.rows, assessment.year_id);
-    const dedupedFreshAccounts = deduplicate(freshAccounts.rows, assessment.year_id);
+    const dedupedBranchPositions = deduplicate(
+      branchPositions.rows,
+      assessment.year_id,
+    );
+    const dedupedFreshAccounts = deduplicate(
+      freshAccounts.rows,
+      assessment.year_id,
+    );
 
     return {
       filters: {
@@ -7533,7 +8327,7 @@ export class ReportsService {
       WHERE id = $1 AND deleted_at IS NULL
       LIMIT 1
       `,
-      [Number(financialYear)]
+      [Number(financialYear)],
     );
     if (yearResult.rows.length === 0) {
       throw new NotFoundException('Financial year not found');
@@ -7585,7 +8379,11 @@ export class ReportsService {
     }
 
     const auditUnitId = String(query.audit_unit_id || '').trim();
-    if (auditUnitId && auditUnitId !== 'all_branches' && auditUnitId !== 'all_head_of_dept') {
+    if (
+      auditUnitId &&
+      auditUnitId !== 'all_branches' &&
+      auditUnitId !== 'all_head_of_dept'
+    ) {
       params.push(Number(auditUnitId));
       whereClause += ` AND id = $${params.length}`;
     } else if (auditUnitId === 'all_branches') {
@@ -7636,12 +8434,14 @@ export class ReportsService {
           AND year_id = $1
           AND audit_unit_id = ANY($2::int[])
         `,
-        [Number(financialYear), unitIds]
+        [Number(financialYear), unitIds],
       );
 
       const assessments = assessmentsResult.rows;
       for (const assessment of assessments) {
-        const unit = auditUnits.find((u: any) => u.id === assessment.audit_unit_id);
+        const unit = auditUnits.find(
+          (u: any) => u.id === assessment.audit_unit_id,
+        );
         if (unit) {
           unit.asses_data[assessment.id] = {
             id: assessment.id,
@@ -7666,13 +8466,15 @@ export class ReportsService {
       if (auditUnits.length === 1) {
         auditUnitHeader = auditUnits[0].combined_name;
       } else {
-        const selectedUnit = auditUnits.find((u: any) => String(u.id) === auditUnitId);
+        const selectedUnit = auditUnits.find(
+          (u: any) => String(u.id) === auditUnitId,
+        );
         if (selectedUnit) {
           auditUnitHeader = selectedUnit.combined_name;
         } else {
           const unitRow = await this.db.query(
             `SELECT audit_unit_code, name, section_type_id FROM audit_unit_master WHERE id = $1 LIMIT 1`,
-            [Number(auditUnitId)]
+            [Number(auditUnitId)],
           );
           if (unitRow.rows.length > 0) {
             auditUnitHeader = this.auditUnitName(unitRow.rows[0]);
@@ -7702,16 +8504,3 @@ export class ReportsService {
     };
   }
 }
-
-}
-
-
-
-
-
-
-
-
-
-
-
