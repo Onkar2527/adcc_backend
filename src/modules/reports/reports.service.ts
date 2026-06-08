@@ -88,6 +88,10 @@ export class ReportsService {
       return this.getPerformanceRiskWeightageCategoryWiseDefinition();
     }
 
+    if (reportSlug === 'audit-committee-board-report-1') {
+      return this.getAuditCommitteeBoardReport1Definition();
+    }
+
     if (reportSlug === 'broader-areawise-scoring-report') {
       return this.getBroaderAreaWiseScoringDefinition();
     }
@@ -1102,6 +1106,71 @@ export class ReportsService {
       summaryCards: [],
     };
   }
+
+  private async getAuditCommitteeBoardReport1Definition() {
+    const lookups = await this.getAuditStatusLookups();
+
+    return {
+      slug: 'audit-committee-board-report-1',
+      title: 'Audit Committee Board Report - 1',
+      category: 'Board Reports',
+      page: 'A4L',
+      fileName: 'audit-committee-board-report-1',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        audit_unit_id: 'all_branches',
+        trend: '',
+        startMonth: '',
+        endMonth: '',
+        startMonth2: '',
+        endMonth2: '',
+      },
+      filters: [
+        {
+          key: 'audit_unit_id',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'trend',
+          label: 'Trend On',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '', label: 'Please select trend' },
+            { value: 'rwt', label: 'Risk Wise Trend' },
+            { value: 'rswt', label: 'Risk Score Wise Trend' },
+          ],
+        },
+        { key: 'startMonth', label: 'Trend Period - 1 Start Month [YYYY-MM]', type: 'text', required: true },
+        { key: 'endMonth', label: 'Trend Period - 1 End Month [YYYY-MM]', type: 'text', required: true },
+        { key: 'startMonth2', label: 'Trend Period - 2 Start Month [YYYY-MM]', type: 'text', required: true },
+        { key: 'endMonth2', label: 'Trend Period - 2 End Month [YYYY-MM]', type: 'text', required: true },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No.', width: '5%', align: 'center' },
+        { key: 'audit_unit_details', label: 'Audit Unit Details', width: '18%' },
+        { key: 'period1_total_risk', label: 'Total Risk', width: '9%', align: 'right' },
+        { key: 'period1_percent', label: 'Period 1 - % To All Branch Risk', width: '12%', align: 'right' },
+        { key: 'period1_risk', label: 'Period 1 - Risk Rating', width: '10%', align: 'center' },
+        { key: 'period2_percent', label: 'Period 2 - % To All Branch Risk', width: '12%', align: 'right' },
+        { key: 'period2_risk', label: 'Period 2 - Risk Rating', width: '10%', align: 'center' },
+        { key: 'period2_total_risk', label: 'Total Risk', width: '9%', align: 'right' },
+        { key: 'trend_label', label: 'Trend', width: '8%', align: 'center' },
+        { key: 'change_in_risk_score', label: 'Change in Risk Score', width: '10%', align: 'right' },
+      ],
+      summaryCards: [
+        { key: 'totalAuditUnits', label: 'Audit Units' },
+        { key: 'overallTrend', label: 'Overall Trend' },
+        { key: 'changeInRiskScore', label: 'Change in Risk Score' },
+      ],
+    };
+  }
   private async getBroaderAreaWiseScoringDefinition() {
     const lookups = await this.getAuditCompleteLookups();
 
@@ -1399,6 +1468,10 @@ export class ReportsService {
 
     if (reportSlug === 'performance-risk-weightage-report-category-wise') {
       return this.getPerformanceRiskWeightageCategoryWiseReport(query);
+    }
+
+    if (reportSlug === 'audit-committee-board-report-1') {
+      return this.getAuditCommitteeBoardReport1(query);
     }
 
     if (reportSlug === 'broader-areawise-scoring-report') {
@@ -4177,7 +4250,7 @@ export class ReportsService {
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-          `
+        `
           SELECT
             ax.business_risk,
             ax.control_risk,
@@ -4189,8 +4262,8 @@ export class ReportsService {
             AND ax.assesment_id = ANY($2::int[])
             AND ax.deleted_at IS NULL
           `,
-          [answerIds, assessmentIds],
-        )
+        [answerIds, assessmentIds],
+      )
       : { rows: [] };
 
     // Group answers and annexures by assessment
@@ -4494,6 +4567,332 @@ export class ReportsService {
     };
   }
 
+
+  async getAuditCommitteeBoardReport1(query: any) {
+    const auditUnitFilter = String(query.audit_unit_id || 'all_branches').trim();
+    const trend = String(query.trend || '').trim();
+    const startMonth = String(query.startMonth || '').trim();
+    const endMonth = String(query.endMonth || '').trim();
+    const startMonth2 = String(query.startMonth2 || '').trim();
+    const endMonth2 = String(query.endMonth2 || '').trim();
+
+    if (!['rwt', 'rswt'].includes(trend)) {
+      throw new BadRequestException('Trend on is required');
+    }
+
+    const period1 = this.monthPeriodRange(startMonth, endMonth, 'Trend Period - 1');
+    const period2 = this.monthPeriodRange(startMonth2, endMonth2, 'Trend Period - 2');
+
+    if (period1.startDate <= period2.endDate && period2.startDate <= period1.endDate) {
+      throw new BadRequestException('Trend periods must not overlap.');
+    }
+
+    const unitWhere: string[] = ['aum.deleted_at IS NULL'];
+    const unitParams: any[] = [];
+
+    if (auditUnitFilter === 'all_branches') {
+      unitWhere.push('aum.section_type_id = 1');
+    } else if (auditUnitFilter === 'all_head_of_dept') {
+      unitWhere.push('aum.section_type_id > 1');
+    } else {
+      unitParams.push(Number(auditUnitFilter));
+      unitWhere.push(`aum.id = $${unitParams.length}`);
+    }
+
+    const unitsResult = await this.db.query(
+      `
+      SELECT aum.id, aum.audit_unit_code, aum.name
+      FROM audit_unit_master aum
+      WHERE ${unitWhere.join(' AND ')}
+      ORDER BY aum.audit_unit_code ASC, aum.name ASC
+      `,
+      unitParams,
+    );
+
+    if (!unitsResult.rows.length) {
+      throw new BadRequestException('No audit units found for selected filters.');
+    }
+
+    const auditUnitIds = unitsResult.rows.map((row: any) => Number(row.id));
+    const unitsById = new Map<number, any>();
+    unitsResult.rows.forEach((unit: any) => unitsById.set(Number(unit.id), unit));
+
+    const scoringResult = await this.db.query(
+      `
+      SELECT
+        rsm.audit_unit_id,
+        rsm.id AS audit_assesment_id,
+        COALESCE(asm.year_id, ym.id) AS year_id,
+        rsm.assesment_period_from,
+        rsm.assesment_period_to,
+        rsm.risk_data
+      FROM report_scoring_master rsm
+      LEFT JOIN audit_assesment_master asm
+        ON asm.id = rsm.id
+        AND asm.deleted_at IS NULL
+      LEFT JOIN year_master ym
+        ON ym.year::text = rsm.year::text
+      WHERE rsm.audit_unit_id = ANY($1::int[])
+        AND rsm.audit_status_id > 3
+        AND rsm.deleted_at IS NULL
+        AND (
+          (rsm.assesment_period_from >= $2 AND rsm.assesment_period_to <= $3)
+          OR (rsm.assesment_period_from >= $4 AND rsm.assesment_period_to <= $5)
+        )
+      ORDER BY rsm.audit_unit_id ASC, rsm.assesment_period_from ASC
+      `,
+      [auditUnitIds, period1.startDate, period1.endDate, period2.startDate, period2.endDate],
+    );
+
+    if (!scoringResult.rows.length) {
+      throw new BadRequestException('No data found for selected filters.');
+    }
+
+    const yearIds = Array.from(new Set(scoringResult.rows.map((row: any) => Number(row.year_id || 0)).filter(Boolean)));
+    const riskWeightsResult = yearIds.length
+      ? await this.db.query(
+        `
+        SELECT year_id, risk_category_id, risk_weight
+        FROM risk_category_weights
+        WHERE year_id = ANY($1::int[])
+          AND is_active = 1
+          AND deleted_at IS NULL
+        `,
+        [yearIds],
+      )
+      : { rows: [] };
+
+    const riskWeightMap = new Map<string, number>();
+    riskWeightsResult.rows.forEach((row: any) => {
+      riskWeightMap.set(`${Number(row.year_id)}:${Number(row.risk_category_id)}`, Number(row.risk_weight || 0));
+    });
+
+    const ratingsResult = yearIds.length
+      ? await this.db.query(
+        `
+        SELECT audit_unit_id, year_id, risk_type_id, range_from, range_to
+        FROM risk_branch_rating
+        WHERE year_id = ANY($1::int[])
+          AND audit_type_id = 1
+          AND deleted_at IS NULL
+        `,
+        [yearIds],
+      )
+      : { rows: [] };
+
+    const ratingsMap = new Map<string, any[]>();
+    ratingsResult.rows.forEach((row: any) => {
+      const key = `${Number(row.audit_unit_id)}:${Number(row.year_id)}`;
+      if (!ratingsMap.has(key)) {
+        ratingsMap.set(key, []);
+      }
+      ratingsMap.get(key)!.push(row);
+    });
+
+    const statsByUnit = new Map<number, any>();
+    const statsFor = (auditUnitId: number) => {
+      if (!statsByUnit.has(auditUnitId)) {
+        statsByUnit.set(auditUnitId, {
+          period1: { audits: new Set<number>(), yearId: 0, totalScoreByRisk: new Map<number, number>(), score: 0 },
+          period2: { audits: new Set<number>(), yearId: 0, totalScoreByRisk: new Map<number, number>(), score: 0 },
+        });
+      }
+      return statsByUnit.get(auditUnitId);
+    };
+
+    scoringResult.rows.forEach((row: any) => {
+      const assessmentFrom = this.dateOnly(row.assesment_period_from);
+      const assessmentTo = this.dateOnly(row.assesment_period_to);
+      const periodKey = assessmentFrom >= period1.startDate && assessmentTo <= period1.endDate
+        ? 'period1'
+        : assessmentFrom >= period2.startDate && assessmentTo <= period2.endDate
+          ? 'period2'
+          : '';
+
+      if (!periodKey) {
+        return;
+      }
+
+      const unitStats = statsFor(Number(row.audit_unit_id));
+      const periodStats = unitStats[periodKey];
+      const assessmentId = Number(row.audit_assesment_id || 0);
+      const yearId = Number(row.year_id || 0);
+      periodStats.yearId = periodStats.yearId || yearId;
+      if (assessmentId) {
+        periodStats.audits.add(assessmentId);
+      }
+
+      const riskData = this.parseRiskData(row.risk_data);
+      Object.entries(riskData).forEach(([riskIdText, riskDetails]: [string, any]) => {
+        const riskId = Number(riskIdText);
+        if (!riskId) {
+          return;
+        }
+
+        const avgScore = Number(riskDetails?.avg_sc ?? riskDetails?.avg ?? riskDetails?.score ?? 0);
+        const current = Number(periodStats.totalScoreByRisk.get(riskId) || 0);
+        periodStats.totalScoreByRisk.set(riskId, current + avgScore);
+      });
+    });
+
+    let period1Total = 0;
+    let period2Total = 0;
+
+    statsByUnit.forEach((unitStats: any) => {
+      ['period1', 'period2'].forEach((periodKey) => {
+        const periodStats = unitStats[periodKey];
+        const auditCount = Math.max(periodStats.audits.size, 1);
+        let weightedScore = 0;
+
+        periodStats.totalScoreByRisk.forEach((score: number, riskId: number) => {
+          const avgScore = Number((score / auditCount).toFixed(2));
+          const riskWeight = Number(riskWeightMap.get(`${periodStats.yearId}:${riskId}`) || 0);
+          weightedScore += Number((avgScore * riskWeight).toFixed(2));
+        });
+
+        periodStats.score = Number(weightedScore.toFixed(2));
+      });
+
+      period1Total += Number(unitStats.period1.score || 0);
+      period2Total += Number(unitStats.period2.score || 0);
+    });
+
+    const rows: any[] = [];
+    const trendCounts = { increasing: 0, decreasing: 0, stable: 0 };
+
+    auditUnitIds.forEach((auditUnitId: number) => {
+      const unitStats = statsByUnit.get(auditUnitId);
+      if (!unitStats) {
+        return;
+      }
+
+      const p1Score = Number(unitStats.period1.score || 0);
+      const p2Score = Number(unitStats.period2.score || 0);
+
+      if (p1Score <= 0 && p2Score <= 0) {
+        return;
+      }
+
+      const p1Percent = period1Total > 0 ? (p1Score * 100) / period1Total : 0;
+      const p2Percent = period2Total > 0 ? (p2Score * 100) / period2Total : 0;
+      const p1Risk = this.matchBranchRiskRatingByPercent(
+        p1Percent,
+        ratingsMap.get(`${auditUnitId}:${unitStats.period1.yearId}`) || [],
+      );
+      const p2Risk = this.matchBranchRiskRatingByPercent(
+        p2Percent,
+        ratingsMap.get(`${auditUnitId}:${unitStats.period2.yearId}`) || [],
+      );
+      const trendLabel = this.committeeTrendLabel(trend, p1Score, p2Score, p1Risk, p2Risk);
+      trendCounts[trendLabel.key as 'increasing' | 'decreasing' | 'stable']++;
+      const unit = unitsById.get(auditUnitId) || {};
+
+      rows.push({
+        sr_no: rows.length + 1,
+        audit_unit_id: auditUnitId,
+        audit_unit_details: this.auditUnitName(unit),
+        period1_total_risk: this.formatDecimal(p1Score, 2),
+        period1_percent: this.formatDecimal(p1Percent, 2),
+        period1_risk: p1Risk || '-',
+        period2_percent: this.formatDecimal(p2Percent, 2),
+        period2_risk: p2Risk || '-',
+        period2_total_risk: this.formatDecimal(p2Score, 2),
+        trend_label: trendLabel.label,
+        change_in_risk_score: this.formatDecimal(Math.abs(p2Score - p1Score), 2),
+      });
+    });
+
+    if (!rows.length) {
+      throw new BadRequestException('No data found for selected filters.');
+    }
+
+    const overallTrend = this.committeeTrendLabel('rswt', period1Total, period2Total, '', '');
+
+    return {
+      filters: {
+        audit_unit_id: auditUnitFilter,
+        trend,
+        startMonth,
+        endMonth,
+        startMonth2,
+        endMonth2,
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      header: {
+        assessmentPeriod: `${period1.startDate} to ${period1.endDate} / ${period2.startDate} to ${period2.endDate}`,
+      },
+      rows,
+      summary: {
+        totalAuditUnits: rows.length,
+        period1TotalRisk: this.formatDecimal(period1Total, 2),
+        period2TotalRisk: this.formatDecimal(period2Total, 2),
+        overallTrend: overallTrend.label,
+        changeInRiskScore: this.formatDecimal(Math.abs(period2Total - period1Total), 2),
+        increasing: trendCounts.increasing,
+        decreasing: trendCounts.decreasing,
+        stable: trendCounts.stable,
+      },
+    };
+  }
+
+  private monthPeriodRange(startMonth: string, endMonth: string, label: string) {
+    const monthPattern = /^\d{4}-\d{2}$/;
+    if (!monthPattern.test(startMonth) || !monthPattern.test(endMonth)) {
+      throw new BadRequestException(`${label} month must be in YYYY-MM format.`);
+    }
+
+    const startDate = `${startMonth}-01`;
+    const [endYear, endMonthNo] = endMonth.split('-').map(Number);
+    const endDay = new Date(endYear, endMonthNo, 0).getDate();
+    const endDate = `${endMonth}-${String(endDay).padStart(2, '0')}`;
+
+    if (startDate > endDate) {
+      throw new BadRequestException(`${label} start month cannot be after end month.`);
+    }
+
+    return { startDate, endDate };
+  }
+
+  private parseRiskData(value: any) {
+    if (!value) {
+      return {};
+    }
+
+    if (typeof value === 'object') {
+      return value;
+    }
+
+    try {
+      return JSON.parse(String(value));
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  private committeeTrendLabel(
+    trend: string,
+    period1Score: number,
+    period2Score: number,
+    period1Risk: string,
+    period2Risk: string,
+  ) {
+    if (trend === 'rwt' && period1Risk && period2Risk && period1Risk === period2Risk) {
+      return { key: 'stable', label: 'Stable' };
+    }
+
+    if (trend === 'rswt' && Number(period1Score) === Number(period2Score)) {
+      return { key: 'stable', label: 'Stable' };
+    }
+
+    if (trend === 'rwt' && (!period1Risk || !period2Risk) && Number(period1Score) === Number(period2Score)) {
+      return { key: 'stable', label: 'Stable' };
+    }
+
+    return Number(period1Score) > Number(period2Score)
+      ? { key: 'decreasing', label: 'Decreasing' }
+      : { key: 'increasing', label: 'Increasing' };
+  }
   async getPerformanceRiskWeightageReport(query: any) {
     const searchType = String(query.selectSearchTypeFilter || '3').trim();
     const auditUnitId = Number(query.reportAuditUnit || 0);
@@ -7303,6 +7702,15 @@ export class ReportsService {
     };
   }
 }
+
+}
+
+
+
+
+
+
+
 
 
 
