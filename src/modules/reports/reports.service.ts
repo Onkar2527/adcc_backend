@@ -80,6 +80,10 @@ export class ReportsService {
       return this.getPerformanceRiskWeightageDefinition();
     }
 
+    if (reportSlug === 'performance-risk-weightage-report-category-wise') {
+      return this.getPerformanceRiskWeightageCategoryWiseDefinition();
+    }
+
     if (reportSlug === 'broader-areawise-scoring-report') {
       return this.getBroaderAreaWiseScoringDefinition();
     }
@@ -912,6 +916,92 @@ export class ReportsService {
     };
   }
 
+  private async getPerformanceRiskWeightageCategoryWiseDefinition() {
+    const lookups = await this.getComplianceLookups();
+
+    return {
+      slug: 'performance-risk-weightage-report-category-wise',
+      title: 'Performance Risk Weightage Report (Category Wise)',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'performance-risk-weightage-report-category-wise',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        selectSearchTypeFilter: '3',
+        reportAuditUnit: '',
+        reportAuditAssesment: '',
+        startDate: '',
+        endDate: '',
+        rmv_pending_assesments: [],
+      },
+      filters: [
+        {
+          key: 'selectSearchTypeFilter',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '3', label: 'Single Branch (Assessment Wise)' },
+            { value: '4', label: 'Single Department (Assessment Wise)' },
+            { value: '5', label: 'Single Branch Wise' },
+            { value: '6', label: 'Single Head Of Department Wise' },
+          ],
+        },
+        {
+          key: 'reportAuditUnit',
+          label: 'Audit Unit',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Audit Assessments',
+          type: 'select',
+          required: false,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+        {
+          key: 'startDate',
+          label: 'Start Date',
+          type: 'date',
+          required: false,
+        },
+        {
+          key: 'endDate',
+          label: 'End Date',
+          type: 'date',
+          required: false,
+        },
+        {
+          key: 'rmv_pending_assesments',
+          label: 'Remove Pending Assessments',
+          type: 'checkbox',
+          options: [{ value: '1', label: 'Remove Pending Assessments' }],
+        },
+      ],
+      columns: [
+        { key: 'category', label: 'Category', width: '10%', align: 'left' },
+        { key: 'risk_type', label: 'Risk Type', width: '14%', align: 'left' },
+        { key: 'risk_weight', label: 'Risk Weight', width: '7%', align: 'right' },
+        { key: 'total_questions', label: 'Total Questions Available', width: '9%', align: 'right' },
+        { key: 'total_na_questions', label: 'Questions Not Applicable', width: '9%', align: 'right' },
+        { key: 'total_questions_t1', label: 'Total Questions Applicable (T1)', width: '9%', align: 'right' },
+        { key: 'total_annex_t2', label: 'Total Annexures (T2)', width: '8%', align: 'right' },
+        { key: 'total_questions_t1_t2', label: 'Total Questions (T1 + T2)', width: '9%', align: 'right' },
+        { key: 'total_highest_score_weighted', label: 'Highest Possible Score (Weighted)', width: '10%', align: 'right' },
+        { key: 'total_obtained_score_weighted', label: 'Total Score Obtained (Weighted)', width: '10%', align: 'right' },
+        { key: 'relative_performance', label: 'Relative Performance (%)', width: '9%', align: 'right' },
+        { key: 'percent_to_total', label: '% To Total Score Obtained (Weighted)', width: '10%', align: 'right' },
+      ],
+      summaryCards: [],
+    };
+  }
   private async getBroaderAreaWiseScoringDefinition() {
     const lookups = await this.getAuditCompleteLookups();
 
@@ -1201,6 +1291,10 @@ export class ReportsService {
 
     if (reportSlug === 'performance-risk-weightage-report') {
       return this.getPerformanceRiskWeightageReport(query);
+    }
+
+    if (reportSlug === 'performance-risk-weightage-report-category-wise') {
+      return this.getPerformanceRiskWeightageCategoryWiseReport(query);
     }
 
     if (reportSlug === 'broader-areawise-scoring-report') {
@@ -4172,6 +4266,465 @@ export class ReportsService {
     };
   }
 
+  async getPerformanceRiskWeightageCategoryWiseReport(query: any) {
+    const searchType = String(query.selectSearchTypeFilter || '3').trim();
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+    const startDate = query.startDate ? String(query.startDate).trim() : '';
+    const endDate = query.endDate ? String(query.endDate).trim() : '';
+    const removePending = Array.isArray(query.rmv_pending_assesments)
+      ? query.rmv_pending_assesments.includes('1')
+      : String(query.rmv_pending_assesments) === '1';
+
+    if (!['3', '4', '5', '6'].includes(searchType)) {
+      throw new BadRequestException('Search type is required');
+    }
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if ((searchType === '3' || searchType === '4') && !assessmentId) {
+      throw new BadRequestException('Audit assessment is required');
+    }
+
+    if ((searchType === '5' || searchType === '6') && (!startDate || !endDate)) {
+      throw new BadRequestException('Date range (Start Date & End Date) is required');
+    }
+
+    let assessmentsResult: any;
+
+    if (searchType === '3' || searchType === '4') {
+      assessmentsResult = await this.db.query(
+        `
+        SELECT
+          id,
+          year_id,
+          audit_unit_id,
+          assesment_period_from,
+          assesment_period_to,
+          frequency
+        FROM audit_assesment_master
+        WHERE id = $1
+          AND audit_unit_id = $2
+          AND deleted_at IS NULL
+        `,
+        [assessmentId, auditUnitId],
+      );
+    } else {
+      const statusCondition = removePending
+        ? 'AND audit_status_id > 4'
+        : 'AND audit_status_id > 1';
+
+      assessmentsResult = await this.db.query(
+        `
+        SELECT
+          id,
+          year_id,
+          audit_unit_id,
+          assesment_period_from,
+          assesment_period_to,
+          frequency
+        FROM audit_assesment_master
+        WHERE audit_unit_id = $1
+          AND assesment_period_from >= $2
+          AND assesment_period_to <= $3
+          ${statusCondition}
+          AND deleted_at IS NULL
+        ORDER BY id ASC
+        `,
+        [auditUnitId, startDate, endDate],
+      );
+    }
+
+    if (!assessmentsResult.rows.length) {
+      throw new BadRequestException('No data found for selected filters.');
+    }
+
+    const assessmentIds = assessmentsResult.rows.map((row: any) => Number(row.id));
+    const firstYearId = Number(assessmentsResult.rows[0].year_id || 0);
+
+    const branchResult = await this.db.query(
+      `
+      SELECT name, audit_unit_code
+      FROM audit_unit_master
+      WHERE id = $1
+        AND deleted_at IS NULL
+      `,
+      [auditUnitId],
+    );
+    const branchInfo = branchResult.rows[0] || {
+      name: 'Selected Audit Unit',
+      audit_unit_code: '',
+    };
+
+    const [
+      riskCategoriesResult,
+      riskMatrixResult,
+      depositsResult,
+      advancesResult,
+      depositsSamplingResult,
+      advancesSamplingResult,
+      answersResult,
+    ] = await Promise.all([
+      this.db.query(
+        `
+        SELECT
+          rcm.id,
+          rcm.risk_category AS title,
+          COALESCE(rcw.risk_weight, 0) AS risk_weight
+        FROM risk_category_master rcm
+        LEFT JOIN risk_category_weights rcw
+          ON rcw.risk_category_id = rcm.id
+          AND rcw.year_id = $1
+          AND rcw.is_active = 1
+          AND rcw.deleted_at IS NULL
+        WHERE rcm.is_active = 1
+          AND rcm.deleted_at IS NULL
+        ORDER BY rcm.id ASC
+        `,
+        [firstYearId],
+      ),
+      this.db.query(
+        `
+        SELECT risk_parameter, business_risk_score, control_risk_score
+        FROM risk_matrix
+        WHERE year_id = $1
+          AND deleted_at IS NULL
+        `,
+        [firstYearId],
+      ),
+      this.db.query(
+        `
+        SELECT COUNT(*)::int AS count
+        FROM dump_deposits
+        WHERE assesment_period_id = ANY($1::int[])
+          AND deleted_at IS NULL
+        `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+        SELECT COUNT(*)::int AS count
+        FROM dump_advances
+        WHERE assesment_period_id = ANY($1::int[])
+          AND deleted_at IS NULL
+        `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+        SELECT COUNT(*)::int AS count
+        FROM dump_deposits
+        WHERE sampling_filter = 1
+          AND assesment_period_id = ANY($1::int[])
+          AND deleted_at IS NULL
+        `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+        SELECT COUNT(*)::int AS count
+        FROM dump_advances
+        WHERE sampling_filter = 1
+          AND assesment_period_id = ANY($1::int[])
+          AND deleted_at IS NULL
+        `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+        SELECT
+          ans.id,
+          ans.business_risk,
+          ans.control_risk,
+          ans.answer_given,
+          ans.dump_id,
+          qm.option_id,
+          qm.risk_category_id,
+          cm.linked_table_id
+        FROM answers_data ans
+        INNER JOIN question_master qm
+          ON qm.id = ans.question_id
+        LEFT JOIN category_master cm
+          ON cm.id = ans.category_id
+        WHERE ans.assesment_id = ANY($1::int[])
+          AND qm.risk_category_id IS NOT NULL
+          AND ans.deleted_at IS NULL
+          AND qm.deleted_at IS NULL
+        `,
+        [assessmentIds],
+      ),
+    ]);
+
+    const businessRiskScores = new Map<number, number>();
+    const controlRiskScores = new Map<number, number>();
+
+    riskMatrixResult.rows.forEach((row: any) => {
+      const parameter = Number(row.risk_parameter);
+      businessRiskScores.set(parameter, Number(row.business_risk_score || 0));
+      controlRiskScores.set(parameter, Number(row.control_risk_score || 0));
+    });
+
+    const matrixScore = (businessRisk: any, controlRisk: any) => {
+      const businessRiskId = Number(businessRisk);
+      const controlRiskId = Number(controlRisk);
+
+      if (
+        !businessRiskId
+        || !controlRiskId
+        || businessRiskId < 1
+        || businessRiskId > 4
+        || controlRiskId < 1
+        || controlRiskId > 4
+      ) {
+        return 0;
+      }
+
+      return Number(businessRiskScores.get(businessRiskId) || 0)
+        + Number(controlRiskScores.get(controlRiskId) || 0);
+    };
+
+    const highestPossibleScore = Math.max(
+      0,
+      ...Array.from({ length: 4 }, (_value, index) => index + 1)
+        .flatMap((businessRisk) =>
+          Array.from({ length: 4 }, (__value, index) => index + 1)
+            .map((controlRisk) => matrixScore(businessRisk, controlRisk)),
+        ),
+    );
+
+    const categoryKey = (dumpId: any, linkedTableId: any) => {
+      if (!Number(dumpId || 0)) {
+        return 'GENERAL';
+      }
+
+      return Number(linkedTableId || 0) === 1 ? 'DEPOSITS' : 'ADVANCES';
+    };
+
+    const statsByCategoryRisk = new Map<string, {
+      totalQuestions: number;
+      totalNaQuestions: number;
+      totalQuestionsT1: number;
+      totalAnnexT2: number;
+      obtainedScore: number;
+    }>();
+
+    const getStats = (category: string, riskCategoryId: number) => {
+      const key = `${category}:${riskCategoryId}`;
+
+      if (!statsByCategoryRisk.has(key)) {
+        statsByCategoryRisk.set(key, {
+          totalQuestions: 0,
+          totalNaQuestions: 0,
+          totalQuestionsT1: 0,
+          totalAnnexT2: 0,
+          obtainedScore: 0,
+        });
+      }
+
+      return statsByCategoryRisk.get(key)!;
+    };
+
+    const answerIds = answersResult.rows.map((row: any) => Number(row.id));
+    const annexuresResult = answerIds.length
+      ? await this.db.query(
+        `
+        SELECT
+          ax.business_risk,
+          ax.control_risk,
+          ax.risk_cat_id AS risk_category_id,
+          ans.dump_id,
+          cm.linked_table_id
+        FROM answers_data_annexure ax
+        INNER JOIN answers_data ans
+          ON ans.id = ax.answer_id
+          AND ans.deleted_at IS NULL
+        LEFT JOIN category_master cm
+          ON cm.id = ans.category_id
+        WHERE ax.answer_id = ANY($1::int[])
+          AND ax.assesment_id = ANY($2::int[])
+          AND ax.deleted_at IS NULL
+        `,
+        [answerIds, assessmentIds],
+      )
+      : { rows: [] };
+
+    answersResult.rows.forEach((row: any) => {
+      const riskCategoryId = Number(row.risk_category_id || 0);
+      if (!riskCategoryId) {
+        return;
+      }
+
+      const stats = getStats(categoryKey(row.dump_id, row.linked_table_id), riskCategoryId);
+      const answer = String(row.answer_given || '').trim().toUpperCase();
+      const isNotApplicable =
+        ['NOT APPLICABLE', 'N/A', 'NA', 'NOTAPPLICABLE'].includes(answer);
+      const isAnnexureAnswer = Number(row.option_id) === 4;
+
+      stats.totalQuestions++;
+
+      if (isNotApplicable) {
+        stats.totalNaQuestions++;
+        return;
+      }
+
+      if (!isAnnexureAnswer) {
+        stats.totalQuestionsT1++;
+        stats.obtainedScore += matrixScore(row.business_risk, row.control_risk);
+      }
+    });
+
+    annexuresResult.rows.forEach((row: any) => {
+      const riskCategoryId = Number(row.risk_category_id || 0);
+      if (!riskCategoryId) {
+        return;
+      }
+
+      const stats = getStats(categoryKey(row.dump_id, row.linked_table_id), riskCategoryId);
+      stats.totalAnnexT2++;
+      stats.obtainedScore += matrixScore(row.business_risk, row.control_risk);
+    });
+
+    const categories = ['GENERAL', 'ADVANCES', 'DEPOSITS'];
+    let totalObtainedScoreWeighted = 0;
+
+    const rows = riskCategoriesResult.rows
+      .flatMap((riskCategory: any) => {
+        const riskCategoryId = Number(riskCategory.id);
+        const riskWeight = Number(riskCategory.risk_weight || 0);
+
+        return categories.map((category) => {
+          const stats = getStats(category, riskCategoryId);
+          const totalQuestionsT1T2 = stats.totalQuestionsT1 + stats.totalAnnexT2;
+          const highestScoreWeighted = highestPossibleScore * totalQuestionsT1T2 * riskWeight;
+          const obtainedScoreWeighted = stats.obtainedScore * riskWeight;
+
+          totalObtainedScoreWeighted += obtainedScoreWeighted;
+
+          return {
+            category,
+            risk_type: String(riskCategory.title || '').toUpperCase(),
+            risk_weight: this.formatDecimal(riskWeight, 0),
+            total_questions: stats.totalQuestions,
+            total_na_questions: stats.totalNaQuestions,
+            total_questions_t1: stats.totalQuestionsT1,
+            total_annex_t2: stats.totalAnnexT2,
+            total_questions_t1_t2: totalQuestionsT1T2,
+            total_highest_score_weighted: this.formatDecimal(highestScoreWeighted, 2),
+            total_obtained_score_weighted: this.formatDecimal(obtainedScoreWeighted, 2),
+            relative_performance: this.formatDecimal(
+              highestScoreWeighted > 0
+                ? (obtainedScoreWeighted / highestScoreWeighted) * 100
+                : 0,
+              2,
+            ),
+            percent_to_total: 0,
+            __obtained_weighted_value: obtainedScoreWeighted,
+            __risk_order: riskCategoryId,
+            __category_order: categories.indexOf(category) + 1,
+          };
+        });
+      })
+      .filter((row: any) =>
+        row.total_questions > 0
+        || row.total_annex_t2 > 0
+        || Number(row.total_obtained_score_weighted) > 0,
+      )
+      .sort((a: any, b: any) => {
+        const riskDiff = Number(a.__risk_order || 0) - Number(b.__risk_order || 0);
+        if (riskDiff !== 0) {
+          return riskDiff;
+        }
+
+        return Number(a.__category_order || 0) - Number(b.__category_order || 0);
+      })
+      .map((row: any) => ({
+        ...row,
+        percent_to_total: this.formatDecimal(
+          totalObtainedScoreWeighted > 0
+            ? (Number(row.__obtained_weighted_value || 0) / totalObtainedScoreWeighted) * 100
+            : 0,
+          2,
+        ),
+      }));
+
+    const totals = rows.reduce(
+      (acc: any, row: any) => {
+        acc.totalQuestions += Number(row.total_questions || 0);
+        acc.totalNaQuestions += Number(row.total_na_questions || 0);
+        acc.totalQuestionsT1 += Number(row.total_questions_t1 || 0);
+        acc.totalAnnexT2 += Number(row.total_annex_t2 || 0);
+        acc.totalHighestScoreWeighted += Number(row.total_highest_score_weighted || 0);
+        acc.totalObtainedScoreWeighted += Number(row.total_obtained_score_weighted || 0);
+        acc.percentToTotal += Number(row.percent_to_total || 0);
+        return acc;
+      },
+      {
+        totalQuestions: 0,
+        totalNaQuestions: 0,
+        totalQuestionsT1: 0,
+        totalAnnexT2: 0,
+        totalHighestScoreWeighted: 0,
+        totalObtainedScoreWeighted: 0,
+        percentToTotal: 0,
+      },
+    );
+
+    if (rows.length) {
+      rows.push({
+        category: '',
+        risk_type: 'Total',
+        risk_weight: '',
+        total_questions: totals.totalQuestions,
+        total_na_questions: totals.totalNaQuestions,
+        total_questions_t1: totals.totalQuestionsT1,
+        total_annex_t2: totals.totalAnnexT2,
+        total_questions_t1_t2: totals.totalQuestionsT1 + totals.totalAnnexT2,
+        total_highest_score_weighted: this.formatDecimal(totals.totalHighestScoreWeighted, 2),
+        total_obtained_score_weighted: this.formatDecimal(totals.totalObtainedScoreWeighted, 2),
+        relative_performance: '',
+        percent_to_total: this.formatDecimal(totals.percentToTotal, 2),
+      });
+    }
+
+    const branchCode = branchInfo.audit_unit_code
+      ? ` - ( BR. ${branchInfo.audit_unit_code} )`
+      : '';
+    const combinedName = `${branchInfo.name || 'Selected Audit Unit'}${branchCode}`;
+    const periodText = searchType === '3' || searchType === '4'
+      ? `${this.dateOnly(assessmentsResult.rows[0].assesment_period_from)} to ${this.dateOnly(assessmentsResult.rows[0].assesment_period_to)}`
+      : `${startDate} to ${endDate}`;
+
+    return {
+      filters: {
+        selectSearchTypeFilter: searchType,
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: String(assessmentId || ''),
+        startDate,
+        endDate,
+        rmv_pending_assesments: removePending ? ['1'] : [],
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      header: {
+        assessmentPeriod: periodText,
+        auditUnit: combinedName,
+      },
+      rows,
+      summary: {
+        auditsConducted: assessmentIds.length,
+        totalQuestions: totals.totalQuestions,
+        totalObtainedScore: this.formatDecimal(totals.totalObtainedScoreWeighted, 2),
+        totalDepositsSampling: Number(depositsSamplingResult.rows[0]?.count || 0),
+        totalAdvancesSampling: Number(advancesSamplingResult.rows[0]?.count || 0),
+      },
+      meta: {
+        totalDeposits: Number(depositsResult.rows[0]?.count || 0),
+        totalAdvances: Number(advancesResult.rows[0]?.count || 0),
+      },
+    };
+  }
   async getBroaderAreaWiseScoringReport(query: any) {
     const searchType = String(query.selectSearchTypeFilter || '3').trim();
     const auditUnitId = Number(query.reportAuditUnit || 0);
@@ -4507,7 +5060,7 @@ export class ReportsService {
     }
 
     // Sort matching legacy looping hierarchy
-    const catOrder = { GENERAL: 1, DEPOSITS: 2, ADVANCES: 3 };
+    const catOrder: Record<string, number> = { GENERAL: 1, DEPOSITS: 2, ADVANCES: 3 };
     rows.sort((a, b) => {
       const catDiff = (catOrder[a.category_name] || 99) - (catOrder[b.category_name] || 99);
       if (catDiff !== 0) return catDiff;
@@ -5877,3 +6430,7 @@ export class ReportsService {
     };
   }
 }
+
+
+
+
