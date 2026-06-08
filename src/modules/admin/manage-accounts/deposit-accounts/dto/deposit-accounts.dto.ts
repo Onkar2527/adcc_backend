@@ -65,6 +65,18 @@ export class CreateDepositAccountDto {
     @IsDateString()
     close_date?: string;
 
+    @IsOptional()
+    @IsDateString()
+    upload_date?: string;
+
+    @IsOptional()
+    @IsDateString()
+    upload_period_from?: string;
+
+    @IsOptional()
+    @IsDateString()
+    upload_period_to?: string;
+
     @IsNotEmpty()
     @IsString()
     account_status!: string;
