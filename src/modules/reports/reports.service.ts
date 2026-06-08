@@ -7097,9 +7097,17 @@ export class ReportsService {
         bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
       },
       defaultFilters: {
+        audit_unit_id: 'all_branches',
         financial_year: lookups.years[1]?.value || '',
       },
       filters: [
+        {
+          key: 'audit_unit_id',
+          label: 'Select Branch',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
         {
           key: 'financial_year',
           label: 'Select Financial Year',
@@ -7133,6 +7141,60 @@ export class ReportsService {
     }
     const yearObj = yearResult.rows[0];
 
+    const userTypeId = Number(query.user_type_id || 0);
+    const auditUnitAuthority = String(query.audit_unit_authority || '').trim();
+    const employeeId = Number(query.employee_id || 0);
+
+    let whereClause = 'is_active = 1 AND deleted_at IS NULL';
+    const params: any[] = [];
+
+    if (userTypeId === 2 || userTypeId === 4) {
+      if (auditUnitAuthority) {
+        const assignedIds = auditUnitAuthority
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => !isNaN(n));
+        if (assignedIds.length > 0) {
+          params.push(assignedIds);
+          whereClause += ` AND id = ANY($${params.length}::int[])`;
+        } else {
+          whereClause += ' AND 1 = 0';
+        }
+      } else {
+        whereClause += ' AND 1 = 0';
+      }
+    } else if (userTypeId === 3) {
+      if (auditUnitAuthority) {
+        const assignedIds = auditUnitAuthority
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => !isNaN(n));
+        if (assignedIds.length > 0) {
+          params.push(assignedIds);
+          const assignedIdsIndex = params.length;
+          params.push(employeeId);
+          const employeeIdIndex = params.length;
+          whereClause += ` AND (id = ANY($${assignedIdsIndex}::int[]) OR branch_head_id = $${employeeIdIndex} OR branch_subhead_id = $${employeeIdIndex})`;
+        } else {
+          params.push(employeeId);
+          whereClause += ` AND (branch_head_id = $${params.length} OR branch_subhead_id = $${params.length})`;
+        }
+      } else {
+        params.push(employeeId);
+        whereClause += ` AND (branch_head_id = $${params.length} OR branch_subhead_id = $${params.length})`;
+      }
+    }
+
+    const auditUnitId = String(query.audit_unit_id || '').trim();
+    if (auditUnitId && auditUnitId !== 'all_branches' && auditUnitId !== 'all_head_of_dept') {
+      params.push(Number(auditUnitId));
+      whereClause += ` AND id = $${params.length}`;
+    } else if (auditUnitId === 'all_branches') {
+      whereClause += ' AND section_type_id = 1';
+    } else if (auditUnitId === 'all_head_of_dept') {
+      whereClause += ' AND section_type_id > 1';
+    }
+
     const unitsResult = await this.db.query(
       `
       SELECT
@@ -7141,10 +7203,10 @@ export class ReportsService {
         name,
         section_type_id
       FROM audit_unit_master
-      WHERE is_active = 1
-        AND deleted_at IS NULL
+      WHERE ${whereClause}
       ORDER BY section_type_id ASC, audit_unit_code ASC, name ASC
-      `
+      `,
+      params,
     );
 
     const auditUnits = unitsResult.rows.map((row: any) => ({
@@ -7198,13 +7260,39 @@ export class ReportsService {
       }
     }
 
+    let auditUnitHeader = 'All Branches';
+    if (auditUnitId === 'all_head_of_dept') {
+      auditUnitHeader = 'All Head Of Departments';
+    } else if (auditUnitId && auditUnitId !== 'all_branches') {
+      if (auditUnits.length === 1) {
+        auditUnitHeader = auditUnits[0].combined_name;
+      } else {
+        const selectedUnit = auditUnits.find((u: any) => String(u.id) === auditUnitId);
+        if (selectedUnit) {
+          auditUnitHeader = selectedUnit.combined_name;
+        } else {
+          const unitRow = await this.db.query(
+            `SELECT audit_unit_code, name, section_type_id FROM audit_unit_master WHERE id = $1 LIMIT 1`,
+            [Number(auditUnitId)]
+          );
+          if (unitRow.rows.length > 0) {
+            auditUnitHeader = this.auditUnitName(unitRow.rows[0]);
+          }
+        }
+      }
+    } else if (auditUnits.length === 1) {
+      auditUnitHeader = auditUnits[0].combined_name;
+    }
+
     return {
       filters: {
         financial_year: financialYear,
+        audit_unit_id: auditUnitId || 'all_branches',
       },
       generatedAt: new Date().toISOString(),
       header: {
         financialYear: yearObj.year,
+        auditUnit: auditUnitHeader,
       },
       year: {
         id: yearObj.id,
