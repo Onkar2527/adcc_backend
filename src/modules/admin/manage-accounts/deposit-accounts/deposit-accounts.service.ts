@@ -286,7 +286,7 @@ export class DepositAccountsService {
         try {
 
             await this.validateDuplicate(
-                data.account_no,
+                data,
             );
 
             return await this.db.transaction(
@@ -325,6 +325,12 @@ export class DepositAccountsService {
 
                 close_date,
 
+                upload_date,
+
+                upload_period_from,
+
+                upload_period_to,
+
                 account_status,
 
                 sampling_filter,
@@ -340,7 +346,8 @@ export class DepositAccountsService {
                 $1,$2,$3,$4,$5,
                 $6,$7,$8,$9,$10,
                 $11,$12,$13,$14,$15,
-                $16,$17,$18
+                $16,$17,$18,$19,$20,
+                $21
               )
 
               RETURNING *
@@ -374,6 +381,12 @@ export class DepositAccountsService {
                                 data.maturity_amount,
 
                                 data.close_date,
+
+                                data.upload_date,
+
+                                data.upload_period_from,
+
+                                data.upload_period_to,
 
                                 data.account_status,
 
@@ -419,7 +432,7 @@ export class DepositAccountsService {
             if (data.account_no) {
 
                 await this.validateDuplicate(
-                    data.account_no,
+                    data,
                     id,
                 );
             }
@@ -487,6 +500,41 @@ export class DepositAccountsService {
               account_status
             ),
 
+            account_opening_date = COALESCE(
+              $13,
+              account_opening_date
+            ),
+
+            balance_date = COALESCE(
+              $14,
+              balance_date
+            ),
+
+            maturity_date = COALESCE(
+              $15,
+              maturity_date
+            ),
+
+            close_date = COALESCE(
+              $16,
+              close_date
+            ),
+
+            upload_date = COALESCE(
+              $17,
+              upload_date
+            ),
+
+            upload_period_from = COALESCE(
+              $18,
+              upload_period_from
+            ),
+
+            upload_period_to = COALESCE(
+              $19,
+              upload_period_to
+            ),
+
             updated_at = CURRENT_TIMESTAMP
 
           WHERE id = $1
@@ -518,6 +566,20 @@ export class DepositAccountsService {
                         data.maturity_amount,
 
                         data.account_status,
+
+                        data.account_opening_date,
+
+                        data.balance_date,
+
+                        data.maturity_date,
+
+                        data.close_date,
+
+                        data.upload_date,
+
+                        data.upload_period_from,
+
+                        data.upload_period_to,
                     ],
                 );
 
@@ -622,13 +684,16 @@ export class DepositAccountsService {
 
     private async validateDuplicate(
 
-        accountNo: string,
+        data: CreateDepositAccountDto | UpdateDepositAccountDto,
 
         id?: number,
     ) {
 
         const params: any[] = [
-            accountNo,
+            Number(data.scheme_id),
+            data.account_no,
+            data.ucic,
+            this.formatCsvDate(data.account_opening_date),
         ];
 
         let query = `
@@ -636,7 +701,13 @@ export class DepositAccountsService {
 
       FROM dump_deposits
 
-      WHERE account_no = $1
+      WHERE scheme_id = $1
+
+      AND account_no = $2
+
+      AND ucic = $3
+
+      AND account_opening_date::date = $4::date
 
       AND deleted_at IS NULL
     `;
@@ -646,7 +717,7 @@ export class DepositAccountsService {
             params.push(id);
 
             query += `
-        AND id != $2
+        AND id != $5
       `;
         }
 
@@ -659,11 +730,10 @@ export class DepositAccountsService {
         if (result.rows.length) {
 
             throw new BadRequestException(
-                'Account number already exists',
+                'Duplicate deposit account details found for same scheme, account number, UCIC and opening date',
             );
         }
     }
-
     // Dump Upload
 
     private formatCsvDate(

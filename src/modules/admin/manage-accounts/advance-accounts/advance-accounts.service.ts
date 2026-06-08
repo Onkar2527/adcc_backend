@@ -283,7 +283,7 @@ export class AdvanceAccountsService {
         try {
 
             await this.validateDuplicate(
-                data.account_no,
+                data,
             );
 
             return await this.db.transaction(
@@ -322,6 +322,12 @@ export class AdvanceAccountsService {
 
                 balance_date,
 
+                upload_date,
+
+                upload_period_from,
+
+                upload_period_to,
+
                 account_status,
 
                 sampling_filter,
@@ -337,7 +343,8 @@ export class AdvanceAccountsService {
                 $1,$2,$3,$4,$5,
                 $6,$7,$8,$9,$10,
                 $11,$12,$13,$14,$15,
-                $16,$17,$18
+                $16,$17,$18,$19,$20,
+                $21
               )
 
               RETURNING *
@@ -371,6 +378,12 @@ export class AdvanceAccountsService {
                                 data.account_opening_date,
 
                                 data.balance_date,
+
+                                data.upload_date,
+
+                                data.upload_period_from,
+
+                                data.upload_period_to,
 
                                 data.account_status,
 
@@ -416,7 +429,7 @@ export class AdvanceAccountsService {
             if (data.account_no) {
 
                 await this.validateDuplicate(
-                    data.account_no,
+                    data,
                     id,
                 );
             }
@@ -482,7 +495,42 @@ export class AdvanceAccountsService {
             sanction_amount = COALESCE(
               $12,
               sanction_amount
-            ),  
+            ),
+
+            account_opening_date = COALESCE(
+              $13,
+              account_opening_date
+            ),
+
+            balance_date = COALESCE(
+              $14,
+              balance_date
+            ),
+
+            renewal_date = COALESCE(
+              $15,
+              renewal_date
+            ),
+
+            due_date = COALESCE(
+              $16,
+              due_date
+            ),
+
+            upload_date = COALESCE(
+              $17,
+              upload_date
+            ),
+
+            upload_period_from = COALESCE(
+              $18,
+              upload_period_from
+            ),
+
+            upload_period_to = COALESCE(
+              $19,
+              upload_period_to
+            ),
 
             updated_at = CURRENT_TIMESTAMP
 
@@ -514,7 +562,21 @@ export class AdvanceAccountsService {
 
                         data.npa_status,
 
-                        data.sanction_amount
+                        data.sanction_amount,
+
+                        data.account_opening_date,
+
+                        data.balance_date,
+
+                        data.renewal_date,
+
+                        data.due_date,
+
+                        data.upload_date,
+
+                        data.upload_period_from,
+
+                        data.upload_period_to
                     ],
                 );
 
@@ -619,13 +681,17 @@ export class AdvanceAccountsService {
 
     private async validateDuplicate(
 
-        accountNo: string,
+        data: CreateAdvanceAccountDto | UpdateAdvanceAccountDto,
 
         id?: number,
     ) {
 
         const params: any[] = [
-            accountNo,
+            Number(data.scheme_id),
+            data.account_no,
+            data.ucic,
+            this.formatCsvDate(data.account_opening_date),
+            this.formatCsvDate(data.renewal_date),
         ];
 
         let query = `
@@ -633,7 +699,15 @@ export class AdvanceAccountsService {
 
       FROM dump_advances
 
-      WHERE account_no = $1
+      WHERE scheme_id = $1
+
+      AND account_no = $2
+
+      AND ucic = $3
+
+      AND account_opening_date::date = $4::date
+
+      AND renewal_date::date = $5::date
 
       AND deleted_at IS NULL
     `;
@@ -643,7 +717,7 @@ export class AdvanceAccountsService {
             params.push(id);
 
             query += `
-        AND id != $2
+        AND id != $6
       `;
         }
 
@@ -656,11 +730,10 @@ export class AdvanceAccountsService {
         if (result.rows.length) {
 
             throw new BadRequestException(
-                'Account number already exists',
+                'Duplicate advance account details found for same scheme, account number, UCIC, opening date and renewal date',
             );
         }
     }
-
     // Dump Upload
 
     private toUpper(
