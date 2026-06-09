@@ -573,6 +573,24 @@ export class InternalAuditController {
     );
   }
 
+  @Post(':assessmentId/carry-forward/:annexureId/comment')
+  saveCarryForwardComment(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('annexureId', ParseIntPipe)
+    annexureId: number,
+
+    @Body()
+    body: any,
+  ) {
+    return this.service.saveCarryForwardComment(
+      assessmentId,
+      annexureId,
+      Number(body?.employee_id || 0),
+      String(body?.comment || ''),
+    );
+  }
   @Get(':assessmentId/category/:categoryId/subset/:subsetSetId')
   getCategorySubsetSet(
     @Param('assessmentId', ParseIntPipe)
@@ -1110,3 +1128,4 @@ export class InternalAuditController {
     );
   }
 }
+

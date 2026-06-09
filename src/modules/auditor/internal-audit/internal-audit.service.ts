@@ -2051,6 +2051,28 @@ export class InternalAuditService {
         ],
       );
 
+    const carryForwardPendingResult =
+      await this.db.query(
+        `
+      SELECT
+          aa.id,
+          aa.answer_given,
+          aa.audit_comment
+      FROM answers_data ad
+      INNER JOIN answers_data_annexure aa
+          ON aa.answer_id = ad.id
+          AND aa.assesment_id = ad.assesment_id
+          AND aa.deleted_at IS NULL
+      WHERE ad.assesment_id = $1
+          AND ad.answer_given = 'CF'
+          AND ad.deleted_at IS NULL
+          AND COALESCE(TRIM(aa.audit_comment), '') = ''
+      ORDER BY aa.id;
+      `,
+        [
+          assessmentId,
+        ],
+      );
     const issues: any[] = [
       ...pendingResult.rows.map(
         (row: any) => ({
@@ -2119,6 +2141,32 @@ export class InternalAuditService {
           message:
             row.message,
         }),
+      ),
+
+      ...carryForwardPendingResult.rows.map(
+        (row: any) => {
+          const data =
+            this.parseJsonObject(
+              row.answer_given,
+            );
+
+          return {
+            category_id:
+              0,
+            category_name:
+              'Carry Forward',
+            menu_name:
+              'Carry Forward',
+            question_id:
+              0,
+            question:
+              data.question || 'Carry-forward point',
+            type:
+              'carry_forward',
+            message:
+              'Carry-forward audit comment is pending.',
+          };
+        },
       ),
     ];
 
@@ -3001,6 +3049,9 @@ export class InternalAuditService {
         SELECT
             aa.id,
             aa.answer_given,
+            aa.audit_comment,
+            aa.audit_status_id,
+            aa.audit_emp_id,
             aa.business_risk,
             aa.control_risk,
             aa.risk_cat_id
@@ -3030,6 +3081,12 @@ export class InternalAuditService {
               this.parseJsonObject(
                 row.answer_given,
               ),
+            audit_comment:
+              row.audit_comment || '',
+            audit_status_id:
+              Number(row.audit_status_id || 0),
+            audit_emp_id:
+              row.audit_emp_id,
             business_risk:
               row.business_risk,
             control_risk:
@@ -3041,6 +3098,83 @@ export class InternalAuditService {
     };
   }
 
+  async saveCarryForwardComment(
+    assessmentId: number,
+    annexureId: number,
+    employeeId: number,
+    comment: string,
+  ) {
+    const assessment =
+      await this.findAssessment(
+        assessmentId,
+      );
+
+    await this.assertAuthority(
+      assessment.audit_unit_id,
+      employeeId,
+    );
+
+    if (
+      !AUDITOR_STATUS_IDS.includes(
+        Number(assessment.audit_status_id),
+      )
+    ) {
+      throw new BadRequestException(
+        'Carry-forward comment can be updated only during audit.',
+      );
+    }
+
+    if (
+      !annexureId
+    ) {
+      throw new BadRequestException(
+        'Carry-forward point is required.',
+      );
+    }
+
+    const result =
+      await this.db.query(
+        `
+        UPDATE answers_data_annexure aa
+        SET audit_comment = $4,
+            audit_emp_id = $3,
+            audit_status_id = 1,
+            updated_at = CURRENT_TIMESTAMP
+        FROM answers_data ad
+        WHERE aa.id = $2
+            AND aa.assesment_id = $1
+            AND aa.deleted_at IS NULL
+            AND ad.id = aa.answer_id
+            AND ad.assesment_id = aa.assesment_id
+            AND ad.answer_given = 'CF'
+            AND ad.deleted_at IS NULL
+        RETURNING aa.id, aa.audit_comment, aa.audit_status_id;
+        `,
+        [
+          assessmentId,
+          annexureId,
+          employeeId,
+          String(comment || '').trim(),
+        ],
+      );
+
+    if (
+      !result.rows.length
+    ) {
+      throw new BadRequestException(
+        'Carry-forward point was not found for this assessment.',
+      );
+    }
+
+    return {
+      success:
+        true,
+      message:
+        'Carry-forward comment saved successfully.',
+      point:
+        result.rows[0],
+    };
+  }
   async submitReviewerComplianceAssessment(
     assessmentId: number,
     employeeId: number,
@@ -11394,3 +11528,6 @@ SELECT (
     return `A${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   }
 }
+
+
+
