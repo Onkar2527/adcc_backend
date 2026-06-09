@@ -15,9 +15,10 @@ const REMARK_TYPES: Record<number, string> = {
   3: 'Remark for Compliance',
   4: 'Remark for Reviewer & Compliance',
   5: 'Remark for Auditor & Compliance',
+  6: 'Remark for Auditor & Reviewer',
 };
 const AUDITOR_REMARK_RECIPIENT_IDS = [2, 3, 4];
-const AUDITOR_INCOMING_REMARK_IDS = [1, 5];
+const AUDITOR_INCOMING_REMARK_IDS = [1, 5, 6];
 const EVIDENCE_MAX_SIZE =
   5 * 1024 * 1024;
 const EVIDENCE_FILE_TYPES: Record<string, {
@@ -1066,6 +1067,22 @@ export class InternalAuditService {
         employeeId,
       );
 
+    const auditStatusId = Number(assessment.audit_status_id);
+    const isReviewer = [2, 5].includes(auditStatusId);
+    const isCompliance = [4, 6].includes(auditStatusId);
+
+    const recipientIds = isReviewer
+      ? [1, 3, 5]
+      : isCompliance
+      ? [1, 2, 6]
+      : AUDITOR_REMARK_RECIPIENT_IDS;
+
+    const incomingIds = isReviewer
+      ? [2, 4, 6]
+      : isCompliance
+      ? [3, 4, 5]
+      : AUDITOR_INCOMING_REMARK_IDS;
+
     const result =
       await this.db.query(
         `
@@ -1097,7 +1114,7 @@ export class InternalAuditService {
         [
           assessmentId,
           employeeId,
-          AUDITOR_INCOMING_REMARK_IDS,
+          incomingIds,
         ],
       );
 
@@ -1127,7 +1144,7 @@ export class InternalAuditService {
       assessment_id:
         assessment.id,
       remark_types:
-        AUDITOR_REMARK_RECIPIENT_IDS.map(
+        recipientIds.map(
           (id) => ({
             id,
             name:
@@ -1160,10 +1177,21 @@ export class InternalAuditService {
     payload: any,
   ) {
 
-    await this.assertAuditorRemarkAccess(
-      assessmentId,
-      employeeId,
-    );
+    const assessment =
+      await this.assertAuditorRemarkAccess(
+        assessmentId,
+        employeeId,
+      );
+
+    const auditStatusId = Number(assessment.audit_status_id);
+    const isReviewer = [2, 5].includes(auditStatusId);
+    const isCompliance = [4, 6].includes(auditStatusId);
+
+    const recipientIds = isReviewer
+      ? [1, 3, 5]
+      : isCompliance
+      ? [1, 2, 6]
+      : AUDITOR_REMARK_RECIPIENT_IDS;
 
     const notiType =
       Number(payload?.noti_type || 0);
@@ -1175,7 +1203,7 @@ export class InternalAuditService {
         .trim();
 
     if (
-      !AUDITOR_REMARK_RECIPIENT_IDS.includes(
+      !recipientIds.includes(
         notiType,
       )
     ) {
@@ -1235,10 +1263,21 @@ export class InternalAuditService {
     employeeId: number,
   ) {
 
-    await this.assertAuditorRemarkAccess(
-      assessmentId,
-      employeeId,
-    );
+    const assessment =
+      await this.assertAuditorRemarkAccess(
+        assessmentId,
+        employeeId,
+      );
+
+    const auditStatusId = Number(assessment.audit_status_id);
+    const isReviewer = [2, 5].includes(auditStatusId);
+    const isCompliance = [4, 6].includes(auditStatusId);
+
+    const incomingIds = isReviewer
+      ? [2, 4, 6]
+      : isCompliance
+      ? [3, 4, 5]
+      : AUDITOR_INCOMING_REMARK_IDS;
 
     const remark =
       await this.db.query(
@@ -1256,7 +1295,7 @@ export class InternalAuditService {
           remarkId,
           assessmentId,
           employeeId,
-          AUDITOR_INCOMING_REMARK_IDS,
+          incomingIds,
         ],
       );
 
@@ -9471,6 +9510,12 @@ ORDER BY id DESC;
 
     if (
       !AUDITOR_STATUS_IDS.includes(
+        Number(
+          assessment.audit_status_id,
+        ),
+      )
+      &&
+      ![2, 4, 5, 6].includes(
         Number(
           assessment.audit_status_id,
         ),
