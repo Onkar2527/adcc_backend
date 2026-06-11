@@ -28,6 +28,7 @@ import { AdvanceAccountsModule } from './modules/admin/manage-accounts/advance-a
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { PolicyDocumentsModule } from './modules/admin/policy-documents/policy-documents.module';
 
 
 @Module({
@@ -58,7 +59,8 @@ import { ReportsModule } from './modules/reports/reports.module';
     AdvanceAccountsModule,
     UsersModule,
     AuthModule,
-    ReportsModule
+    ReportsModule,
+    PolicyDocumentsModule
   ],
   controllers: [AppController],
   providers: [AppService],
