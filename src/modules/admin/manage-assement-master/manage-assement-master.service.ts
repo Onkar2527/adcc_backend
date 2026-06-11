@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from "@nestjs/common";
 import { DatabaseService } from "../../../core/database/database.service";
+import { syncAssessmentScoring } from "../../../common/helpers/assessment-scoring.helper";
 
 @Injectable()
 export class ManageAssementMasterService {
@@ -133,6 +134,16 @@ ORDER BY asm.id DESC;
             values.push(body.is_limit_blocked);
         }
 
+        // Audit Status ID
+        if (body.audit_status_id !== undefined) {
+
+            fields.push(
+                `audit_status_id = $${index++}`
+            );
+
+            values.push(body.audit_status_id);
+        }
+
         // Updated At
         fields.push(
             `updated_at = CURRENT_TIMESTAMP`
@@ -148,10 +159,18 @@ ORDER BY asm.id DESC;
         RETURNING *;
     `;
 
-        return this.db.query(
+        const result = await this.db.query(
             query,
             values
         );
+
+        try {
+            await syncAssessmentScoring(this.db, id);
+        } catch (err) {
+            console.error(`Failed to sync assessment scoring for assessment ${id}:`, err);
+        }
+
+        return result;
     }
 
 

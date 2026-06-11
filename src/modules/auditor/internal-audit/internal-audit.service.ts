@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
+import { syncAssessmentScoring } from '../../../common/helpers/assessment-scoring.helper';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -2295,6 +2296,12 @@ export class InternalAuditService {
       },
     );
 
+    try {
+      await syncAssessmentScoring(this.db, assessmentId);
+    } catch (err) {
+      console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+    }
+
     return {
       success:
         true,
@@ -3380,6 +3387,12 @@ export class InternalAuditService {
         },
       );
 
+    try {
+      await syncAssessmentScoring(this.db, assessmentId);
+    } catch (err) {
+      console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+    }
+
     return {
       success:
         true,
@@ -3999,6 +4012,12 @@ export class InternalAuditService {
           };
         },
       );
+
+    try {
+      await syncAssessmentScoring(this.db, assessmentId);
+    } catch (err) {
+      console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+    }
 
     return {
       success:
@@ -5159,6 +5178,12 @@ ORDER BY id DESC;
         );
       },
     );
+
+    try {
+      await syncAssessmentScoring(this.db, assessmentId);
+    } catch (err) {
+      console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+    }
 
     return {
       success:

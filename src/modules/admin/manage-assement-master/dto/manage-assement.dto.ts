@@ -26,4 +26,9 @@ export class ManageAssementMasterDto {
     @IsOptional()
     @IsNumber()
     is_limit_blocked?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    audit_status_id?: number;
 }

@@ -29,6 +29,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { PolicyDocumentsModule } from './modules/admin/policy-documents/policy-documents.module';
+import { AuditCalendarModule } from './modules/admin/audit-calendar/audit-calendar.module';
 
 
 @Module({
@@ -52,6 +53,7 @@ import { PolicyDocumentsModule } from './modules/admin/policy-documents/policy-d
     RiskCompositeModule,
     RiskMatrixModule,
     BranchRatingModule,
+    BranchRatingModule,
     PeriodwiseQuestionsMasterModule,
     AuditDashboardModule,
     InternalAuditModule,
@@ -60,7 +62,8 @@ import { PolicyDocumentsModule } from './modules/admin/policy-documents/policy-d
     UsersModule,
     AuthModule,
     ReportsModule,
-    PolicyDocumentsModule
+    PolicyDocumentsModule,
+    AuditCalendarModule
   ],
   controllers: [AppController],
   providers: [AppService],
