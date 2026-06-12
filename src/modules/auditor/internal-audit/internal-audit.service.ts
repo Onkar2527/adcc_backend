@@ -2616,9 +2616,9 @@ export class InternalAuditService {
     const annexureMap =
       new Map<number, any[]>();
     const auditEvidenceMap =
-      new Map<string, any>();
+      new Map<string, any[]>();
     const complianceEvidenceMap =
-      new Map<string, any>();
+      new Map<string, any[]>();
 
     for (
       const row
@@ -2629,23 +2629,25 @@ export class InternalAuditService {
 
       if (
         Number(row.evi_type) === 2
-        &&
-        !complianceEvidenceMap.has(key)
       ) {
         complianceEvidenceMap.set(
           key,
-          row,
+          [
+            ...(complianceEvidenceMap.get(key) || []),
+            row,
+          ],
         );
       }
 
       if (
         Number(row.evi_type) === 1
-        &&
-        !auditEvidenceMap.has(key)
       ) {
         auditEvidenceMap.set(
           key,
-          row,
+          [
+            ...(auditEvidenceMap.get(key) || []),
+            row,
+          ],
         );
       }
     }
@@ -2666,14 +2668,22 @@ export class InternalAuditService {
           this.parseJsonArray(
             row.answer_given,
           ),
+        evidences:
+          auditEvidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || [],
         evidence:
           auditEvidenceMap.get(
             `${answerId}:${Number(row.id)}`,
-          ) || null,
+          )?.[0] || null,
+        compliance_evidences:
+          complianceEvidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || [],
         compliance_evidence:
           complianceEvidenceMap.get(
             `${answerId}:${Number(row.id)}`,
-          ) || null,
+          )?.[0] || null,
       });
       annexureMap.set(
         answerId,
@@ -2685,14 +2695,22 @@ export class InternalAuditService {
       answerResult.rows.map(
         (row: any) => ({
           ...row,
+          evidences:
+            auditEvidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || [],
           evidence:
             auditEvidenceMap.get(
               `${Number(row.id)}:0`,
-            ) || null,
+            )?.[0] || null,
+          compliance_evidences:
+            complianceEvidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || [],
           compliance_evidence:
             complianceEvidenceMap.get(
               `${Number(row.id)}:0`,
-            ) || null,
+            )?.[0] || null,
           annexure_rows:
             annexureMap.get(
               Number(row.id),
@@ -3588,7 +3606,7 @@ export class InternalAuditService {
     const annexureMap =
       new Map<number, any[]>();
     const evidenceMap =
-      new Map<string, any>();
+      new Map<string, any[]>();
 
     for (
       const row
@@ -3597,14 +3615,13 @@ export class InternalAuditService {
       const key =
         `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`;
 
-      if (
-        !evidenceMap.has(key)
-      ) {
-        evidenceMap.set(
-          key,
+      evidenceMap.set(
+        key,
+        [
+          ...(evidenceMap.get(key) || []),
           row,
-        );
-      }
+        ],
+      );
     }
 
     for (
@@ -3623,10 +3640,14 @@ export class InternalAuditService {
           this.parseJsonArray(
             row.answer_given,
           ),
+        evidences:
+          evidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || [],
         evidence:
           evidenceMap.get(
             `${answerId}:${Number(row.id)}`,
-          ) || null,
+          )?.[0] || null,
       });
       annexureMap.set(
         answerId,
@@ -3638,10 +3659,14 @@ export class InternalAuditService {
       answerResult.rows.map(
         (row: any) => ({
           ...row,
+          evidences:
+            evidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || [],
           evidence:
             evidenceMap.get(
               `${Number(row.id)}:0`,
-            ) || null,
+            )?.[0] || null,
           annexure_rows:
             annexureMap.get(
               Number(row.id),
@@ -4429,9 +4454,9 @@ ORDER BY id DESC;
     const annexureMap =
       new Map<number, any[]>();
     const auditEvidenceMap =
-      new Map<string, any>();
+      new Map<string, any[]>();
     const complianceEvidenceMap =
-      new Map<string, any>();
+      new Map<string, any[]>();
 
     for (
       const row
@@ -4442,23 +4467,25 @@ ORDER BY id DESC;
 
       if (
         Number(row.evi_type) === 2
-        &&
-        !complianceEvidenceMap.has(key)
       ) {
         complianceEvidenceMap.set(
           key,
-          row,
+          [
+            ...(complianceEvidenceMap.get(key) || []),
+            row,
+          ],
         );
       }
 
       if (
         Number(row.evi_type) === 1
-        &&
-        !auditEvidenceMap.has(key)
       ) {
         auditEvidenceMap.set(
           key,
-          row,
+          [
+            ...(auditEvidenceMap.get(key) || []),
+            row,
+          ],
         );
       }
     }
@@ -4479,14 +4506,22 @@ ORDER BY id DESC;
           this.parseJsonArray(
             row.answer_given,
           ),
+        evidences:
+          auditEvidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || [],
         evidence:
           auditEvidenceMap.get(
             `${answerId}:${Number(row.id)}`,
-          ) || null,
+          )?.[0] || null,
+        compliance_evidences:
+          complianceEvidenceMap.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || [],
         compliance_evidence:
           complianceEvidenceMap.get(
             `${answerId}:${Number(row.id)}`,
-          ) || null,
+          )?.[0] || null,
       });
       annexureMap.set(
         answerId,
@@ -4502,14 +4537,22 @@ ORDER BY id DESC;
             complianceStatus === 4
             ||
             Number(row.compliance_status_id) === 3,
+          evidences:
+            auditEvidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || [],
           evidence:
             auditEvidenceMap.get(
               `${Number(row.id)}:0`,
-            ) || null,
+            )?.[0] || null,
+          compliance_evidences:
+            complianceEvidenceMap.get(
+              `${Number(row.id)}:0`,
+            ) || [],
           compliance_evidence:
             complianceEvidenceMap.get(
               `${Number(row.id)}:0`,
-            ) || null,
+            )?.[0] || null,
           annexure_rows:
             (
               annexureMap.get(
@@ -4815,36 +4858,6 @@ ORDER BY id DESC;
         targetType,
         observationId,
       );
-
-    const existing =
-      await this.db.findOne(
-        `
-        SELECT id
-        FROM evidence_master
-        WHERE answer_id = $1
-            AND annex_id = $2
-            AND assesment_id = $3
-            AND evi_type = 2
-            AND deleted_at IS NULL
-        LIMIT 1;
-        `,
-        [
-          target.answerId,
-          target.annexureRowId,
-          assessmentId,
-        ],
-      );
-
-    if (
-      existing?.id
-    ) {
-      return {
-        success:
-          false,
-        message:
-          'Compliance evidence already uploaded.',
-      };
-    }
 
     const storedName =
       `${randomUUID()}${evidenceType.extension}`;
@@ -6753,36 +6766,6 @@ ORDER BY id DESC;
         dumpId,
       );
 
-    const existing =
-      await this.db.findOne(
-        `
-        SELECT id
-        FROM evidence_master
-        WHERE answer_id = $1
-            AND annex_id = $2
-            AND assesment_id = $3
-            AND evi_type = 1
-            AND deleted_at IS NULL
-        LIMIT 1;
-        `,
-        [
-          target.answerId,
-          annexureRowId,
-          assessmentId,
-        ],
-      );
-
-    if (
-      existing?.id
-    ) {
-      return {
-        success:
-          false,
-        message:
-          'Evidence document already uploaded. Please remove it before uploading another file.',
-      };
-    }
-
     const storedName =
       `${randomUUID()}${evidenceType.extension}`;
 
@@ -8474,15 +8457,21 @@ ORDER BY id DESC;
       );
 
     const evidenceByTarget =
-      new Map<string, any>();
+      new Map<string, any[]>();
 
     for (
       const row
       of result.rows
     ) {
+      const key =
+        `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`;
+
       evidenceByTarget.set(
-        `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`,
-        row,
+        key,
+        [
+          ...(evidenceByTarget.get(key) || []),
+          row,
+        ],
       );
     }
 
@@ -8500,19 +8489,25 @@ ORDER BY id DESC;
         continue;
       }
 
-      question.answer.evidence =
+      question.answer.evidences =
         evidenceByTarget.get(
           `${answerId}:0`,
-        ) || null;
+        ) || [];
+
+      question.answer.evidence =
+        question.answer.evidences[0] || null;
 
       for (
         const row
         of question.answer.annexure_rows || []
       ) {
-        row.evidence =
+        row.evidences =
           evidenceByTarget.get(
             `${answerId}:${Number(row.id)}`,
-          ) || null;
+          ) || [];
+
+        row.evidence =
+          row.evidences[0] || null;
       }
     }
   }
