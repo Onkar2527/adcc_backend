@@ -39,7 +39,7 @@ export class ReportsService {
 
   constructor(private readonly db: DatabaseService) {}
 
-  async getReportDefinition(reportSlug: string) {
+  async getReportDefinition(reportSlug: string, isFreeFlow = false) {
     if (reportSlug === 'audit-status-report') {
       return this.getAuditStatusDefinition();
     }
@@ -57,39 +57,39 @@ export class ReportsService {
     }
 
     if (reportSlug === 'audit-complete-report') {
-      return this.getAuditCompleteDefinition();
+      return this.getAuditCompleteDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'audit-observations-report') {
-      return this.getAuditObservationsDefinition();
+      return this.getAuditObservationsDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'compliance-report') {
-      return this.getComplianceDefinition();
+      return this.getComplianceDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'compliance-summary-report') {
-      return this.getComplianceSummaryDefinition();
+      return this.getComplianceSummaryDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'risk-weightage-report') {
-      return this.getRiskWeightageDefinition();
+      return this.getRiskWeightageDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'risk-wise-audit-units-report') {
-      return this.getRiskWiseAuditUnitsDefinition();
+      return this.getRiskWiseAuditUnitsDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'rbia-performance-risk-weightage-report-all-units') {
-      return this.getRBIAPerformanceRiskWeightageReportAllUnitsDefinition();
+      return this.getRBIAPerformanceRiskWeightageReportAllUnitsDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'performance-risk-weightage-report') {
-      return this.getPerformanceRiskWeightageDefinition();
+      return this.getPerformanceRiskWeightageDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'performance-risk-weightage-report-category-wise') {
-      return this.getPerformanceRiskWeightageCategoryWiseDefinition();
+      return this.getPerformanceRiskWeightageCategoryWiseDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'audit-committee-board-report-1') {
@@ -97,11 +97,11 @@ export class ReportsService {
     }
 
     if (reportSlug === 'broader-areawise-scoring-report') {
-      return this.getBroaderAreaWiseScoringDefinition();
+      return this.getBroaderAreaWiseScoringDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'questionwsie-broader-areawise-report') {
-      return this.getQuestionWiseBroaderAreaDefinition();
+      return this.getQuestionWiseBroaderAreaDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'audit-observation-count-report') {
@@ -109,15 +109,15 @@ export class ReportsService {
     }
 
     if (reportSlug === 'pending-compliance-detail-report') {
-      return this.getPendingComplianceDetailDefinition();
+      return this.getPendingComplianceDetailDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'executive-summary-audit-report') {
-      return this.getExecutiveSummaryDefinition(false);
+      return this.getExecutiveSummaryDefinition(false, isFreeFlow);
     }
 
     if (reportSlug === 'executive-summary-compliance-report') {
-      return this.getExecutiveSummaryDefinition(true);
+      return this.getExecutiveSummaryDefinition(true, isFreeFlow);
     }
 
     if (reportSlug === 'internal-assesment-report') {
@@ -354,6 +354,7 @@ export class ReportsService {
       },
       defaultFilters: {
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
       },
       filters: [
@@ -363,6 +364,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -416,6 +424,7 @@ export class ReportsService {
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
+        financial_year: 'all',
       },
       filters: [
         {
@@ -424,6 +433,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
       ],
       columns: [
@@ -442,8 +458,8 @@ export class ReportsService {
     };
   }
 
-  private async getAuditCompleteDefinition() {
-    const lookups = await this.getAuditCompleteLookups();
+  private async getAuditCompleteDefinition(isFreeFlow = false) {
+    const lookups = await this.getAuditCompleteLookups(isFreeFlow);
 
     return {
       slug: 'audit-complete-report',
@@ -457,6 +473,7 @@ export class ReportsService {
       },
       defaultFilters: {
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
         risk_category_arr: [],
         business_risk_arr: [],
@@ -469,6 +486,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -516,8 +540,8 @@ export class ReportsService {
     };
   }
 
-  private async getAuditObservationsDefinition() {
-    const lookups = await this.getAuditCompleteLookups();
+  private async getAuditObservationsDefinition(isFreeFlow = false) {
+    const lookups = await this.getAuditCompleteLookups(isFreeFlow);
 
     return {
       slug: 'audit-observations-report',
@@ -531,6 +555,7 @@ export class ReportsService {
       },
       defaultFilters: {
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
         risk_category_arr: [],
         business_risk_arr: [],
@@ -543,6 +568,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -587,8 +619,8 @@ export class ReportsService {
     };
   }
 
-  private async getComplianceDefinition() {
-    const lookups = await this.getComplianceLookups();
+  private async getComplianceDefinition(isFreeFlow = false) {
+    const lookups = await this.getComplianceLookups(isFreeFlow);
 
     return {
       slug: 'compliance-report',
@@ -602,6 +634,7 @@ export class ReportsService {
       },
       defaultFilters: {
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
         risk_category_arr: [],
         business_risk_arr: [],
@@ -614,6 +647,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -661,8 +701,8 @@ export class ReportsService {
     };
   }
 
-  private async getComplianceSummaryDefinition() {
-    const lookups = await this.getComplianceLookups();
+  private async getComplianceSummaryDefinition(isFreeFlow = false) {
+    const lookups = await this.getComplianceLookups(isFreeFlow);
 
     return {
       slug: 'compliance-summary-report',
@@ -676,6 +716,7 @@ export class ReportsService {
       },
       defaultFilters: {
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
         risk_category_arr: [],
         business_risk_arr: [],
@@ -688,6 +729,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -736,8 +784,8 @@ export class ReportsService {
     };
   }
 
-  private async getRiskWeightageDefinition() {
-    const lookups = await this.getComplianceLookups();
+  private async getRiskWeightageDefinition(isFreeFlow = false) {
+    const lookups = await this.getComplianceLookups(isFreeFlow);
 
     return {
       slug: 'risk-weightage-report',
@@ -752,6 +800,7 @@ export class ReportsService {
       defaultFilters: {
         selectSearchTypeFilter: '3',
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
         startDate: '',
         endDate: '',
@@ -776,6 +825,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -856,8 +912,8 @@ export class ReportsService {
     };
   }
 
-  private async getRiskWiseAuditUnitsDefinition() {
-    const lookups = await this.getComplianceLookups();
+  private async getRiskWiseAuditUnitsDefinition(isFreeFlow = false) {
+    const lookups = await this.getComplianceLookups(isFreeFlow);
     const riskColumns = lookups.riskCategories.flatMap((riskCategory: any) => [
       {
         key: `risk_${riskCategory.value}_score`,
@@ -891,6 +947,7 @@ export class ReportsService {
       },
       defaultFilters: {
         selectSearchTypeFilter: '1',
+        financial_year: 'all',
         startDate: '',
         endDate: '',
         rmv_pending_assesments: ['1'],
@@ -905,6 +962,13 @@ export class ReportsService {
             { value: '1', label: 'All Branches' },
             { value: '2', label: 'All Head Of Departments' },
           ],
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'startDate',
@@ -960,8 +1024,8 @@ export class ReportsService {
     };
   }
 
-  private async getRBIAPerformanceRiskWeightageReportAllUnitsDefinition() {
-    const lookups = await this.getComplianceLookups();
+  private async getRBIAPerformanceRiskWeightageReportAllUnitsDefinition(isFreeFlow = false) {
+    const lookups = await this.getComplianceLookups(isFreeFlow);
 
     const riskColumns = lookups.riskCategories.flatMap((riskCategory: any) => [
       {
@@ -1002,6 +1066,7 @@ export class ReportsService {
       },
       defaultFilters: {
         selectSearchTypeFilter: '1',
+        financial_year: 'all',
         startDate: '',
         endDate: '',
         rmv_pending_assesments: [],
@@ -1016,6 +1081,13 @@ export class ReportsService {
             { value: '1', label: 'All Branches' },
             { value: '2', label: 'All Head Of Departments' },
           ],
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'startDate',
@@ -1082,8 +1154,8 @@ export class ReportsService {
     };
   }
 
-  private async getPerformanceRiskWeightageDefinition() {
-    const lookups = await this.getComplianceLookups();
+  private async getPerformanceRiskWeightageDefinition(isFreeFlow = false) {
+    const lookups = await this.getComplianceLookups(isFreeFlow);
 
     return {
       slug: 'performance-risk-weightage-report',
@@ -1098,6 +1170,7 @@ export class ReportsService {
       defaultFilters: {
         selectSearchTypeFilter: '3',
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
         startDate: '',
         endDate: '',
@@ -1122,6 +1195,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -1219,8 +1299,8 @@ export class ReportsService {
     };
   }
 
-  private async getPerformanceRiskWeightageCategoryWiseDefinition() {
-    const lookups = await this.getComplianceLookups();
+  private async getPerformanceRiskWeightageCategoryWiseDefinition(isFreeFlow = false) {
+    const lookups = await this.getComplianceLookups(isFreeFlow);
 
     return {
       slug: 'performance-risk-weightage-report-category-wise',
@@ -1235,6 +1315,7 @@ export class ReportsService {
       defaultFilters: {
         selectSearchTypeFilter: '3',
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
         startDate: '',
         endDate: '',
@@ -1259,6 +1340,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -1371,6 +1459,7 @@ export class ReportsService {
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
+        financial_year: 'all',
         trend: '',
         startMonth: '',
         endMonth: '',
@@ -1384,6 +1473,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'trend',
@@ -1479,8 +1575,8 @@ export class ReportsService {
       ],
     };
   }
-  private async getBroaderAreaWiseScoringDefinition() {
-    const lookups = await this.getAuditCompleteLookups();
+  private async getBroaderAreaWiseScoringDefinition(isFreeFlow = false) {
+    const lookups = await this.getAuditCompleteLookups(isFreeFlow);
 
     return {
       slug: 'broader-areawise-scoring-report',
@@ -1495,6 +1591,7 @@ export class ReportsService {
       defaultFilters: {
         selectSearchTypeFilter: '3',
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
         startDate: '',
         endDate: '',
@@ -1519,6 +1616,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -1656,8 +1760,8 @@ export class ReportsService {
     };
   }
 
-  private async getQuestionWiseBroaderAreaDefinition() {
-    const definition = await this.getBroaderAreaWiseScoringDefinition();
+  private async getQuestionWiseBroaderAreaDefinition(isFreeFlow = false) {
+    const definition = await this.getBroaderAreaWiseScoringDefinition(isFreeFlow);
     return {
       ...definition,
       slug: 'questionwsie-broader-areawise-report',
@@ -1681,6 +1785,7 @@ export class ReportsService {
       },
       defaultFilters: {
         reportAuditUnit: 'all_branches',
+        financial_year: 'all',
         startDate: '',
         endDate: '',
       },
@@ -1691,6 +1796,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'startDate',
@@ -1728,8 +1840,8 @@ export class ReportsService {
     };
   }
 
-  private async getPendingComplianceDetailDefinition() {
-    const lookups = await this.getComplianceLookups();
+  private async getPendingComplianceDetailDefinition(isFreeFlow = false) {
+    const lookups = await this.getComplianceLookups(isFreeFlow);
 
     return {
       slug: 'pending-compliance-detail-report',
@@ -1744,6 +1856,7 @@ export class ReportsService {
       defaultFilters: {
         selectSearchTypeFilter: '3',
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
         startDate: '',
         endDate: '',
@@ -1767,6 +1880,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -1951,8 +2071,8 @@ export class ReportsService {
     };
   }
 
-  async getAuditCompleteLookups() {
-    const [units, assessments, riskCategories] = await Promise.all([
+  async getAuditCompleteLookups(isFreeFlow = false) {
+    const [units, assessments, riskCategories, years] = await Promise.all([
       this.db.query(`
         SELECT
           id,
@@ -1967,6 +2087,7 @@ export class ReportsService {
       this.db.query(`
         SELECT
           asm.id,
+          asm.year_id,
           asm.audit_unit_id,
           asm.assesment_period_from,
           asm.assesment_period_to,
@@ -1976,7 +2097,7 @@ export class ReportsService {
         FROM audit_assesment_master asm
         INNER JOIN audit_unit_master aum
           ON aum.id = asm.audit_unit_id
-        WHERE asm.audit_status_id > 1
+        WHERE ${isFreeFlow ? 'asm.audit_status_id >= 1' : 'asm.audit_status_id > 1'}
           AND asm.deleted_at IS NULL
           AND aum.deleted_at IS NULL
         ORDER BY aum.audit_unit_code ASC, asm.assesment_period_from DESC
@@ -1987,6 +2108,12 @@ export class ReportsService {
         WHERE is_active = 1
           AND deleted_at IS NULL
         ORDER BY id ASC
+      `),
+      this.db.query(`
+        SELECT id, year
+        FROM year_master
+        WHERE deleted_at IS NULL
+        ORDER BY id DESC
       `),
     ]);
 
@@ -2004,17 +2131,25 @@ export class ReportsService {
           value: String(row.id),
           label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
           audit_unit_id: row.audit_unit_id,
+          year_id: String(row.year_id || ''),
         })),
       ],
       riskCategories: riskCategories.rows.map((row: any) => ({
         value: String(row.id),
         label: String(row.risk_category || '').toUpperCase(),
       })),
+      years: [
+        { value: 'all', label: 'All Years' },
+        ...years.rows.map((row: any) => ({
+          value: String(row.id),
+          label: String(row.year),
+        })),
+      ],
     };
   }
 
-  async getComplianceLookups() {
-    const [units, assessments, riskCategories] = await Promise.all([
+  async getComplianceLookups(isFreeFlow = false) {
+    const [units, assessments, riskCategories, years] = await Promise.all([
       this.db.query(`
         SELECT
           id,
@@ -2029,6 +2164,7 @@ export class ReportsService {
       this.db.query(`
         SELECT
           asm.id,
+          asm.year_id,
           asm.audit_unit_id,
           asm.assesment_period_from,
           asm.assesment_period_to,
@@ -2038,7 +2174,7 @@ export class ReportsService {
         FROM audit_assesment_master asm
         INNER JOIN audit_unit_master aum
           ON aum.id = asm.audit_unit_id
-        WHERE asm.audit_status_id > 4
+        WHERE ${isFreeFlow ? 'asm.audit_status_id >= 4' : 'asm.audit_status_id > 4'}
           AND asm.deleted_at IS NULL
           AND aum.deleted_at IS NULL
         ORDER BY aum.audit_unit_code ASC, asm.assesment_period_from DESC
@@ -2049,6 +2185,12 @@ export class ReportsService {
         WHERE is_active = 1
           AND deleted_at IS NULL
         ORDER BY id ASC
+      `),
+      this.db.query(`
+        SELECT id, year
+        FROM year_master
+        WHERE deleted_at IS NULL
+        ORDER BY id DESC
       `),
     ]);
 
@@ -2066,17 +2208,25 @@ export class ReportsService {
           value: String(row.id),
           label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
           audit_unit_id: row.audit_unit_id,
+          year_id: String(row.year_id || ''),
         })),
       ],
       riskCategories: riskCategories.rows.map((row: any) => ({
         value: String(row.id),
         label: String(row.risk_category || '').toUpperCase(),
       })),
+      years: [
+        { value: 'all', label: 'All Years' },
+        ...years.rows.map((row: any) => ({
+          value: String(row.id),
+          label: String(row.year),
+        })),
+      ],
     };
   }
 
   async getAssessmentTimelineLookups() {
-    const [units, assessments] = await Promise.all([
+    const [units, assessments, years] = await Promise.all([
       this.db.query(`
         SELECT
           id,
@@ -2091,6 +2241,7 @@ export class ReportsService {
       this.db.query(`
         SELECT
           asm.id,
+          asm.year_id,
           asm.audit_unit_id,
           asm.assesment_period_from,
           asm.assesment_period_to,
@@ -2102,6 +2253,12 @@ export class ReportsService {
           AND aum.deleted_at IS NULL
         ORDER BY aum.audit_unit_code ASC, asm.assesment_period_from DESC
       `),
+      this.db.query(`
+        SELECT id, year
+        FROM year_master
+        WHERE deleted_at IS NULL
+        ORDER BY id DESC
+      `),
     ]);
 
     return {
@@ -2118,6 +2275,14 @@ export class ReportsService {
           value: String(row.id),
           label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
           audit_unit_id: row.audit_unit_id,
+          year_id: String(row.year_id || ''),
+        })),
+      ],
+      years: [
+        { value: 'all', label: 'All Years' },
+        ...years.rows.map((row: any) => ({
+          value: String(row.id),
+          label: String(row.year),
         })),
       ],
     };
@@ -2127,6 +2292,7 @@ export class ReportsService {
     const auditUnit = String(query.reportAuditUnit || '').trim();
     const startDate = this.dateOnly(query.startDate);
     const endDate = this.dateOnly(query.endDate);
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!auditUnit) {
       throw new BadRequestException('Audit unit is required');
@@ -2144,7 +2310,7 @@ export class ReportsService {
     const where = [
       'asm.assesment_period_from >= $1',
       'asm.assesment_period_to <= $2',
-      'asm.audit_status_id > 1',
+      isFreeFlow ? 'asm.audit_status_id >= 1' : 'asm.audit_status_id > 1',
       'asm.deleted_at IS NULL',
       'aum.deleted_at IS NULL',
     ];
@@ -2321,6 +2487,7 @@ export class ReportsService {
   async getAuditCompleteReport(query: any) {
     const auditUnitId = Number(query.reportAuditUnit || 0);
     const assessmentId = Number(query.reportAuditAssesment || 0);
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!auditUnitId) {
       throw new BadRequestException('Audit unit is required');
@@ -2337,7 +2504,7 @@ export class ReportsService {
     const where = [
       'ad.assesment_id = $1',
       'aam.audit_unit_id = $2',
-      'aam.audit_status_id > 1',
+      isFreeFlow ? 'aam.audit_status_id >= 1' : 'aam.audit_status_id > 1',
       'ad.deleted_at IS NULL',
       'qm.deleted_at IS NULL',
     ];
@@ -2518,6 +2685,7 @@ export class ReportsService {
   async getComplianceReport(query: any) {
     const auditUnitId = Number(query.reportAuditUnit || 0);
     const assessmentId = Number(query.reportAuditAssesment || 0);
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!auditUnitId) {
       throw new BadRequestException('Audit unit is required');
@@ -2534,7 +2702,7 @@ export class ReportsService {
     const where = [
       'ad.assesment_id = $1',
       'aam.audit_unit_id = $2',
-      'aam.audit_status_id > 1',
+      isFreeFlow ? 'aam.audit_status_id >= 1' : 'aam.audit_status_id > 1',
       'ad.deleted_at IS NULL',
       'qm.deleted_at IS NULL',
       'ad.is_compliance = 1',
@@ -2712,6 +2880,7 @@ export class ReportsService {
   async getComplianceSummaryReport(query: any) {
     const auditUnitId = Number(query.reportAuditUnit || 0);
     const assessmentId = Number(query.reportAuditAssesment || 0);
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!auditUnitId) {
       throw new BadRequestException('Audit unit is required');
@@ -2728,7 +2897,7 @@ export class ReportsService {
     const where = [
       'ad.assesment_id = $1',
       'aam.audit_unit_id = $2',
-      'aam.audit_status_id > 1',
+      isFreeFlow ? 'aam.audit_status_id >= 1' : 'aam.audit_status_id > 1',
       'ad.deleted_at IS NULL',
       'qm.deleted_at IS NULL',
       'ad.is_compliance = 1',
@@ -3175,6 +3344,7 @@ export class ReportsService {
     const removePending = Array.isArray(query.rmv_pending_assesments)
       ? query.rmv_pending_assesments.includes('1')
       : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!auditUnitId) {
       throw new BadRequestException('Audit unit is required');
@@ -3210,8 +3380,8 @@ export class ReportsService {
     } else {
       // searchType 5 or 6 (date range filter)
       const statusCondition = removePending
-        ? 'AND audit_status_id > 4'
-        : 'AND audit_status_id > 1';
+        ? (isFreeFlow ? 'AND audit_status_id >= 4' : 'AND audit_status_id > 4')
+        : (isFreeFlow ? 'AND audit_status_id >= 1' : 'AND audit_status_id > 1');
       const result = await this.db.query(
         `
         SELECT id, year_id, audit_unit_id, assesment_period_from, assesment_period_to, frequency
@@ -3689,6 +3859,7 @@ export class ReportsService {
     const removePending = Array.isArray(query.rmv_pending_assesments)
       ? query.rmv_pending_assesments.includes('1')
       : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!['1', '2'].includes(searchType)) {
       throw new BadRequestException('Search type is required');
@@ -3732,8 +3903,8 @@ export class ReportsService {
     }
 
     const statusCondition = removePending
-      ? 'AND asm.audit_status_id > 4'
-      : 'AND asm.audit_status_id > 1';
+      ? (isFreeFlow ? 'AND asm.audit_status_id >= 4' : 'AND asm.audit_status_id > 4')
+      : (isFreeFlow ? 'AND asm.audit_status_id >= 1' : 'AND asm.audit_status_id > 1');
 
     const assessmentsResult = await this.db.query(
       `
@@ -4516,6 +4687,7 @@ export class ReportsService {
     const removePending = Array.isArray(query.rmv_pending_assesments)
       ? query.rmv_pending_assesments.includes('1')
       : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!['1', '2'].includes(searchType)) {
       throw new BadRequestException('Search type is required');
@@ -4530,8 +4702,8 @@ export class ReportsService {
     const unitTypeId = searchType === '2' ? 2 : 1;
 
     const statusCondition = removePending
-      ? 'AND asm.audit_status_id > 4'
-      : 'AND asm.audit_status_id > 1';
+      ? (isFreeFlow ? 'AND asm.audit_status_id >= 4' : 'AND asm.audit_status_id > 4')
+      : (isFreeFlow ? 'AND asm.audit_status_id >= 1' : 'AND asm.audit_status_id > 1');
 
     const assessmentsResult = await this.db.query(
       `
@@ -5551,6 +5723,7 @@ export class ReportsService {
     const removePending = Array.isArray(query.rmv_pending_assesments)
       ? query.rmv_pending_assesments.includes('1')
       : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!['3', '4', '5', '6'].includes(searchType)) {
       throw new BadRequestException('Search type is required');
@@ -5594,8 +5767,8 @@ export class ReportsService {
       );
     } else {
       const statusCondition = removePending
-        ? 'AND audit_status_id > 4'
-        : 'AND audit_status_id > 1';
+        ? (isFreeFlow ? 'AND audit_status_id >= 4' : 'AND audit_status_id > 4')
+        : (isFreeFlow ? 'AND audit_status_id >= 1' : 'AND audit_status_id > 1');
 
       assessmentsResult = await this.db.query(
         `
@@ -6022,6 +6195,7 @@ export class ReportsService {
     const removePending = Array.isArray(query.rmv_pending_assesments)
       ? query.rmv_pending_assesments.includes('1')
       : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!['3', '4', '5', '6'].includes(searchType)) {
       throw new BadRequestException('Search type is required');
@@ -6065,8 +6239,8 @@ export class ReportsService {
       );
     } else {
       const statusCondition = removePending
-        ? 'AND audit_status_id > 4'
-        : 'AND audit_status_id > 1';
+        ? (isFreeFlow ? 'AND audit_status_id >= 4' : 'AND audit_status_id > 4')
+        : (isFreeFlow ? 'AND audit_status_id >= 1' : 'AND audit_status_id > 1');
 
       assessmentsResult = await this.db.query(
         `
@@ -6538,6 +6712,7 @@ export class ReportsService {
     const removePending = Array.isArray(query.rmv_pending_assesments)
       ? query.rmv_pending_assesments.includes('1')
       : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!auditUnitId) {
       throw new BadRequestException('Audit unit is required');
@@ -6572,8 +6747,8 @@ export class ReportsService {
       assessments = result.rows;
     } else {
       const statusCondition = removePending
-        ? 'AND audit_status_id > 4'
-        : 'AND audit_status_id > 1';
+        ? (isFreeFlow ? 'AND audit_status_id >= 4' : 'AND audit_status_id > 4')
+        : (isFreeFlow ? 'AND audit_status_id >= 1' : 'AND audit_status_id > 1');
       const result = await this.db.query(
         `
         SELECT id, year_id, audit_unit_id, assesment_period_from, assesment_period_to, frequency
@@ -7953,10 +8128,10 @@ export class ReportsService {
     return String(value).slice(0, 10);
   }
 
-  private async getExecutiveSummaryDefinition(isCompliance: boolean) {
+  private async getExecutiveSummaryDefinition(isCompliance: boolean, isFreeFlow = false) {
     const lookups = isCompliance
-      ? await this.getComplianceLookups()
-      : await this.getAuditCompleteLookups();
+      ? await this.getComplianceLookups(isFreeFlow)
+      : await this.getAuditCompleteLookups(isFreeFlow);
 
     const slug = isCompliance
       ? 'executive-summary-compliance-report'
@@ -7982,6 +8157,7 @@ export class ReportsService {
       },
       defaultFilters: {
         reportAuditUnit: '',
+        financial_year: 'all',
         reportAuditAssesment: '',
       },
       filters: [
@@ -7991,6 +8167,13 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
         },
         {
           key: 'reportAuditAssesment',
@@ -8291,7 +8474,7 @@ export class ReportsService {
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
-        financial_year: lookups.years[1]?.value || '',
+        financial_year: 'all',
       },
       filters: [
         {
@@ -8306,7 +8489,7 @@ export class ReportsService {
           label: 'Select Financial Year',
           type: 'select',
           required: true,
-          options: lookups.years.filter((y: any) => y.value !== 'all'),
+          options: lookups.years,
         },
       ],
       columns: [],
@@ -8316,23 +8499,29 @@ export class ReportsService {
 
   async getInternalAssessmentReport(query: any) {
     const financialYear = String(query.financial_year || '').trim();
-    if (!financialYear || financialYear === 'all') {
+    const isAllYears = financialYear === 'all';
+    if (!financialYear) {
       throw new BadRequestException('Financial year is required');
     }
 
-    const yearResult = await this.db.query(
-      `
-      SELECT id, year
-      FROM year_master
-      WHERE id = $1 AND deleted_at IS NULL
-      LIMIT 1
-      `,
-      [Number(financialYear)],
-    );
-    if (yearResult.rows.length === 0) {
-      throw new NotFoundException('Financial year not found');
+    let yearObj: any;
+    if (isAllYears) {
+      yearObj = { id: 'all', year: 'All Years' };
+    } else {
+      const yearResult = await this.db.query(
+        `
+        SELECT id, year
+        FROM year_master
+        WHERE id = $1 AND deleted_at IS NULL
+        LIMIT 1
+        `,
+        [Number(financialYear)],
+      );
+      if (yearResult.rows.length === 0) {
+        throw new NotFoundException('Financial year not found');
+      }
+      yearObj = yearResult.rows[0];
     }
-    const yearObj = yearResult.rows[0];
 
     const userTypeId = Number(query.user_type_id || 0);
     const auditUnitAuthority = String(query.audit_unit_authority || '').trim();
@@ -8438,26 +8627,46 @@ export class ReportsService {
 
     if (auditUnits.length > 0) {
       const unitIds = auditUnits.map((u: any) => u.id);
-      const assessmentsResult = await this.db.query(
-        `
-        SELECT
-          id,
-          year_id,
-          audit_unit_id,
-          frequency,
-          assesment_period_from,
-          assesment_period_to,
-          audit_status_id,
-          audit_start_date,
-          audit_review_date,
-          compliance_start_date
-        FROM audit_assesment_master
-        WHERE deleted_at IS NULL
-          AND year_id = $1
-          AND audit_unit_id = ANY($2::int[])
-        `,
-        [Number(financialYear), unitIds],
-      );
+      const assessmentsResult = isAllYears
+        ? await this.db.query(
+            `
+            SELECT
+              id,
+              year_id,
+              audit_unit_id,
+              frequency,
+              assesment_period_from,
+              assesment_period_to,
+              audit_status_id,
+              audit_start_date,
+              audit_review_date,
+              compliance_start_date
+            FROM audit_assesment_master
+            WHERE deleted_at IS NULL
+              AND audit_unit_id = ANY($1::int[])
+            `,
+            [unitIds],
+          )
+        : await this.db.query(
+            `
+            SELECT
+              id,
+              year_id,
+              audit_unit_id,
+              frequency,
+              assesment_period_from,
+              assesment_period_to,
+              audit_status_id,
+              audit_start_date,
+              audit_review_date,
+              compliance_start_date
+            FROM audit_assesment_master
+            WHERE deleted_at IS NULL
+              AND year_id = $1
+              AND audit_unit_id = ANY($2::int[])
+            `,
+            [Number(financialYear), unitIds],
+          );
 
       const assessments = assessmentsResult.rows;
       for (const assessment of assessments) {

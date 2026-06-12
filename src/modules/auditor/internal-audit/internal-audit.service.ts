@@ -70,6 +70,7 @@ export class InternalAuditService {
   async getAuditUnitDashboard(
     auditUnitId: number,
     employeeId: number,
+    freeFlow = false,
   ) {
 
     await this.assertAuthority(
@@ -210,13 +211,17 @@ export class InternalAuditService {
                   ) !== 7,
               )
               &&
-              !assessments.some(
-                (assessment: any) =>
-                  this.formatDbDate(
-                    assessment.assesment_period_to,
-                  )
-                  ===
-                  `${this.getFinancialYearStart(year.year) + 1}-03-31`,
+              (
+                freeFlow
+                ||
+                !assessments.some(
+                  (assessment: any) =>
+                    this.formatDbDate(
+                      assessment.assesment_period_to,
+                    )
+                    ===
+                    `${this.getFinancialYearStart(year.year) + 1}-03-31`,
+                )
               ),
           };
         },
@@ -255,6 +260,7 @@ export class InternalAuditService {
     auditUnitId: number,
     yearId: number,
     employeeId: number,
+    freeFlow = false,
   ) {
 
     await this.assertAuthority(
@@ -318,9 +324,19 @@ export class InternalAuditService {
     const fyEnd =
       `${fyStartYear + 1}-03-31`;
 
-    const existingResult =
-      await this.db.query(
+    const queryStr = freeFlow
+      ? `
+        SELECT
+            id,
+            frequency,
+            audit_status_id,
+            assesment_period_to
+        FROM audit_assesment_master
+        WHERE audit_unit_id = $1
+            AND deleted_at IS NULL
+        ORDER BY id ASC;
         `
+      : `
         SELECT
             id,
             frequency,
@@ -333,13 +349,16 @@ export class InternalAuditService {
             AND assesment_period_to <= $4
             AND deleted_at IS NULL
         ORDER BY id ASC;
-        `,
-        [
-          yearId,
-          auditUnitId,
-          fyStart,
-          fyEnd,
-        ],
+        `;
+
+    const queryParams = freeFlow
+      ? [auditUnitId]
+      : [yearId, auditUnitId, fyStart, fyEnd];
+
+    const existingResult =
+      await this.db.query(
+        queryStr,
+        queryParams,
       );
 
     let fyRemainMonths = 12;
@@ -387,24 +406,161 @@ export class InternalAuditService {
       }
     }
 
-    const assessmentStartDate =
-      this.formatDate(
-        this.firstDayOfNextMonth(
-          new Date(
-            latestAssessmentPeriodTo,
-          ),
-        ),
-      );
+    if (
+      freeFlow
+    ) {
 
-    const assessmentEndDate =
-      this.formatDate(
-        this.lastDayAfterMonths(
-          new Date(
-            assessmentStartDate,
+      pendingAssessment = false;
+
+      if (
+        existingResult.rows.length > 0
+      ) {
+
+        const latestAssessment =
+          existingResult.rows[existingResult.rows.length - 1];
+
+        if (
+          Number(
+            latestAssessment.audit_status_id,
+          )
+          !== 7
+        ) {
+
+          pendingAssessment = true;
+        }
+      }
+    }
+
+    let assessmentStartDate = '';
+    let assessmentEndDate = '';
+    let controlData: any = null;
+
+    if (
+      freeFlow
+    ) {
+
+      const configsResult =
+        await this.db.query(
+          `
+          SELECT id, year_id, start_month_year, end_month_year, menu_ids, cat_ids, header_ids, question_ids, advances_scheme_ids, deposits_scheme_ids
+          FROM multi_level_control_master
+          WHERE audit_unit_id = $1
+              AND deleted_at IS NULL
+          ORDER BY start_month_year ASC, id ASC;
+          `,
+          [auditUnitId],
+        );
+
+      const existingPeriods =
+        new Set<string>();
+
+      for (
+        const assessment
+        of existingResult.rows
+      ) {
+
+        const fromStr =
+          this.formatDbDate(
+            assessment.assesment_period_from,
+          ).slice(0, 7);
+
+        const toStr =
+          this.formatDbDate(
+            assessment.assesment_period_to,
+          ).slice(0, 7);
+
+        existingPeriods.add(
+          `${fromStr}_${toStr}`,
+        );
+      }
+
+      let targetConfig: any = null;
+
+      for (
+        const config
+        of configsResult.rows
+      ) {
+
+        const configKey =
+          `${config.start_month_year}_${config.end_month_year}`;
+
+        if (
+          !existingPeriods.has(
+            configKey,
+          )
+        ) {
+
+          targetConfig = config;
+          break;
+        }
+      }
+
+      if (
+        !targetConfig
+        &&
+        configsResult.rows.length > 0
+      ) {
+
+        targetConfig =
+          configsResult.rows[configsResult.rows.length - 1];
+      }
+
+      if (
+        targetConfig
+      ) {
+
+        assessmentStartDate =
+          `${targetConfig.start_month_year}-01`;
+
+        const [yearStr, monthStr] =
+          targetConfig.end_month_year.split('-');
+
+        const y =
+          Number(yearStr);
+
+        const m =
+          Number(monthStr);
+
+        const lastDay =
+          new Date(y, m, 0).getDate();
+
+        const endMonthPadded =
+          String(m).padStart(2, '0');
+
+        const endDayPadded =
+          String(lastDay).padStart(2, '0');
+
+        assessmentEndDate =
+          `${y}-${endMonthPadded}-${endDayPadded}`;
+
+        controlData =
+          this.validControl(
+            targetConfig,
+            unit.section_type_id,
+          );
+      }
+
+    } else {
+
+      assessmentStartDate =
+        this.formatDate(
+          this.firstDayOfNextMonth(
+            new Date(
+              latestAssessmentPeriodTo,
+            ),
           ),
-          Number(unit.frequency || 1) - 1,
-        ),
-      );
+        );
+
+      assessmentEndDate =
+        this.formatDate(
+          this.lastDayAfterMonths(
+            new Date(
+              assessmentStartDate,
+            ),
+            Number(unit.frequency || 1) - 1,
+          ),
+        );
+    }
 
     const auditStartDate =
       this.formatDate(
@@ -422,6 +578,7 @@ export class InternalAuditService {
     let error: string | null = null;
 
     if (
+      !freeFlow &&
       !(
         assessmentStartDate >= fyStart
         &&
@@ -434,6 +591,7 @@ export class InternalAuditService {
     }
 
     if (
+      !freeFlow &&
       pendingAssessment
     ) {
 
@@ -441,6 +599,7 @@ export class InternalAuditService {
     }
 
     if (
+      !freeFlow &&
       fyRemainMonths > 0
       &&
       Number(unit.frequency) > fyRemainMonths
@@ -449,6 +608,7 @@ export class InternalAuditService {
       error =
         `Note: Your current audit frequency is every ${unit.frequency} Months. There are ${fyRemainMonths} Months remaining for the current audit cycle in the F.Y. ${fyStartYear} - ${fyStartYear + 1}. Please consider changing your audit frequency.`;
     } else if (
+      !freeFlow &&
       fyRemainMonths <= 0
     ) {
 
@@ -466,10 +626,10 @@ export class InternalAuditService {
         );
     }
 
-    let controlData: any = null;
-
     if (
       !error
+      &&
+      !controlData
     ) {
 
       controlData =
@@ -479,14 +639,17 @@ export class InternalAuditService {
           auditUnitId,
           assessmentStartDate,
           assessmentEndDate,
+          freeFlow,
         );
+    }
 
-      if (
-        !controlData
-      ) {
+    if (
+      !error
+      &&
+      !controlData
+    ) {
 
-        error = 'multiLevelControlNoData';
-      }
+      error = 'multiLevelControlNoData';
     }
 
     return {
@@ -499,7 +662,10 @@ export class InternalAuditService {
         audit_type_id: 1,
         year_id: yearId,
         audit_unit_id: auditUnitId,
-        frequency: unit.frequency,
+        frequency: freeFlow
+          ? ((new Date(assessmentEndDate).getFullYear() - new Date(assessmentStartDate).getFullYear()) * 12 +
+             (new Date(assessmentEndDate).getMonth() - new Date(assessmentStartDate).getMonth()) + 1)
+          : Number(unit.frequency || 1),
         audit_head_id: employeeId,
         branch_head_id: unit.branch_head_id,
         branch_subhead_id: unit.branch_subhead_id,
@@ -530,6 +696,7 @@ export class InternalAuditService {
     auditUnitId: number,
     yearId: number,
     employeeId: number,
+    freeFlow = false,
   ) {
 
     const preview =
@@ -537,6 +704,7 @@ export class InternalAuditService {
         auditUnitId,
         yearId,
         employeeId,
+        freeFlow,
       );
 
     if (
@@ -11326,21 +11494,32 @@ SELECT (
     auditUnitId: number,
     assessmentStartDate: string,
     assessmentEndDate: string,
+    freeFlow = false,
   ) {
 
-    const result =
-      await this.db.query(
+    const queryStr = freeFlow
+      ? `
+        SELECT *
+        FROM multi_level_control_master
+        WHERE audit_unit_id = $1
+            AND deleted_at IS NULL;
         `
+      : `
         SELECT *
         FROM multi_level_control_master
         WHERE year_id = $1
             AND audit_unit_id = $2
             AND deleted_at IS NULL;
-        `,
-        [
-          year.id,
-          auditUnitId,
-        ],
+        `;
+
+    const queryParams = freeFlow
+      ? [auditUnitId]
+      : [year.id, auditUnitId];
+
+    const result =
+      await this.db.query(
+        queryStr,
+        queryParams,
       );
 
     const controls =
@@ -11368,18 +11547,57 @@ SELECT (
     const fallbackKey =
       `${fyStartYear}-04_${fyStartYear + 1}-03`;
 
-    return this.validControl(
-      controls.get(
-        periodKey,
-      ),
-      unit.section_type_id,
-    )
-      || this.validControl(
+    let selectedControl =
+      this.validControl(
+        controls.get(
+          periodKey,
+        ),
+        unit.section_type_id,
+      )
+      ||
+      this.validControl(
         controls.get(
           fallbackKey,
         ),
         unit.section_type_id,
       );
+
+    if (
+      !selectedControl
+      &&
+      freeFlow
+      &&
+      result.rows.length > 0
+    ) {
+
+      const sorted =
+        [...result.rows].sort(
+          (a, b) =>
+            b.start_month_year.localeCompare(a.start_month_year),
+        );
+
+      for (
+        const row
+        of sorted
+      ) {
+
+        const valid =
+          this.validControl(
+            row,
+            unit.section_type_id,
+          );
+
+        if (
+          valid
+        ) {
+
+          selectedControl = valid;
+          break;
+        }
+      }
+    }
+
+    return selectedControl;
   }
 
   private validControl(

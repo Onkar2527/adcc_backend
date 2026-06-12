@@ -1037,11 +1037,15 @@ export class InternalAuditController {
 
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('free_flow')
+    freeFlow?: string,
   ) {
 
     return this.service.getAuditUnitDashboard(
       auditUnitId,
       Number(employeeId || 0),
+      freeFlow === '1' || freeFlow === 'true',
     );
   }
 
@@ -1055,12 +1059,16 @@ export class InternalAuditController {
 
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('free_flow')
+    freeFlow?: string,
   ) {
 
     return this.service.getStartAssessmentPreview(
       auditUnitId,
       yearId,
       Number(employeeId || 0),
+      freeFlow === '1' || freeFlow === 'true',
     );
   }
 
@@ -1080,6 +1088,7 @@ export class InternalAuditController {
       auditUnitId,
       yearId,
       Number(body?.employee_id || 0),
+      body?.free_flow === true || body?.free_flow === 'true' || body?.free_flow === 1,
     );
   }
 

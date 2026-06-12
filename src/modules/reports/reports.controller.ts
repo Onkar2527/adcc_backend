@@ -16,8 +16,12 @@ export class ReportsController {
   }
 
   @Get(':reportSlug/definition')
-  getReportDefinition(@Param('reportSlug') reportSlug: string) {
-    return this.reportsService.getReportDefinition(reportSlug);
+  getReportDefinition(
+    @Param('reportSlug') reportSlug: string,
+    @Query('freeFlow') freeFlow?: string,
+  ) {
+    const isFreeFlow = freeFlow === 'true' || freeFlow === '1';
+    return this.reportsService.getReportDefinition(reportSlug, isFreeFlow);
   }
 
   @Get(':reportSlug/data')
