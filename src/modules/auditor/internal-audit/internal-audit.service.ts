@@ -1884,16 +1884,19 @@ export class InternalAuditService {
   async getSubmissionPreview(
     assessmentId: number,
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
     return this.getAssessmentSubmissionPreview(
       assessmentId,
       employeeId,
+      liveManagerCompliance,
     );
   }
 
   private async getAssessmentSubmissionPreview(
     assessmentId: number,
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
     const overview =
       await this.getOverview(
@@ -2192,6 +2195,7 @@ export class InternalAuditService {
       FROM account_categories ac
       INNER JOIN dump_deposits d
           ON ac.linked_table_id = 1
+          AND d.branch_id = $3
           AND d.sampling_filter = 1
           AND d.deleted_at IS NULL
           AND COALESCE(d.assesment_period_id, 0) <> $1
@@ -2207,6 +2211,7 @@ export class InternalAuditService {
       FROM account_categories ac
       INNER JOIN dump_advances a
           ON ac.linked_table_id = 2
+          AND a.branch_id = $3
           AND a.sampling_filter = 1
           AND a.deleted_at IS NULL
           AND COALESCE(a.assesment_period_id, 0) <> $1
@@ -2217,8 +2222,60 @@ export class InternalAuditService {
         [
           assessmentId,
           overview.cat_ids || '',
+          Number(overview.audit_unit_id || 0),
         ],
       );
+
+    const liveCompliancePendingResult =
+      liveManagerCompliance
+        ? await this.db.query(
+          `
+          SELECT
+              ad.menu_id,
+              mm.name AS menu_name,
+              ad.category_id,
+              cm.name AS category_name,
+              ad.header_id,
+              qhm.name AS header_name,
+              ad.question_id,
+              qm.question,
+              ad.dump_id,
+              CASE
+                  WHEN COALESCE(ad.compliance_status_id, 0) = 4 THEN 'Pending with Manager.'
+                  WHEN COALESCE(ad.compliance_status_id, 0) = 3 THEN 'Re-compliance pending with Manager.'
+                  WHEN COALESCE(ad.compliance_status_id, 0) = 0
+                      AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+                      THEN 'Pending with Reviewer.'
+                  WHEN COALESCE(ad.compliance_status_id, 0) = 0 THEN 'Pending with Manager.'
+                  ELSE 'Live compliance point is not resolved.'
+              END AS message
+          FROM answers_data ad
+          LEFT JOIN menu_master mm
+              ON mm.id = ad.menu_id
+          LEFT JOIN category_master cm
+              ON cm.id = ad.category_id
+          LEFT JOIN question_header_master qhm
+              ON qhm.id = ad.header_id
+          LEFT JOIN question_master qm
+              ON qm.id = ad.question_id
+          WHERE ad.assesment_id = $1
+              AND ad.is_compliance = 1
+              AND COALESCE(ad.compliance_status_id, 0) NOT IN (2, 5)
+              AND ad.deleted_at IS NULL
+          ORDER BY
+              ad.menu_id,
+              ad.category_id,
+              ad.dump_id,
+              ad.header_id,
+              ad.question_id;
+          `,
+          [
+            assessmentId,
+          ],
+        )
+        : {
+          rows: [],
+        };
 
     const carryForwardPendingResult =
       await this.db.query(
@@ -2312,6 +2369,29 @@ export class InternalAuditService {
         }),
       ),
 
+      ...liveCompliancePendingResult.rows.map(
+        (row: any) => ({
+          category_id:
+            row.category_id,
+          category_name:
+            row.category_name,
+          menu_name:
+            row.menu_name,
+          header_id:
+            row.header_id,
+          question_id:
+            row.question_id,
+          question:
+            row.question,
+          dump_id:
+            row.dump_id,
+          type:
+            'live_compliance',
+          message:
+            row.message,
+        }),
+      ),
+
       ...carryForwardPendingResult.rows.map(
         (row: any) => {
           const data =
@@ -2366,8 +2446,12 @@ export class InternalAuditService {
         complianceResult.rows,
       message:
         issues.length
-          ? 'Complete the pending audit points before submitting for review.'
-          : 'Audit is ready to submit for review.',
+          ? liveManagerCompliance
+            ? 'Complete audit points and resolve all live compliance points before completing assessment.'
+            : 'Complete the pending audit points before submitting for review.'
+          : liveManagerCompliance
+            ? 'Audit is ready to complete.'
+            : 'Audit is ready to submit for review.',
       issues,
       overview,
     };
@@ -2376,12 +2460,14 @@ export class InternalAuditService {
   async submitAssessment(
     assessmentId: number,
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
 
     const preview =
       await this.getSubmissionPreview(
         assessmentId,
         employeeId,
+        liveManagerCompliance,
       );
 
     if (
@@ -2408,7 +2494,7 @@ export class InternalAuditService {
             UPDATE audit_assesment_master
             SET
                 audit_end_date = CURRENT_DATE,
-                audit_status_id = 2,
+                audit_status_id = $4,
                 audit_emp_id = $2
             WHERE id = $1
                 AND audit_status_id = $3
@@ -2419,6 +2505,7 @@ export class InternalAuditService {
               assessmentId,
               employeeId,
               currentStatus,
+              liveManagerCompliance ? 7 : 2,
             ],
           );
 
@@ -2440,12 +2527,13 @@ export class InternalAuditService {
               reviewer_emp_id,
               batch_key
           )
-          VALUES ($1, 1, 2, 0, $2, $3);
+          VALUES ($1, 1, $4, 0, $2, $3);
           `,
           [
             assessmentId,
             employeeId,
             preview.overview.batch_key,
+            liveManagerCompliance ? 7 : 2,
           ],
         );
 
@@ -2474,13 +2562,16 @@ export class InternalAuditService {
       success:
         true,
       message:
+        liveManagerCompliance
+          ? 'Audit assessment completed successfully.'
+          :
         Number(preview.overview.audit_status_id) === 3
           ? 'Corrected audit points submitted back to Reviewer successfully.'
           : 'Audit submitted to reviewer successfully.',
       status_id:
-        2,
+        liveManagerCompliance ? 7 : 2,
       status:
-        STATUS_LABELS[2],
+        STATUS_LABELS[liveManagerCompliance ? 7 : 2],
     };
   }
 
@@ -2488,6 +2579,7 @@ export class InternalAuditService {
 
   async getReviewerPending(
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
 
     await this.assertReviewer(
@@ -2552,9 +2644,86 @@ export class InternalAuditService {
         `, [employeeId]
       );
 
+    const assessments =
+      result.rows;
+
+    if (
+      liveManagerCompliance
+    ) {
+      const liveResult =
+        await this.db.query(
+          `
+          SELECT
+              aam.id,
+              aam.audit_unit_id,
+              aam.audit_status_id,
+              aam.assesment_period_from,
+              aam.assesment_period_to,
+              aam.audit_end_date,
+              au.audit_unit_code,
+              au.name AS audit_unit_name,
+              ym.year,
+              COUNT(DISTINCT ad.id) FILTER (
+                  WHERE ad.is_compliance = 1
+                      AND COALESCE(ad.compliance_status_id, 0) IN (0, 2, 3, 5)
+                      AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+              )::int AS total_points,
+              COUNT(DISTINCT ad.id) FILTER (
+                  WHERE ad.is_compliance = 1
+                      AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+              )::int AS compliance_points,
+              COUNT(DISTINCT ad.id) FILTER (
+                  WHERE ad.is_compliance = 1
+                      AND ad.compliance_status_id = 3
+              )::int AS rejected_points,
+              'Live Compliance Review' AS review_stage,
+              true AS live_manager_compliance
+          FROM audit_assesment_master aam
+          INNER JOIN audit_unit_master au
+              ON au.id = aam.audit_unit_id
+          LEFT JOIN year_master ym
+              ON ym.id = aam.year_id
+          LEFT JOIN answers_data ad
+              ON ad.assesment_id = aam.id
+              AND ad.deleted_at IS NULL
+          WHERE aam.audit_status_id IN (1, 3)
+            AND aam.deleted_at IS NULL
+            AND EXISTS (
+                SELECT 1
+                FROM employee_master em
+                WHERE em.id = $1
+                    AND em.user_type_id = 4
+                    AND em.deleted_at IS NULL
+                    AND em.audit_unit_authority IS NOT NULL
+                    AND EXISTS (
+                        SELECT 1
+                        FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
+                        WHERE trim(unit_id) = aam.audit_unit_id::text
+                    )
+            )
+          GROUP BY
+              aam.id,
+              au.audit_unit_code,
+              au.name,
+              ym.year
+          HAVING COUNT(DISTINCT ad.id) FILTER (
+              WHERE ad.is_compliance = 1
+                  AND COALESCE(ad.compliance_status_id, 0) = 0
+                  AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+          ) > 0
+          ORDER BY aam.id DESC;
+          `,
+          [employeeId],
+        );
+
+      assessments.push(
+        ...liveResult.rows,
+      );
+    }
+
     return {
       assessments:
-        result.rows,
+        assessments,
     };
   }
 
@@ -2603,6 +2772,7 @@ export class InternalAuditService {
   async getReviewerComplianceAssessment(
     assessmentId: number,
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
 
     await this.assertReviewerAuthority(
@@ -2617,6 +2787,14 @@ export class InternalAuditService {
 
     if (
       Number(overview.audit_status_id) !== 5
+      &&
+      !(
+        liveManagerCompliance
+        &&
+        [1, 3].includes(
+          Number(overview.audit_status_id),
+        )
+      )
     ) {
       throw new BadRequestException(
         'Assessment is not pending for compliance review.',
@@ -2709,9 +2887,19 @@ export class InternalAuditService {
         WHERE ad.assesment_id = $1
             AND ad.is_compliance = 1
             AND ad.deleted_at IS NULL
+            AND (
+                $2::boolean = false
+                OR (
+                    NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+                    AND COALESCE(ad.compliance_status_id, 0) IN (0, 2, 3, 5)
+                )
+            )
         ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id;
         `,
-        [assessmentId],
+        [
+          assessmentId,
+          liveManagerCompliance,
+        ],
       );
 
     const answerIds =
@@ -2887,7 +3075,12 @@ export class InternalAuditService {
       );
 
     return {
-      overview,
+      overview:
+        {
+          ...overview,
+          live_manager_compliance:
+            liveManagerCompliance,
+        },
       answers,
       counts:
         this.getReviewerComplianceCounts(
@@ -2913,7 +3106,9 @@ export class InternalAuditService {
       );
 
     if (
-      Number(assessment.audit_status_id) !== 5
+      ![1, 3, 5].includes(
+        Number(assessment.audit_status_id),
+      )
     ) {
       throw new BadRequestException(
         'Assessment is not pending for compliance review.',
@@ -2994,6 +3189,7 @@ export class InternalAuditService {
     employeeId: number,
     action: number,
     comment: string,
+    liveManagerCompliance = false,
   ) {
 
     await this.assertReviewerAuthority(
@@ -3026,6 +3222,14 @@ export class InternalAuditService {
 
     if (
       Number(assessment.audit_status_id) !== 5
+      &&
+      !(
+        liveManagerCompliance
+        &&
+        [1, 3].includes(
+          Number(assessment.audit_status_id),
+        )
+      )
     ) {
       throw new BadRequestException(
         'Assessment is not pending for compliance review.',
@@ -3371,6 +3575,7 @@ export class InternalAuditService {
   async submitReviewerComplianceAssessment(
     assessmentId: number,
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
 
     await this.assertReviewerAuthority(
@@ -3386,6 +3591,49 @@ export class InternalAuditService {
     if (
       Number(assessment.audit_status_id) !== 5
     ) {
+      if (
+        liveManagerCompliance
+        &&
+        [1, 3].includes(
+          Number(assessment.audit_status_id),
+        )
+      ) {
+        const pending =
+          await this.db.findOne(
+            `
+            SELECT COUNT(*)::int AS pending_count
+            FROM answers_data
+            WHERE assesment_id = $1
+                AND is_compliance = 1
+                AND COALESCE(compliance_status_id, 0) = 0
+                AND NULLIF(BTRIM(COALESCE(audit_commpliance, '')), '') IS NOT NULL
+                AND deleted_at IS NULL;
+            `,
+            [
+              assessmentId,
+            ],
+          );
+
+        if (
+          Number(pending?.pending_count || 0) > 0
+        ) {
+          throw new BadRequestException(
+            'Accept or reject all live compliance observations before submitting.',
+          );
+        }
+
+        return {
+          success:
+            true,
+          message:
+            'Live compliance review saved.',
+          status_id:
+            Number(assessment.audit_status_id),
+          status:
+            STATUS_LABELS[Number(assessment.audit_status_id)],
+        };
+      }
+
       throw new BadRequestException(
         'Assessment is not pending for compliance review.',
       );
@@ -4232,11 +4480,102 @@ export class InternalAuditService {
 
   async getCompliancePending(
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
 
     await this.assertCompliance(
       employeeId,
     );
+
+    if (
+      liveManagerCompliance
+    ) {
+      const liveResult =
+        await this.db.query(
+          `
+          SELECT
+              aam.id,
+              aam.audit_unit_id,
+              aam.audit_status_id,
+              aam.assesment_period_from,
+              aam.assesment_period_to,
+              aam.compliance_start_date,
+              aam.compliance_due_date,
+              au.audit_unit_code,
+              au.name AS audit_unit_name,
+              ym.year,
+              'Live Compliance' AS compliance_stage,
+              COUNT(DISTINCT ad.id) FILTER (
+                  WHERE ad.is_compliance = 1
+                      AND (
+                          COALESCE(ad.compliance_status_id, 0) = 3
+                          OR (
+                              COALESCE(ad.compliance_status_id, 0) IN (0, 4)
+                              AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
+                          )
+                      )
+              )::int AS compliance_points,
+              COUNT(DISTINCT ad.id) FILTER (
+                  WHERE ad.is_compliance = 1
+                      AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4)
+                      AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+              )::int AS responded_points,
+              true AS live_manager_compliance
+          FROM audit_assesment_master aam
+          INNER JOIN audit_unit_master au
+              ON au.id = aam.audit_unit_id
+          LEFT JOIN year_master ym
+              ON ym.id = aam.year_id
+          LEFT JOIN answers_data ad
+              ON ad.assesment_id = aam.id
+              AND ad.deleted_at IS NULL
+          WHERE aam.audit_status_id IN (1, 3)
+              AND aam.deleted_at IS NULL
+              AND (
+                au.branch_head_id = $1
+                OR EXISTS (
+                SELECT 1
+                FROM employee_master em
+                WHERE em.id = $1
+                    AND em.deleted_at IS NULL
+                    AND em.audit_unit_authority IS NOT NULL
+                    AND EXISTS (
+                        SELECT 1
+                        FROM unnest(
+                            string_to_array(
+                                COALESCE(em.audit_unit_authority, ''),
+                                ','
+                            )
+                        ) unit_id
+                        WHERE trim(unit_id) = aam.audit_unit_id::text
+                    )
+                )
+            )
+          GROUP BY
+              aam.id,
+              au.audit_unit_code,
+              au.name,
+              ym.year
+          HAVING COUNT(DISTINCT ad.id) FILTER (
+              WHERE ad.is_compliance = 1
+                  AND (
+                      COALESCE(ad.compliance_status_id, 0) = 3
+                      OR (
+                          COALESCE(ad.compliance_status_id, 0) IN (0, 4)
+                          AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
+                      )
+                  )
+          ) > 0
+          ORDER BY aam.id DESC;
+          `,
+          [employeeId],
+        );
+
+      return {
+        assessments:
+          liveResult.rows,
+      };
+    }
 
     const result =
       await this.db.query(
@@ -4320,7 +4659,9 @@ export class InternalAuditService {
             AND aa.deleted_at IS NULL
         WHERE aam.audit_status_id IN (4, 6)
             AND aam.deleted_at IS NULL
-            AND EXISTS (
+            AND (
+              au.branch_head_id = $1
+              OR EXISTS (
               SELECT 1
               FROM employee_master em
               WHERE em.id = $1
@@ -4336,6 +4677,7 @@ export class InternalAuditService {
                       ) unit_id
                       WHERE trim(unit_id) = aam.audit_unit_id::text
                   )
+              )
           )
         GROUP BY
             aam.id,
@@ -4365,17 +4707,26 @@ export class InternalAuditService {
         `
       SELECT aam.id
       FROM audit_assesment_master aam
-      INNER JOIN employee_master em
-          ON em.id = $2
-          AND em.deleted_at IS NULL
-          AND em.audit_unit_authority IS NOT NULL
-          AND EXISTS (
-              SELECT 1
-              FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
-              WHERE trim(unit_id) = aam.audit_unit_id::text
-          )
+      LEFT JOIN audit_unit_master au
+          ON au.id = aam.audit_unit_id
+          AND au.deleted_at IS NULL
       WHERE aam.id = $1
           AND aam.deleted_at IS NULL
+          AND (
+              au.branch_head_id = $2
+              OR EXISTS (
+                  SELECT 1
+                  FROM employee_master em
+                  WHERE em.id = $2
+                      AND em.deleted_at IS NULL
+                      AND em.audit_unit_authority IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1
+                          FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
+                          WHERE trim(unit_id) = aam.audit_unit_id::text
+                      )
+              )
+          )
       LIMIT 1;
       `,
         [
@@ -4396,6 +4747,7 @@ export class InternalAuditService {
   async getComplianceAssessment(
     assessmentId: number,
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
 
     await this.assertComplianceAuthority(
@@ -4412,6 +4764,34 @@ export class InternalAuditService {
       Number(overview.audit_status_id);
 
     if (
+      !(
+        [4, 6].includes(
+          complianceStatus,
+        )
+        ||
+        (
+          liveManagerCompliance
+          &&
+          [1, 3].includes(
+            complianceStatus,
+          )
+        )
+      )
+    ) {
+      throw new BadRequestException(
+        'Assessment is not pending for compliance.',
+      );
+    }
+
+    const overviewWithFlow = {
+      ...overview,
+      live_manager_compliance:
+        liveManagerCompliance,
+    };
+
+    if (
+      !liveManagerCompliance
+      &&
       ![4, 6].includes(
         complianceStatus,
       )
@@ -4521,18 +4901,33 @@ export class InternalAuditService {
             AND sm.deleted_at IS NULL
         WHERE ad.assesment_id = $1
             AND ad.is_compliance = 1
-            AND ad.audit_status_id = 2
             AND ad.deleted_at IS NULL
             AND (
-                $2::int = 4
-                OR ad.compliance_status_id = 3
-                OR EXISTS (
-                    SELECT 1
-                    FROM answers_data_annexure aa
-                    WHERE aa.answer_id = ad.id
-                        AND aa.assesment_id = ad.assesment_id
-                        AND aa.compliance_status_id = 3
-                        AND aa.deleted_at IS NULL
+                (
+                    $3::boolean = true
+                    AND (
+                        COALESCE(ad.compliance_status_id, 0) = 3
+                        OR (
+                            COALESCE(ad.compliance_status_id, 0) IN (0, 4)
+                            AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
+                        )
+                    )
+                )
+                OR (
+                    $3::boolean = false
+                    AND ad.audit_status_id = 2
+                    AND (
+                        $2::int = 4
+                        OR ad.compliance_status_id = 3
+                        OR EXISTS (
+                            SELECT 1
+                            FROM answers_data_annexure aa
+                            WHERE aa.answer_id = ad.id
+                                AND aa.assesment_id = ad.assesment_id
+                                AND aa.compliance_status_id = 3
+                                AND aa.deleted_at IS NULL
+                        )
+                    )
                 )
             )
         ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id;
@@ -4540,6 +4935,7 @@ export class InternalAuditService {
         [
           assessmentId,
           complianceStatus,
+          liveManagerCompliance,
         ],
       );
 
@@ -4573,11 +4969,26 @@ export class InternalAuditService {
           FROM answers_data_annexure
           WHERE assesment_id = $1
               AND answer_id = ANY($2::int[])
-              AND audit_status_id = 2
               AND deleted_at IS NULL
               AND (
-                  $3::int = 4
-                  OR compliance_status_id = 3
+                  (
+                      $4::boolean = true
+                      AND (
+                          COALESCE(compliance_status_id, 0) = 3
+                          OR (
+                              COALESCE(compliance_status_id, 0) IN (0, 4)
+                              AND NULLIF(BTRIM(COALESCE(audit_commpliance, '')), '') IS NULL
+                          )
+                      )
+                  )
+                  OR (
+                      $4::boolean = false
+                      AND audit_status_id = 2
+                      AND (
+                          $3::int = 4
+                          OR compliance_status_id = 3
+                      )
+                  )
               )
           ORDER BY answer_id, id;
           `,
@@ -4585,6 +4996,7 @@ export class InternalAuditService {
             assessmentId,
             answerIds,
             complianceStatus,
+            liveManagerCompliance,
           ],
         );
 
@@ -4702,6 +5114,8 @@ ORDER BY id DESC;
         (row: any) => ({
           ...row,
           response_required:
+            liveManagerCompliance
+            ||
             complianceStatus === 4
             ||
             Number(row.compliance_status_id) === 3,
@@ -4730,6 +5144,8 @@ ORDER BY id DESC;
               (annexure: any) => ({
                 ...annexure,
                 response_required:
+                  liveManagerCompliance
+                  ||
                   complianceStatus === 4
                   ||
                   Number(annexure.compliance_status_id) === 3,
@@ -4739,7 +5155,8 @@ ORDER BY id DESC;
       );
 
     return {
-      overview,
+      overview:
+        overviewWithFlow,
       answers,
       counts:
         this.getComplianceCounts(
@@ -4747,6 +5164,8 @@ ORDER BY id DESC;
           String(
             overview.batch_key || '',
           ),
+          !liveManagerCompliance
+          &&
           complianceStatus === 6,
         ),
     };
@@ -4769,7 +5188,7 @@ ORDER BY id DESC;
       );
 
     if (
-      ![4, 6].includes(
+      ![1, 3, 4, 6].includes(
         Number(assessment.audit_status_id),
       )
     ) {
@@ -4790,22 +5209,31 @@ ORDER BY id DESC;
             ON ad.id = em.answer_id
             AND ad.assesment_id = em.assesment_id
             AND ad.is_compliance = 1
-            AND ad.audit_status_id = 2
             AND ad.deleted_at IS NULL
         WHERE em.id = $1
             AND em.assesment_id = $2
             AND em.evi_type = 1
             AND em.deleted_at IS NULL
             AND (
-                $3::int = 4
-                OR ad.compliance_status_id = 3
-                OR EXISTS (
-                    SELECT 1
-                    FROM answers_data_annexure aa
-                    WHERE aa.answer_id = ad.id
-                        AND aa.assesment_id = ad.assesment_id
-                        AND aa.compliance_status_id = 3
-                        AND aa.deleted_at IS NULL
+                (
+                    $3::int IN (1, 3)
+                    AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4)
+                )
+                OR (
+                    $3::int IN (4, 6)
+                    AND ad.audit_status_id = 2
+                    AND (
+                        $3::int = 4
+                        OR ad.compliance_status_id = 3
+                        OR EXISTS (
+                            SELECT 1
+                            FROM answers_data_annexure aa
+                            WHERE aa.answer_id = ad.id
+                                AND aa.assesment_id = ad.assesment_id
+                                AND aa.compliance_status_id = 3
+                                AND aa.deleted_at IS NULL
+                        )
+                    )
                 )
             )
         LIMIT 1;
@@ -4876,7 +5304,7 @@ ORDER BY id DESC;
       );
 
     if (
-      ![4, 6].includes(
+      ![1, 3, 4, 6].includes(
         Number(assessment.audit_status_id),
       )
     ) {
@@ -4897,22 +5325,31 @@ ORDER BY id DESC;
             ON ad.id = em.answer_id
             AND ad.assesment_id = em.assesment_id
             AND ad.is_compliance = 1
-            AND ad.audit_status_id = 2
             AND ad.deleted_at IS NULL
         WHERE em.id = $1
             AND em.assesment_id = $2
             AND em.evi_type = 2
             AND em.deleted_at IS NULL
             AND (
-                $3::int = 4
-                OR ad.compliance_status_id = 3
-                OR EXISTS (
-                    SELECT 1
-                    FROM answers_data_annexure aa
-                    WHERE aa.answer_id = ad.id
-                        AND aa.assesment_id = ad.assesment_id
-                        AND aa.compliance_status_id = 3
-                        AND aa.deleted_at IS NULL
+                (
+                    $3::int IN (1, 3)
+                    AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4)
+                )
+                OR (
+                    $3::int IN (4, 6)
+                    AND ad.audit_status_id = 2
+                    AND (
+                        $3::int = 4
+                        OR ad.compliance_status_id = 3
+                        OR EXISTS (
+                            SELECT 1
+                            FROM answers_data_annexure aa
+                            WHERE aa.answer_id = ad.id
+                                AND aa.assesment_id = ad.assesment_id
+                                AND aa.compliance_status_id = 3
+                                AND aa.deleted_at IS NULL
+                        )
+                    )
                 )
             )
         LIMIT 1;
@@ -5104,6 +5541,7 @@ ORDER BY id DESC;
     observationId: number,
     employeeId: number,
     rawResponse: string,
+    liveManagerCompliance = false,
   ) {
 
     await this.assertComplianceAuthority(
@@ -5143,8 +5581,18 @@ ORDER BY id DESC;
       Number(assessment.audit_status_id);
 
     if (
-      ![4, 6].includes(
-        complianceStatus,
+      !(
+        [4, 6].includes(
+          complianceStatus,
+        )
+        ||
+        (
+          liveManagerCompliance
+          &&
+          [1, 3].includes(
+            complianceStatus,
+          )
+        )
       )
     ) {
       throw new BadRequestException(
@@ -5161,6 +5609,7 @@ ORDER BY id DESC;
                 audit_commpliance = $1,
                 compliance_emp_id = $2,
                 compliance_status_id = CASE
+                    WHEN $7::boolean = true THEN 0
                     WHEN $6::int = 6 THEN compliance_status_id
                     ELSE 0
                 END,
@@ -5168,11 +5617,26 @@ ORDER BY id DESC;
             WHERE id = $4
                 AND assesment_id = $5
                 AND is_compliance = 1
-                AND audit_status_id = 2
                 AND deleted_at IS NULL
                 AND (
-                    $6::int = 4
-                    OR compliance_status_id = 3
+                    (
+                        $7::boolean = true
+                        AND (
+                            COALESCE(compliance_status_id, 0) = 3
+                            OR (
+                                COALESCE(compliance_status_id, 0) IN (0, 4)
+                                AND NULLIF(BTRIM(COALESCE(audit_commpliance, '')), '') IS NULL
+                            )
+                        )
+                    )
+                    OR (
+                        $7::boolean = false
+                        AND audit_status_id = 2
+                        AND (
+                            $6::int = 4
+                            OR compliance_status_id = 3
+                        )
+                    )
                 )
             RETURNING id;
           `,
@@ -5183,6 +5647,7 @@ ORDER BY id DESC;
             observationId,
             assessmentId,
             complianceStatus,
+            liveManagerCompliance,
           ],
         )
         : await this.db.query(
@@ -5192,17 +5657,33 @@ ORDER BY id DESC;
                 audit_commpliance = $1,
                 compliance_emp_id = $2,
                 compliance_status_id = CASE
+                    WHEN $7::boolean = true THEN 0
                     WHEN $6::int = 6 THEN compliance_status_id
                     ELSE 0
                 END,
                 batch_key = $3
             WHERE aa.id = $4
                 AND aa.assesment_id = $5
-                AND aa.audit_status_id = 2
                 AND aa.deleted_at IS NULL
                 AND (
-                    $6::int = 4
-                    OR aa.compliance_status_id = 3
+                    (
+                        $7::boolean = true
+                        AND (
+                            COALESCE(aa.compliance_status_id, 0) = 3
+                            OR (
+                                COALESCE(aa.compliance_status_id, 0) IN (0, 4)
+                                AND NULLIF(BTRIM(COALESCE(aa.audit_commpliance, '')), '') IS NULL
+                            )
+                        )
+                    )
+                    OR (
+                        $7::boolean = false
+                        AND aa.audit_status_id = 2
+                        AND (
+                            $6::int = 4
+                            OR aa.compliance_status_id = 3
+                        )
+                    )
                 )
                 AND EXISTS (
                     SELECT 1
@@ -5210,7 +5691,10 @@ ORDER BY id DESC;
                     WHERE ad.id = aa.answer_id
                         AND ad.assesment_id = aa.assesment_id
                         AND ad.is_compliance = 1
-                        AND ad.audit_status_id = 2
+                        AND (
+                            $7::boolean = true
+                            OR ad.audit_status_id = 2
+                        )
                         AND ad.deleted_at IS NULL
                 )
             RETURNING aa.id;
@@ -5222,6 +5706,7 @@ ORDER BY id DESC;
             observationId,
             assessmentId,
             complianceStatus,
+            liveManagerCompliance,
           ],
         );
 
@@ -5239,6 +5724,8 @@ ORDER BY id DESC;
       message:
         complianceStatus === 6
           ? 'Corrected compliance response saved.'
+          : liveManagerCompliance
+            ? 'Compliance response saved for reviewer.'
           : 'Compliance response saved.',
     };
   }
@@ -5246,12 +5733,14 @@ ORDER BY id DESC;
   async getComplianceSubmissionPreview(
     assessmentId: number,
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
 
     const detail =
       await this.getComplianceAssessment(
         assessmentId,
         employeeId,
+        liveManagerCompliance,
       );
 
     const counts =
@@ -5274,6 +5763,8 @@ ORDER BY id DESC;
           ? 'No compliance-required observations were found.'
           : counts.pending
             ? `${counts.pending} compliance response(s) are pending.`
+            : liveManagerCompliance
+              ? 'All live compliance responses are saved. Reviewer can review them now.'
             : isReCompliance
               ? 'All corrected compliance responses are saved. Assessment is ready to return to Reviewer.'
               : 'All compliance responses are saved. Assessment is ready for reviewer compliance review.',
@@ -5283,12 +5774,14 @@ ORDER BY id DESC;
   async submitComplianceAssessment(
     assessmentId: number,
     employeeId: number,
+    liveManagerCompliance = false,
   ) {
 
     const preview =
       await this.getComplianceSubmissionPreview(
         assessmentId,
         employeeId,
+        liveManagerCompliance,
       );
 
     if (
@@ -5297,6 +5790,25 @@ ORDER BY id DESC;
       throw new BadRequestException(
         preview.message,
       );
+    }
+
+    if (
+      liveManagerCompliance
+    ) {
+      return {
+        success:
+          true,
+        status_id:
+          Number(
+            (
+              await this.findAssessment(
+                assessmentId,
+              )
+            ).audit_status_id,
+          ),
+        message:
+          'Live compliance responses are ready for reviewer.',
+      };
     }
 
     const currentStatus =
@@ -5526,7 +6038,10 @@ ORDER BY id DESC;
               ans.business_risk,
               ans.control_risk,
               ans.audit_status_id AS answer_status_id,
-              ans.audit_reviewer_comment
+              ans.audit_reviewer_comment,
+              ans.audit_commpliance,
+              ans.compliance_status_id,
+              ans.compliance_reviewer_comment
           FROM question_set_master qsm
           INNER JOIN question_header_master qhm
               ON qhm.question_set_id = qsm.id
@@ -5669,7 +6184,10 @@ ORDER BY id DESC;
               ans.business_risk,
               ans.control_risk,
               ans.audit_status_id AS answer_status_id,
-              ans.audit_reviewer_comment
+              ans.audit_reviewer_comment,
+              ans.audit_commpliance,
+              ans.compliance_status_id,
+              ans.compliance_reviewer_comment
           FROM question_set_master qsm
           INNER JOIN question_header_master qhm
               ON qhm.question_set_id = qsm.id
@@ -5975,7 +6493,10 @@ ORDER BY id DESC;
         ans.business_risk,
         ans.control_risk,
         ans.audit_status_id AS answer_status_id,
-        ans.audit_reviewer_comment
+        ans.audit_reviewer_comment,
+        ans.audit_commpliance,
+        ans.compliance_status_id,
+        ans.compliance_reviewer_comment
     FROM question_set_master qsm
     INNER JOIN question_header_master qhm
         ON qhm.question_set_id = qsm.id
@@ -6081,6 +6602,7 @@ ORDER BY id DESC;
     employeeId: number,
     answers: any[],
     dumpId = 0,
+    liveManagerCompliance = false,
   ) {
 
     if (
@@ -6213,8 +6735,6 @@ ORDER BY id DESC;
             answer?.is_compliance === true
             ||
             answer?.is_compliance === 1
-            ||
-            validation.is_compliance
           )
             ? 1
             : 0,
@@ -6293,7 +6813,16 @@ ORDER BY id DESC;
                   audit_compulsary_ev_upload = $5,
                   business_risk = $6,
                   control_risk = $7,
-                  batch_key = $8
+                  batch_key = $8,
+                  compliance_status_id = CASE
+                      WHEN $10::boolean = true AND $4::int = 1 THEN
+                          CASE
+                              WHEN COALESCE(compliance_status_id, 0) IN (2, 5) THEN compliance_status_id
+                              ELSE 4
+                          END
+                      WHEN $10::boolean = true AND $4::int = 0 THEN 0
+                      ELSE compliance_status_id
+                  END
               WHERE id = $9;
               `,
               [
@@ -6306,6 +6835,7 @@ ORDER BY id DESC;
                 row.control_risk,
                 row.batch_key,
                 existing.rows[0].id,
+                liveManagerCompliance,
               ],
             );
           } else {
@@ -6365,7 +6895,9 @@ ORDER BY id DESC;
                 null,
                 null,
                 0,
-                0,
+                liveManagerCompliance && row.is_compliance === 1
+                  ? 4
+                  : 0,
                 0,
                 null,
                 row.business_risk,
@@ -6444,7 +6976,10 @@ ORDER BY id DESC;
         ans.business_risk,
         ans.control_risk,
         ans.audit_status_id AS answer_status_id,
-        ans.audit_reviewer_comment
+        ans.audit_reviewer_comment,
+        ans.audit_commpliance,
+        ans.compliance_status_id,
+        ans.compliance_reviewer_comment
     FROM question_set_master qsm
     INNER JOIN question_header_master qhm
         ON qhm.question_set_id = qsm.id
@@ -6523,6 +7058,14 @@ ORDER BY id DESC;
                   row.answer_status_id,
                 audit_reviewer_comment:
                   row.audit_reviewer_comment,
+                compliance_response:
+                  row.audit_commpliance,
+                audit_commpliance:
+                  row.audit_commpliance,
+                compliance_status_id:
+                  row.compliance_status_id,
+                compliance_reviewer_comment:
+                  row.compliance_reviewer_comment,
               }
               : null,
         },
@@ -7545,6 +8088,14 @@ ORDER BY id DESC;
                 row.answer_status_id,
               audit_reviewer_comment:
                 row.audit_reviewer_comment,
+              compliance_response:
+                row.audit_commpliance,
+              audit_commpliance:
+                row.audit_commpliance,
+              compliance_status_id:
+                row.compliance_status_id,
+              compliance_reviewer_comment:
+                row.compliance_reviewer_comment,
             }
             : null,
       });
@@ -8607,6 +9158,7 @@ SELECT
     id,
     answer_id,
     annex_id,
+    evi_type,
     file_name,
     file_type,
     description,
@@ -8614,7 +9166,7 @@ SELECT
 FROM evidence_master
 WHERE assesment_id = $1
     AND answer_id = ANY($2::int[])
-    AND evi_type = 1
+    AND evi_type IN (1, 2)
     AND deleted_at IS NULL
 ORDER BY id DESC;
         `,
@@ -8627,6 +9179,9 @@ ORDER BY id DESC;
     const evidenceByTarget =
       new Map<string, any[]>();
 
+    const complianceEvidenceByTarget =
+      new Map<string, any[]>();
+
     for (
       const row
       of result.rows
@@ -8634,10 +9189,15 @@ ORDER BY id DESC;
       const key =
         `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`;
 
-      evidenceByTarget.set(
+      const targetMap =
+        Number(row.evi_type) === 2
+          ? complianceEvidenceByTarget
+          : evidenceByTarget;
+
+      targetMap.set(
         key,
         [
-          ...(evidenceByTarget.get(key) || []),
+          ...(targetMap.get(key) || []),
           row,
         ],
       );
@@ -8665,6 +9225,14 @@ ORDER BY id DESC;
       question.answer.evidence =
         question.answer.evidences[0] || null;
 
+      question.answer.compliance_evidences =
+        complianceEvidenceByTarget.get(
+          `${answerId}:0`,
+        ) || [];
+
+      question.answer.compliance_evidence =
+        question.answer.compliance_evidences[0] || null;
+
       for (
         const row
         of question.answer.annexure_rows || []
@@ -8676,6 +9244,14 @@ ORDER BY id DESC;
 
         row.evidence =
           row.evidences[0] || null;
+
+        row.compliance_evidences =
+          complianceEvidenceByTarget.get(
+            `${answerId}:${Number(row.id)}`,
+          ) || [];
+
+        row.compliance_evidence =
+          row.compliance_evidences[0] || null;
       }
     }
   }
@@ -8697,7 +9273,7 @@ ORDER BY id DESC;
       Number(assessment.audit_status_id);
 
     if (
-      ![4, 6].includes(
+      ![1, 3, 4, 6].includes(
         complianceStatus,
       )
     ) {
@@ -8717,11 +9293,20 @@ ORDER BY id DESC;
           WHERE id = $1
               AND assesment_id = $2
               AND is_compliance = 1
-              AND audit_status_id = 2
               AND deleted_at IS NULL
               AND (
-                  $3::int = 4
-                  OR compliance_status_id = 3
+                  (
+                      $3::int IN (1, 3)
+                      AND COALESCE(compliance_status_id, 0) IN (0, 3, 4)
+                  )
+                  OR (
+                      $3::int IN (4, 6)
+                      AND audit_status_id = 2
+                      AND (
+                          $3::int = 4
+                          OR compliance_status_id = 3
+                      )
+                  )
               )
           LIMIT 1;
           `,
@@ -8757,15 +9342,23 @@ ORDER BY id DESC;
             ON ad.id = aa.answer_id
             AND ad.assesment_id = aa.assesment_id
             AND ad.is_compliance = 1
-            AND ad.audit_status_id = 2
             AND ad.deleted_at IS NULL
         WHERE aa.id = $1
             AND aa.assesment_id = $2
-            AND aa.audit_status_id = 2
             AND aa.deleted_at IS NULL
             AND (
-                $3::int = 4
-                OR aa.compliance_status_id = 3
+                (
+                    $3::int IN (1, 3)
+                    AND COALESCE(aa.compliance_status_id, 0) IN (0, 3, 4)
+                )
+                OR (
+                    $3::int IN (4, 6)
+                    AND aa.audit_status_id = 2
+                    AND (
+                        $3::int = 4
+                        OR aa.compliance_status_id = 3
+                    )
+                )
             )
         LIMIT 1;
         `,
@@ -8911,18 +9504,56 @@ ORDER BY id DESC;
         return question.answer.evidence;
       }
 
+      const answerEvidence =
+        [
+          ...(question.answer?.evidences || []),
+          ...(question.answer?.compliance_evidences || []),
+          question.answer?.evidence,
+          question.answer?.compliance_evidence,
+        ]
+          .filter(Boolean)
+          .find(
+            (evidence: any) =>
+              Number(evidence?.id || 0) === evidenceId,
+          );
+
+      if (
+        answerEvidence
+      ) {
+        return answerEvidence;
+      }
+
       const evidence =
         (question.answer?.annexure_rows || [])
           .find(
             (row: any) =>
-              Number(row.evidence?.id || 0)
-              === evidenceId,
-          )?.evidence;
+              [
+                ...(row?.evidences || []),
+                ...(row?.compliance_evidences || []),
+                row?.evidence,
+                row?.compliance_evidence,
+              ]
+                .filter(Boolean)
+                .some(
+                  (evidence: any) =>
+                    Number(evidence?.id || 0) === evidenceId,
+                ),
+          );
 
       if (
         evidence
       ) {
-        return evidence;
+        return [
+          ...(evidence?.evidences || []),
+          ...(evidence?.compliance_evidences || []),
+          evidence?.evidence,
+          evidence?.compliance_evidence,
+        ]
+          .filter(Boolean)
+          .find(
+            (item: any) =>
+              Number(item?.id || 0) === evidenceId,
+          );
       }
     }
 
@@ -11802,6 +12433,8 @@ SELECT (
     return `A${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   }
 }
+
+
 
 
 

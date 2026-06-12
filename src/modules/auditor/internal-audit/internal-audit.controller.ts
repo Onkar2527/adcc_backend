@@ -25,10 +25,14 @@ export class InternalAuditController {
   getReviewerPending(
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('live_manager_compliance')
+    liveManagerCompliance?: string,
   ) {
 
     return this.service.getReviewerPending(
       Number(employeeId || 0),
+      String(liveManagerCompliance) === 'true',
     );
   }
 
@@ -39,11 +43,15 @@ export class InternalAuditController {
 
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('live_manager_compliance')
+    liveManagerCompliance?: string,
   ) {
 
     return this.service.getReviewerComplianceAssessment(
       assessmentId,
       Number(employeeId || 0),
+      String(liveManagerCompliance) === 'true',
     );
   }
 
@@ -105,6 +113,8 @@ export class InternalAuditController {
       Number(body?.employee_id || 0),
       Number(body?.action || 0),
       String(body?.comment || ''),
+      body?.live_manager_compliance === true
+      || String(body?.live_manager_compliance) === 'true',
     );
   }
 
@@ -120,6 +130,8 @@ export class InternalAuditController {
     return this.service.submitReviewerComplianceAssessment(
       assessmentId,
       Number(body?.employee_id || 0),
+      body?.live_manager_compliance === true
+      || String(body?.live_manager_compliance) === 'true',
     );
   }
 
@@ -218,10 +230,14 @@ export class InternalAuditController {
   getCompliancePending(
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('live_manager_compliance')
+    liveManagerCompliance?: string,
   ) {
 
     return this.service.getCompliancePending(
       Number(employeeId || 0),
+      String(liveManagerCompliance) === 'true',
     );
   }
 
@@ -232,11 +248,15 @@ export class InternalAuditController {
 
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('live_manager_compliance')
+    liveManagerCompliance?: string,
   ) {
 
     return this.service.getComplianceAssessment(
       assessmentId,
       Number(employeeId || 0),
+      String(liveManagerCompliance) === 'true',
     );
   }
 
@@ -383,6 +403,8 @@ export class InternalAuditController {
       observationId,
       Number(body?.employee_id || 0),
       String(body?.response || ''),
+      body?.live_manager_compliance === true
+      || String(body?.live_manager_compliance) === 'true',
     );
   }
 
@@ -393,11 +415,15 @@ export class InternalAuditController {
 
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('live_manager_compliance')
+    liveManagerCompliance?: string,
   ) {
 
     return this.service.getComplianceSubmissionPreview(
       assessmentId,
       Number(employeeId || 0),
+      String(liveManagerCompliance) === 'true',
     );
   }
 
@@ -413,6 +439,8 @@ export class InternalAuditController {
     return this.service.submitComplianceAssessment(
       assessmentId,
       Number(body?.employee_id || 0),
+      body?.live_manager_compliance === true
+      || String(body?.live_manager_compliance) === 'true',
     );
   }
 
@@ -453,11 +481,15 @@ export class InternalAuditController {
 
     @Query('employee_id')
     employeeId?: string,
+
+    @Query('live_manager_compliance')
+    liveManagerCompliance?: string,
   ) {
 
     return this.service.getSubmissionPreview(
       assessmentId,
       Number(employeeId || 0),
+      String(liveManagerCompliance) === 'true',
     );
   }
 
@@ -473,6 +505,8 @@ export class InternalAuditController {
     return this.service.submitAssessment(
       assessmentId,
       Number(body?.employee_id || 0),
+      body?.live_manager_compliance === true
+      || String(body?.live_manager_compliance) === 'true',
     );
   }
 
@@ -659,6 +693,8 @@ export class InternalAuditController {
       Number(body?.employee_id || 0),
       body?.answers || [],
       Number(body?.dump_id || 0),
+      body?.live_manager_compliance === true
+      || String(body?.live_manager_compliance) === 'true',
     );
   }
 
