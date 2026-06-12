@@ -10994,33 +10994,61 @@ SELECT (
       );
     }
 
-    const result =
-      await this.db.query(
+    const empQuery = `SELECT user_type_id, region_name FROM employee_master WHERE id = $1 AND deleted_at IS NULL`;
+    const empResult = await this.db.query(empQuery, [employeeId]);
+    if (!empResult.rows.length) {
+      throw new BadRequestException('Employee not found');
+    }
+    const emp = empResult.rows[0];
+
+    if (Number(emp.user_type_id) === 6) {
+      const regionResult = await this.db.query(
         `
-        SELECT id
-        FROM employee_master
-        WHERE id = $1
-            AND audit_unit_authority IS NOT NULL
-            AND EXISTS (
-                SELECT 1
-                FROM unnest(string_to_array(COALESCE(audit_unit_authority, ''), ',')) unit_id
-                WHERE trim(unit_id) = $2::text
-            )
+        SELECT 1
+        FROM region_master rm
+        WHERE LOWER(TRIM(rm.region_name)) = LOWER(TRIM($1))
+          AND rm.deleted_at IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM unnest(string_to_array(COALESCE(rm.audit_unit_ids, ''), ',')) unit_id
+              WHERE trim(unit_id) = $2::text
+          )
         LIMIT 1;
         `,
-        [
-          employeeId,
-          auditUnitId,
-        ],
+        [emp.region_name || '', auditUnitId],
       );
+      if (!regionResult.rows.length) {
+        throw new BadRequestException('Division user is not authorized for this audit unit');
+      }
+    } else {
+      const result =
+        await this.db.query(
+          `
+          SELECT id
+          FROM employee_master
+          WHERE id = $1
+              AND audit_unit_authority IS NOT NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM unnest(string_to_array(COALESCE(audit_unit_authority, ''), ',')) unit_id
+                  WHERE trim(unit_id) = $2::text
+              )
+          LIMIT 1;
+          `,
+          [
+            employeeId,
+            auditUnitId,
+          ],
+        );
 
-    if (
-      !result.rows.length
-    ) {
+      if (
+        !result.rows.length
+      ) {
 
-      throw new BadRequestException(
-        'Auditor is not authorized for this audit unit',
-      );
+        throw new BadRequestException(
+          'Auditor is not authorized for this audit unit',
+        );
+      }
     }
   }
 

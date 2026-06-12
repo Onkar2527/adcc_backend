@@ -13,7 +13,7 @@ export class EmployeesService {
     const query = `
       SELECT 
         id, emp_code, user_type_id, name, email, mobile, 
-        designation, gender, is_active, audit_unit_authority, created_at
+        designation, gender, is_active, audit_unit_authority, region_name, created_at
       FROM employee_master
       WHERE deleted_at IS NULL
       ORDER BY id DESC
@@ -48,10 +48,10 @@ export class EmployeesService {
       INSERT INTO employee_master (
         emp_code, user_type_id, name, email, mobile, 
         designation, gender, password, is_active, 
-        password_policy, audit_unit_authority, admin_id, created_at
+        password_policy, audit_unit_authority, admin_id, region_name, created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
-      RETURNING id, emp_code, name, email, is_active
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)
+      RETURNING id, emp_code, name, email, is_active, region_name
     `;
 
     const values = [
@@ -69,6 +69,7 @@ export class EmployeesService {
         ? data.unit_ids.join(',')
         : (data.audit_unit_authority ?? ''),
       data.admin_id ?? 1,
+      data.region_name ?? null,
     ];
 
     const result = await this.db.query(query, values);
@@ -99,6 +100,7 @@ export class EmployeesService {
     addUpdate('designation', data.designation);
     addUpdate('gender', data.gender);
     addUpdate('is_active', data.is_active);
+    addUpdate('region_name', data.region_name);
 
     if (data.unit_ids !== undefined) {
       addUpdate('audit_unit_authority', data.unit_ids.join(','));

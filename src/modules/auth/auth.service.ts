@@ -11,22 +11,28 @@ export class AuthService {
   ) {}
 
   async validateUser(username: string, pass: string): Promise<any> {
+    const user = await this.usersService.findByUsername(username);
 
-  const user = await this.usersService.findByUsername(username);
+    if (!user) return null;
 
-  if (!user) return null;
+    let isValid = false;
 
-  const isValid =
-    user.password_hash
-      ? await bcrypt.compare(pass, user.password)
-      : pass === user.password;
+    if (
+      user.password &&
+      (user.password.startsWith('$2a$') ||
+        user.password.startsWith('$2b$') ||
+        user.password.startsWith('$2y$'))
+    ) {
+      isValid = await bcrypt.compare(pass, user.password);
+    } else {
+      isValid = pass === user.password;
+    }
 
-  if (!isValid) return null;
+    if (!isValid) return null;
 
-  const { password_hash, password, ...result } = user;
-
-  return result;
-}
+    const { password, ...result } = user;
+    return result;
+  }
 
   async login(username: string, pass: string) {
     const user = await this.validateUser(username, pass);
@@ -34,15 +40,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = { 
-      username: user.username, 
+    const payload = {
+      username: user.username,
       sub: user.id,
       fullName: user.full_name,
       roleId: user.role_id,
-      branchId: user.branch_id
+      branchId: user.branch_id,
     };
-
-
 
     return {
       access_token: this.jwtService.sign(payload),
@@ -52,9 +56,8 @@ export class AuthService {
         user_type_id: user.user_type_id,
         emp_code: user.emp_code,
         designation: user.designation,
-        audit_unit_authority: user.audit_unit_authority 
-
-      }
+        audit_unit_authority: user.audit_unit_authority || user.audit_unit_ids,
+      },
     };
   }
 }

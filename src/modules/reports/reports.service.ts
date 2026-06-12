@@ -8376,6 +8376,28 @@ export class ReportsService {
         params.push(employeeId);
         whereClause += ` AND (branch_head_id = $${params.length} OR branch_subhead_id = $${params.length})`;
       }
+    } else if (userTypeId === 6) {
+      const regionResult = await this.db.query(
+        `SELECT region_name FROM employee_master WHERE id = $1 AND deleted_at IS NULL`,
+        [employeeId]
+      );
+      const regionName = regionResult.rows[0]?.region_name || '';
+      const assignedUnitsResult = await this.db.query(
+        `SELECT audit_unit_ids FROM region_master WHERE LOWER(TRIM(region_name)) = LOWER(TRIM($1)) AND deleted_at IS NULL`,
+        [regionName]
+      );
+      const assignedIds = assignedUnitsResult.rows.flatMap((row: any) => 
+        String(row.audit_unit_ids || '')
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => !isNaN(n) && n > 0)
+      );
+      if (assignedIds.length > 0) {
+        params.push(assignedIds);
+        whereClause += ` AND id = ANY($${params.length}::int[])`;
+      } else {
+        whereClause += ' AND 1 = 0';
+      }
     }
 
     const auditUnitId = String(query.audit_unit_id || '').trim();

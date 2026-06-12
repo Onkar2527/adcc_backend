@@ -189,6 +189,32 @@ export class AuditDashboardService {
     async getAuthorizedAuditUnits(
         employeeId: number,
     ) {
+        const empQuery = `SELECT user_type_id, region_name FROM employee_master WHERE id = $1 AND deleted_at IS NULL`;
+        const empResult = await this.db.query(empQuery, [employeeId]);
+        if (!empResult.rows.length) {
+            return [];
+        }
+        const emp = empResult.rows[0];
+
+        if (Number(emp.user_type_id) === 6) {
+            const query = `
+                WITH region_units AS (
+                    SELECT string_to_array(COALESCE(audit_unit_ids, ''), ',')::int[] AS unit_ids
+                    FROM region_master
+                    WHERE LOWER(TRIM(region_name)) = LOWER(TRIM($1))
+                      AND deleted_at IS NULL
+                )
+                SELECT DISTINCT au.id, au.audit_unit_code, au.name, au.frequency, au.last_audit_date
+                FROM audit_unit_master au
+                CROSS JOIN region_units ru
+                WHERE au.is_active = 1
+                  AND au.deleted_at IS NULL
+                  AND au.id = ANY(ru.unit_ids)
+                ORDER BY au.audit_unit_code;
+            `;
+            const result = await this.db.query(query, [emp.region_name || '']);
+            return result.rows;
+        }
 
         const query = `
 
@@ -927,6 +953,29 @@ LIMIT 1;
         employeeId: number,
         auditUnitId: number,
     ) {
+        const empQuery = `SELECT user_type_id, region_name FROM employee_master WHERE id = $1 AND deleted_at IS NULL`;
+        const empResult = await this.db.query(empQuery, [employeeId]);
+        if (!empResult.rows.length) {
+            return false;
+        }
+        const emp = empResult.rows[0];
+
+        if (Number(emp.user_type_id) === 6) {
+            const query = `
+                SELECT 1
+                FROM region_master rm
+                WHERE LOWER(TRIM(rm.region_name)) = LOWER(TRIM($1))
+                  AND rm.deleted_at IS NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM unnest(string_to_array(COALESCE(rm.audit_unit_ids, ''), ',')) unit_id
+                      WHERE trim(unit_id) = $2::text
+                  )
+                LIMIT 1;
+            `;
+            const result = await this.db.query(query, [emp.region_name || '', auditUnitId]);
+            return result.rows.length > 0;
+        }
 
         const result =
             await this.db.query(

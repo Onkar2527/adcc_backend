@@ -30,6 +30,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { PolicyDocumentsModule } from './modules/admin/policy-documents/policy-documents.module';
 import { AuditCalendarModule } from './modules/admin/audit-calendar/audit-calendar.module';
+import { RegionMasterModule } from './modules/admin/region-master/region-master.module';
 
 
 @Module({
@@ -63,7 +64,8 @@ import { AuditCalendarModule } from './modules/admin/audit-calendar/audit-calend
     AuthModule,
     ReportsModule,
     PolicyDocumentsModule,
-    AuditCalendarModule
+    AuditCalendarModule,
+    RegionMasterModule
   ],
   controllers: [AppController],
   providers: [AppService],

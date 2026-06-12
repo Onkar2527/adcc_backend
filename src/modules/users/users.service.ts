@@ -42,14 +42,14 @@ export class UsersService {
   }
 
   async findByUsername(username: string) {
-    const query = `SELECT * FROM employee_master WHERE emp_code = $1 AND is_active = 1 AND deleted_at IS NULL`;
+    const query = `SELECT e.*,r.audit_unit_ids FROM employee_master e  left join region_master r on e.region_name=r.region_name WHERE e.emp_code = $1 AND e.is_active = 1 AND e.deleted_at IS NULL`;
     const result = await this.db.query(query, [username]);
     return result.rows[0];
   }
 
   async create(data: CreateUserDto) {
     const id = this.idService.generate();
-    
+
     let passwordHash = '';
     if (data.password) {
       passwordHash = await bcrypt.hash(data.password, 10);

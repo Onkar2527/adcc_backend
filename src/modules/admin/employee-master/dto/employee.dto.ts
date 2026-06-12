@@ -43,6 +43,10 @@ export class CreateEmployeeDto {
   @IsOptional()
   @IsNumber()
   admin_id?: number;
+
+  @IsOptional()
+  @IsString()
+  region_name?: string;
 }
 
 export class UpdateEmployeeDto {
@@ -94,6 +98,10 @@ export class UpdateEmployeeDto {
   @IsOptional()
   @IsNumber()
   admin_id?: number;
+
+  @IsOptional()
+  @IsString()
+  region_name?: string;
 }
 
 export class SetPasswordDto {
