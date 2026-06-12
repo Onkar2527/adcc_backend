@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
+import { syncAssessmentScoring } from '../../../common/helpers/assessment-scoring.helper';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -2295,6 +2296,12 @@ export class InternalAuditService {
       },
     );
 
+    try {
+      await syncAssessmentScoring(this.db, assessmentId);
+    } catch (err) {
+      console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+    }
+
     return {
       success:
         true,
@@ -3398,6 +3405,12 @@ export class InternalAuditService {
         },
       );
 
+    try {
+      await syncAssessmentScoring(this.db, assessmentId);
+    } catch (err) {
+      console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+    }
+
     return {
       success:
         true,
@@ -4024,6 +4037,12 @@ export class InternalAuditService {
           };
         },
       );
+
+    try {
+      await syncAssessmentScoring(this.db, assessmentId);
+    } catch (err) {
+      console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+    }
 
     return {
       success:
@@ -5173,6 +5192,12 @@ ORDER BY id DESC;
       },
     );
 
+    try {
+      await syncAssessmentScoring(this.db, assessmentId);
+    } catch (err) {
+      console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+    }
+
     return {
       success:
         true,
@@ -5320,6 +5345,7 @@ ORDER BY id DESC;
               qm.subset_multi_id,
               qm.audit_ev_upload,
               qm.show_instances,
+              qm.suggestions,
               rcm.risk_category AS risk_category_name,
               am.name AS annexure_name,
               am.risk_defination_id AS annexure_risk_defination_id,
@@ -5462,6 +5488,7 @@ ORDER BY id DESC;
               qm.subset_multi_id,
               qm.audit_ev_upload,
               qm.show_instances,
+              qm.suggestions,
               rcm.risk_category AS risk_category_name,
               am.name AS annexure_name,
               am.risk_defination_id AS annexure_risk_defination_id,
@@ -5767,6 +5794,7 @@ ORDER BY id DESC;
         qm.subset_multi_id,
         qm.audit_ev_upload,
         qm.show_instances,
+        qm.suggestions,
         rcm.risk_category AS risk_category_name,
         am.name AS annexure_name,
         am.risk_defination_id AS annexure_risk_defination_id,
@@ -6239,6 +6267,7 @@ ORDER BY id DESC;
         qm.subset_multi_id,
         qm.audit_ev_upload,
         qm.show_instances,
+        qm.suggestions,
         ans.id AS answer_id,
         ans.answer_given,
         ans.audit_comment,
@@ -6303,6 +6332,8 @@ ORDER BY id DESC;
             row.audit_ev_upload,
           show_instances:
             row.show_instances,
+          suggestions:
+            row.suggestions,
           answer:
             row.answer_id
               ? {
@@ -7323,6 +7354,8 @@ ORDER BY id DESC;
           row.audit_ev_upload,
         show_instances:
           row.show_instances,
+        suggestions:
+          row.suggestions,
         answer:
           row.answer_id
             ? {

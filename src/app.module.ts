@@ -28,6 +28,8 @@ import { AdvanceAccountsModule } from './modules/admin/manage-accounts/advance-a
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { PolicyDocumentsModule } from './modules/admin/policy-documents/policy-documents.module';
+import { AuditCalendarModule } from './modules/admin/audit-calendar/audit-calendar.module';
 
 
 @Module({
@@ -51,6 +53,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     RiskCompositeModule,
     RiskMatrixModule,
     BranchRatingModule,
+    BranchRatingModule,
     PeriodwiseQuestionsMasterModule,
     AuditDashboardModule,
     InternalAuditModule,
@@ -58,7 +61,9 @@ import { ReportsModule } from './modules/reports/reports.module';
     AdvanceAccountsModule,
     UsersModule,
     AuthModule,
-    ReportsModule
+    ReportsModule,
+    PolicyDocumentsModule,
+    AuditCalendarModule
   ],
   controllers: [AppController],
   providers: [AppService],
