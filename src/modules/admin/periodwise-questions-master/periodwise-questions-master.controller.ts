@@ -42,6 +42,11 @@ export class PeriodwiseQuestionsMastersController {
         return this.service.updateMenu(Number(id), dto)
     }
 
+    @Put('multiple-auditors/:id')
+    updateMultipleAuditors(@Param('id') id: string, @Body() dto: { is_multiple_auditors: boolean }) {
+        return this.service.updateMultipleAuditors(Number(id), dto)
+    }
+
     @Put('category/:id')
     updateCategory(@Param('id') id: string, @Body() dto: { cat_ids: string }) {
         return this.service.updateCategory(Number(id), dto)
@@ -51,6 +56,25 @@ export class PeriodwiseQuestionsMastersController {
     updateQuestionAndHeaders(@Param('id') id: string, @Body() dto: { header_ids: string, question_ids: string }) {
         return this.service.updateQuestionAndHeaders(Number(id), dto)
     }
+
+    @Get(':id/eligible-auditors')
+    getEligibleAuditors(@Param('id') id: string) {
+        return this.service.getEligibleAuditors(Number(id));
+    }
+
+    @Get(':id/category-assignments')
+    getCategoryAssignments(@Param('id') id: string) {
+        return this.service.getCategoryAssignments(Number(id));
+    }
+
+    @Post(':id/assign-categories')
+    assignCategories(
+        @Param('id') id: string,
+        @Body() body: { assignments: { category_id: number; audit_emp_id: number }[] }
+    ) {
+        return this.service.assignCategories(Number(id), body.assignments);
+    }
+
     @Delete(':id')
     delete(@Param('id') id: string) {
         return this.service.softDelete(Number(id))

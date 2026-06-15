@@ -183,5 +183,136 @@ ORDER BY asm.id DESC;
             [id]
         );
     }
+
+    async getEligibleAuditors(assessmentId: number) {
+        const assessment = await this.db.findOne(
+            `SELECT audit_unit_id FROM audit_assesment_master WHERE id = $1 AND deleted_at IS NULL`,
+            [assessmentId]
+        );
+        if (!assessment) {
+            throw new BadRequestException('Assessment not found');
+        }
+
+        const auditUnitId = String(assessment.audit_unit_id);
+        const result = await this.db.query(
+            `
+            SELECT id, name, emp_code, user_type_id
+            FROM employee_master
+            WHERE $1 = ANY(string_to_array(audit_unit_authority, ','))
+              AND user_type_id = 2
+              AND is_active = 1
+              AND deleted_at IS NULL
+            ORDER BY name;
+            `,
+            [auditUnitId]
+        );
+
+        return result.rows;
+    }
+
+    async getQuestionAssignments(assessmentId: number) {
+        const result = await this.db.query(
+            `
+            SELECT 
+              aqa.id, 
+              unnest(string_to_array(NULLIF(aqa.question_id, ''), ','))::bigint AS question_id, 
+              aqa.audit_emp_id, 
+              em.name AS auditor_name, 
+              em.emp_code AS auditor_emp_code
+            FROM assessment_question_assignments aqa
+            INNER JOIN employee_master em ON em.id = aqa.audit_emp_id
+            WHERE aqa.assessment_id = $1
+              AND aqa.deleted_at IS NULL;
+            `,
+            [assessmentId]
+        );
+        return result.rows;
+    }
+
+    async getQuestions(assessmentId: number) {
+        const assessment = await this.db.findOne(
+            `SELECT cat_ids, question_ids FROM audit_assesment_master WHERE id = $1 AND deleted_at IS NULL`,
+            [assessmentId]
+        );
+        if (!assessment) {
+            throw new BadRequestException('Assessment not found');
+        }
+
+        const catIds = String(assessment.cat_ids || '');
+        const questionIds = String(assessment.question_ids || '');
+
+        if (!catIds || !questionIds) {
+            return [];
+        }
+
+        const result = await this.db.query(
+            `
+            SELECT 
+                cm.id AS category_id, cm.name AS category_name,
+                qhm.id AS header_id, qhm.name AS header_name,
+                qm.id AS question_id, qm.question
+            FROM category_master cm
+            INNER JOIN question_set_master qsm ON qsm.id::text = ANY(string_to_array(cm.question_set_ids, ','))
+            INNER JOIN question_header_master qhm ON qhm.question_set_id = qsm.id
+            INNER JOIN question_master qm ON qm.set_id = qsm.id AND qm.header_id = qhm.id
+            WHERE cm.id::text = ANY(string_to_array($1, ','))
+              AND qm.id::text = ANY(string_to_array($2, ','))
+              AND cm.deleted_at IS NULL AND qsm.deleted_at IS NULL AND qhm.deleted_at IS NULL AND qm.deleted_at IS NULL
+            ORDER BY cm.id, qhm.id, qm.id;
+            `,
+            [catIds, questionIds]
+        );
+
+        return result.rows;
+    }
+
+    async assignQuestions(
+        assessmentId: number,
+        assignments: { question_id: number; audit_emp_id: number }[]
+    ) {
+        if (!Array.isArray(assignments)) {
+            throw new BadRequestException('assignments must be an array');
+        }
+
+        return this.db.transaction(async (client) => {
+            await client.query(
+                `DELETE FROM assessment_question_assignments WHERE assessment_id = $1`,
+                [assessmentId]
+            );
+
+            const auditorMap = new Map<number, number[]>();
+            for (const assignment of assignments) {
+                if (!assignment.question_id || !assignment.audit_emp_id) {
+                    continue;
+                }
+                const empId = Number(assignment.audit_emp_id);
+                const qId = Number(assignment.question_id);
+                if (!auditorMap.has(empId)) {
+                    auditorMap.set(empId, []);
+                }
+                auditorMap.get(empId).push(qId);
+            }
+
+            for (const [empId, qIds] of auditorMap.entries()) {
+                if (qIds.length === 0) continue;
+                const questionIdStr = qIds.join(',');
+                await client.query(
+                    `
+                    INSERT INTO assessment_question_assignments (
+                        assessment_id,
+                        question_id,
+                        audit_emp_id
+                    )
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (assessment_id, audit_emp_id) 
+                    DO UPDATE SET question_id = EXCLUDED.question_id;
+                    `,
+                    [assessmentId, questionIdStr, empId]
+                );
+            }
+
+            return { success: true };
+        });
+    }
 }
 

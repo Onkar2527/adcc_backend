@@ -504,7 +504,7 @@ export class InternalAuditService {
       const configsResult =
         await this.db.query(
           `
-          SELECT id, year_id, start_month_year, end_month_year, menu_ids, cat_ids, header_ids, question_ids, advances_scheme_ids, deposits_scheme_ids
+          SELECT id, year_id, start_month_year, end_month_year, menu_ids, cat_ids, header_ids, question_ids, advances_scheme_ids, deposits_scheme_ids, is_multiple_auditors
           FROM multi_level_control_master
           WHERE audit_unit_id = $1
               AND deleted_at IS NULL
@@ -748,6 +748,8 @@ export class InternalAuditService {
           controlData?.advances_scheme_ids || null,
         deposits_scheme_ids:
           controlData?.deposits_scheme_ids || null,
+        control_master_id: controlData?.id || null,
+        is_multiple_auditors: !!controlData?.is_multiple_auditors,
       },
       notice:
         `Note: The audit due date is: ${auditDueDate} (15 days from the audit start date). After this date, you will not be allowed to conduct audits in the current assessment.`,
@@ -816,12 +818,14 @@ export class InternalAuditService {
                 question_ids,
                 advances_scheme_ids,
                 deposits_scheme_ids,
-                batch_key
+                batch_key,
+                is_multiple_auditors
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8,
                 $9, $10, $11, $12, $13, $14, $15,
-                $16, $17, $18, $19, $20, $21, $22
+                $16, $17, $18, $19, $20, $21, $22,
+                $23
             )
             RETURNING id;
             `,
@@ -848,11 +852,72 @@ export class InternalAuditService {
               data.advances_scheme_ids,
               data.deposits_scheme_ids,
               data.batch_key,
+              data.is_multiple_auditors || false,
             ],
           );
 
         const assessmentId =
           assessmentResult.rows[0].id;
+
+        if (data.control_master_id) {
+          const categoryAssignmentsRes = await client.query(
+            `SELECT category_id, audit_emp_id
+             FROM periodwise_category_assignments
+             WHERE periodwise_master_id = $1 AND deleted_at IS NULL`,
+            [data.control_master_id]
+          );
+
+          if (categoryAssignmentsRes.rows.length > 0) {
+            const activeQuestionsRes = await client.query(
+              `SELECT cm.id AS category_id, qm.id AS question_id
+               FROM category_master cm
+               INNER JOIN question_set_master qsm ON qsm.id::text = ANY(string_to_array(cm.question_set_ids, ','))
+               INNER JOIN question_header_master qhm ON qhm.question_set_id = qsm.id
+               INNER JOIN question_master qm ON qm.set_id = qsm.id AND qm.header_id = qhm.id
+               WHERE cm.id::text = ANY(string_to_array($1, ','))
+                 AND qm.id::text = ANY(string_to_array($2, ','))
+                 AND cm.deleted_at IS NULL AND qsm.deleted_at IS NULL AND qhm.deleted_at IS NULL AND qm.deleted_at IS NULL`,
+              [data.cat_ids || '', data.question_ids || '']
+            );
+
+            const categoryToAuditorMap = new Map<number, number[]>();
+            for (const row of categoryAssignmentsRes.rows) {
+              const catId = Number(row.category_id);
+              const empId = Number(row.audit_emp_id);
+              if (!categoryToAuditorMap.has(catId)) {
+                categoryToAuditorMap.set(catId, []);
+              }
+              categoryToAuditorMap.get(catId).push(empId);
+            }
+
+            const auditorQuestionsMap = new Map<number, Set<number>>();
+            for (const qRow of activeQuestionsRes.rows) {
+              const catId = Number(qRow.category_id);
+              const qId = Number(qRow.question_id);
+              const auditors = categoryToAuditorMap.get(catId);
+              if (auditors && auditors.length > 0) {
+                for (const empId of auditors) {
+                  if (!auditorQuestionsMap.has(empId)) {
+                    auditorQuestionsMap.set(empId, new Set<number>());
+                  }
+                  auditorQuestionsMap.get(empId).add(qId);
+                }
+              }
+            }
+
+            for (const [empId, qIdsSet] of auditorQuestionsMap.entries()) {
+              if (qIdsSet.size === 0) continue;
+              const questionIdStr = Array.from(qIdsSet).join(',');
+              await client.query(
+                `INSERT INTO assessment_question_assignments (assessment_id, question_id, audit_emp_id)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (assessment_id, audit_emp_id) 
+                 DO UPDATE SET question_id = EXCLUDED.question_id`,
+                [assessmentId, questionIdStr, empId]
+              );
+            }
+          }
+        }
 
         const carryForwardCount =
           await this.createCarryForwardPoints(
@@ -6507,6 +6572,12 @@ ORDER BY id DESC;
           risk_categories: [],
         };
 
+    await this.attachQuestionAssignments(
+      sets,
+      assessmentId,
+      employeeId,
+    );
+
     return {
       overview,
       category,
@@ -9550,6 +9621,54 @@ ORDER BY id DESC;
       for (const row of ans.annexure_rows || []) {
         const rowId = Number(row.id);
         row.answers_data_timeline = timelineMap.get(`${answerId}:${rowId}`) || [];
+      }
+    }
+  }
+
+  private async attachQuestionAssignments(
+    sets: any[],
+    assessmentId: number,
+    employeeId: number,
+  ) {
+    const questionMap = new Map<number, any>();
+    this.collectQuestions(sets, questionMap);
+
+    const questionIds = Array.from(questionMap.keys());
+    if (!questionIds.length) {
+      return;
+    }
+
+    const assignmentResult = await this.db.query(
+      `
+      SELECT 
+        unnest(string_to_array(NULLIF(aqa.question_id, ''), ','))::bigint AS question_id, 
+        aqa.audit_emp_id, 
+        em.name AS auditor_name, 
+        em.emp_code AS auditor_emp_code
+      FROM assessment_question_assignments aqa
+      INNER JOIN employee_master em ON em.id = aqa.audit_emp_id
+      WHERE aqa.assessment_id = $1 AND aqa.deleted_at IS NULL;
+      `,
+      [assessmentId]
+    );
+
+    const assignmentMap = new Map<number, any>();
+    for (const row of assignmentResult.rows) {
+      assignmentMap.set(Number(row.question_id), row);
+    }
+
+    for (const [qId, question] of questionMap.entries()) {
+      const assignment = assignmentMap.get(qId);
+      if (assignment) {
+        question.assigned_emp_id = Number(assignment.audit_emp_id);
+        question.assigned_emp_name = assignment.auditor_name;
+        question.assigned_emp_code = assignment.auditor_emp_code;
+        question.is_editable = Number(assignment.audit_emp_id) === Number(employeeId);
+      } else {
+        question.assigned_emp_id = null;
+        question.assigned_emp_name = null;
+        question.assigned_emp_code = null;
+        question.is_editable = true;
       }
     }
   }

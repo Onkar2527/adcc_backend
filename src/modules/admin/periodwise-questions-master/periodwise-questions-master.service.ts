@@ -21,6 +21,7 @@ export class PeriodwiseQuestionsMasterService {
     mlcm.question_ids,
     mlcm.advances_scheme_ids,
     mlcm.deposits_scheme_ids,
+    mlcm.is_multiple_auditors,
     mlcm.admin_id,
     mlcm.created_at,
     mlcm.updated_at,
@@ -241,6 +242,17 @@ ORDER BY
             [data.menu_ids, id]
         );
     }
+    async updateMultipleAuditors(id: number, data: { is_multiple_auditors: boolean }) {
+        return this.db.query(
+            `
+             UPDATE multi_level_control_master
+             SET is_multiple_auditors = $1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2
+             RETURNING *
+             `,
+            [data.is_multiple_auditors, id]
+        );
+    }
     async updateCategory(id: number, data: { cat_ids: string, }) {
 
         return this.db.query(
@@ -264,6 +276,80 @@ ORDER BY
              `,
             [data.header_ids, data.question_ids, id]
         );
+    }
+
+    async getEligibleAuditors(id: number) {
+        const record = await this.db.findOne(
+            `SELECT audit_unit_id FROM multi_level_control_master WHERE id = $1 AND deleted_at IS NULL`,
+            [id]
+        );
+        if (!record) {
+            throw new BadRequestException('Periodwise Questions Master not found');
+        }
+
+        const auditUnitId = String(record.audit_unit_id);
+        return this.db.query(
+            `
+            SELECT id, name, emp_code, user_type_id
+            FROM employee_master
+            WHERE $1 = ANY(string_to_array(audit_unit_authority, ','))
+              AND user_type_id = 2
+              AND is_active = 1
+              AND deleted_at IS NULL
+            ORDER BY name;
+            `,
+            [auditUnitId]
+        ).then(res => res.rows);
+    }
+
+    async getCategoryAssignments(id: number) {
+        return this.db.query(
+            `
+            SELECT pca.id, pca.category_id, pca.audit_emp_id, em.name AS auditor_name, em.emp_code AS auditor_emp_code
+            FROM periodwise_category_assignments pca
+            INNER JOIN employee_master em ON em.id = pca.audit_emp_id
+            WHERE pca.periodwise_master_id = $1
+              AND pca.deleted_at IS NULL;
+            `,
+            [id]
+        ).then(res => res.rows);
+    }
+
+    async assignCategories(
+        id: number,
+        assignments: { category_id: number; audit_emp_id: number }[]
+    ) {
+        if (!Array.isArray(assignments)) {
+            throw new BadRequestException('assignments must be an array');
+        }
+
+        return this.db.transaction(async (client) => {
+            await client.query(
+                `DELETE FROM periodwise_category_assignments WHERE periodwise_master_id = $1`,
+                [id]
+            );
+
+            for (const assignment of assignments) {
+                if (!assignment.category_id || !assignment.audit_emp_id) {
+                    continue;
+                }
+                await client.query(
+                    `
+                    INSERT INTO periodwise_category_assignments (
+                        periodwise_master_id,
+                        category_id,
+                        audit_emp_id
+                    )
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (periodwise_master_id, category_id, audit_emp_id) 
+                    DO NOTHING;
+                    `,
+                    [id, assignment.category_id, assignment.audit_emp_id]
+                );
+            }
+
+            return { success: true };
+        });
     }
 
     async softDelete(id: number) {

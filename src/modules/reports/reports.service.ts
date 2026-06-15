@@ -656,9 +656,10 @@ export class ReportsService {
       ],
       columns: [
         { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
-        { key: 'question', label: 'Question', width: '33%' },
+        { key: 'question', label: 'Question', width: '25%' },
+        { key: 'auditor_emp_code', label: 'Auditor Code', width: '10%', align: 'center' },
         { key: 'answer_given', label: 'Audit Point', width: '10%' },
-        { key: 'audit_comment', label: 'Audit Comment', width: '24%' },
+        { key: 'audit_comment', label: 'Audit Comment', width: '22%' },
         { key: 'business_risk_label', label: 'Business Risk', width: '9%' },
         { key: 'control_risk_label', label: 'Control Risk', width: '9%' },
         { key: 'risk_category', label: 'Risk Type', width: '10%' },
@@ -817,9 +818,10 @@ export class ReportsService {
       ],
       columns: [
         { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
-        { key: 'question', label: 'Question', width: '33%' },
+        { key: 'question', label: 'Question', width: '25%' },
+        { key: 'auditor_emp_code', label: 'Auditor Code', width: '10%', align: 'center' },
         { key: 'answer_given', label: 'Audit Point', width: '10%' },
-        { key: 'audit_comment', label: 'Audit Comment', width: '24%' },
+        { key: 'audit_comment', label: 'Audit Comment', width: '22%' },
         { key: 'business_risk_label', label: 'Business Risk', width: '9%' },
         { key: 'control_risk_label', label: 'Control Risk', width: '9%' },
         { key: 'risk_category', label: 'Risk Type', width: '10%' },
@@ -2672,6 +2674,8 @@ export class ReportsService {
       `
       SELECT
         ad.id,
+        auditor.emp_code AS auditor_emp_code,
+        aam.is_multiple_auditors,
         ad.menu_id,
         mm.name AS menu_name,
         ad.category_id,
@@ -2752,6 +2756,8 @@ export class ReportsService {
       LEFT JOIN audit_unit_master au
         ON au.id = COALESCE(dd.branch_id, da.branch_id)
         AND au.deleted_at IS NULL
+      LEFT JOIN employee_master auditor
+        ON auditor.id = ad.audit_emp_id
       WHERE ${where.join(' AND ')}
       ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
       `,
@@ -2769,6 +2775,8 @@ export class ReportsService {
     const questionRows = result.rows.map((row: any, index: number) => ({
       sr_no: 0,
       ...row,
+      is_multiple_auditors: !!row.is_multiple_auditors,
+      auditor_emp_code: row.auditor_emp_code || '-',
       question: row.question || 'Assessment observation',
       answer_given: this.auditAnswerLabel(row),
       audit_comment: row.audit_comment || '-',
@@ -2871,6 +2879,8 @@ export class ReportsService {
       `
       SELECT
         ad.id,
+        auditor.emp_code AS auditor_emp_code,
+        aam.is_multiple_auditors,
         ad.menu_id,
         mm.name AS menu_name,
         ad.category_id,
@@ -2951,6 +2961,8 @@ export class ReportsService {
       LEFT JOIN audit_unit_master au
         ON au.id = COALESCE(dd.branch_id, da.branch_id)
         AND au.deleted_at IS NULL
+      LEFT JOIN employee_master auditor
+        ON auditor.id = ad.audit_emp_id
       WHERE ${where.join(' AND ')}
       ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
       `,
@@ -2968,6 +2980,8 @@ export class ReportsService {
     const questionRows = result.rows.map((row: any) => ({
       sr_no: 0,
       ...row,
+      is_multiple_auditors: !!row.is_multiple_auditors,
+      auditor_emp_code: row.auditor_emp_code || '-',
       question: row.question || 'Assessment observation',
       answer_given: this.auditAnswerLabel(row),
       audit_comment: row.audit_comment || '-',
@@ -3066,6 +3080,8 @@ export class ReportsService {
       `
       SELECT
         ad.id,
+        auditor.emp_code AS auditor_emp_code,
+        aam.is_multiple_auditors,
         ad.menu_id,
         mm.name AS menu_name,
         ad.category_id,
@@ -3147,6 +3163,8 @@ export class ReportsService {
       LEFT JOIN audit_unit_master au
         ON au.id = COALESCE(dd.branch_id, da.branch_id)
         AND au.deleted_at IS NULL
+      LEFT JOIN employee_master auditor
+        ON auditor.id = ad.audit_emp_id
       WHERE ${where.join(' AND ')}
       ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
       `,
@@ -3164,6 +3182,8 @@ export class ReportsService {
     const questionRows = result.rows.map((row: any) => ({
       sr_no: 0,
       ...row,
+      is_multiple_auditors: !!row.is_multiple_auditors,
+      auditor_emp_code: row.auditor_emp_code || '-',
       question: row.question || 'Assessment observation',
       answer_given: this.auditAnswerLabel(row),
       audit_comment: row.audit_comment || '-',
@@ -3313,6 +3333,8 @@ export class ReportsService {
       `
       SELECT
         ad.id,
+        auditor.emp_code AS auditor_emp_code,
+        aam.is_multiple_auditors,
         ad.assesment_id,
         ad.menu_id,
         mm.name AS menu_name,
@@ -3396,6 +3418,8 @@ export class ReportsService {
       LEFT JOIN audit_unit_master au
         ON au.id = COALESCE(dd.branch_id, da.branch_id)
         AND au.deleted_at IS NULL
+      LEFT JOIN employee_master auditor
+        ON auditor.id = ad.audit_emp_id
       WHERE ${where.join(' AND ')}
       ORDER BY ad.assesment_id, ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
       `,
@@ -3423,6 +3447,8 @@ export class ReportsService {
     const questionRows = result.rows.map((row: any) => ({
       sr_no: 0,
       ...row,
+      is_multiple_auditors: !!row.is_multiple_auditors,
+      auditor_emp_code: row.auditor_emp_code || '-',
       question: row.question || 'Assessment observation',
       answer_given: this.auditAnswerLabel(row),
       audit_comment: row.audit_comment || '-',
@@ -8254,6 +8280,7 @@ export class ReportsService {
         aam.assesment_period_from,
         aam.assesment_period_to,
         aam.frequency,
+        aam.is_multiple_auditors,
         aum.name AS audit_unit_name,
         aum.audit_unit_code
       FROM audit_assesment_master aam
@@ -8275,6 +8302,7 @@ export class ReportsService {
       assessmentPeriod: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)}`,
       auditUnit: this.auditUnitName(row),
       frequency: row.frequency,
+      isMultipleAuditors: !!row.is_multiple_auditors,
     };
   }
 
