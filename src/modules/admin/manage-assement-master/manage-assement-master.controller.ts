@@ -26,5 +26,26 @@ export class ManageAssementMastersController {
         return this.service.update(Number(id), dto)
     }
 
+    @Get(':id/eligible-auditors')
+    getEligibleAuditors(@Param('id') id: string) {
+        return this.service.getEligibleAuditors(Number(id));
+    }
 
+    @Get(':id/question-assignments')
+    getQuestionAssignments(@Param('id') id: string) {
+        return this.service.getQuestionAssignments(Number(id));
+    }
+
+    @Get(':id/questions')
+    getQuestions(@Param('id') id: string) {
+        return this.service.getQuestions(Number(id));
+    }
+
+    @Post(':id/assign-questions')
+    assignQuestions(
+        @Param('id') id: string,
+        @Body('assignments') assignments: { question_id: number; audit_emp_id: number }[]
+    ) {
+        return this.service.assignQuestions(Number(id), assignments);
+    }
 }
