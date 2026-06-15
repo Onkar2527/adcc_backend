@@ -44,6 +44,10 @@ export class ReportsService {
       return this.getAuditStatusDefinition();
     }
 
+    if (reportSlug === 'carry-forward-report') {
+      return this.getCarryForwardDefinition();
+    }
+
     if (reportSlug === 'audit-status-expired-report') {
       return this.getAuditStatusExpiredDefinition();
     }
@@ -232,6 +236,70 @@ export class ReportsService {
         { key: 'compliancePending', label: 'Compliance' },
         { key: 'blocked', label: 'Blocked' },
         { key: 'expired', label: 'Expired' },
+      ],
+    };
+  }
+
+  private async getCarryForwardDefinition() {
+    const lookups = await this.getAuditStatusLookups();
+
+    return {
+      slug: 'carry-forward-report',
+      title: 'Carry Forward Report',
+      category: 'Audit Reports',
+      page: 'A4',
+      fileName: 'carry-forward-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        audit_unit_id: 'all_branches',
+        financial_year: 'all',
+        transfer_status: 'all',
+      },
+      filters: [
+        {
+          key: 'audit_unit_id',
+          label: 'Audit Unit',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          options: lookups.years,
+        },
+        {
+          key: 'transfer_status',
+          label: 'Carry Forward Status',
+          type: 'select',
+          options: [
+            { value: 'all', label: 'All Points' },
+            { value: 'transferred', label: 'Transferred' },
+            { value: 'pending', label: 'Pending Transfer' },
+          ],
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No.', width: '5%', align: 'center' },
+        { key: 'audit_unit_name', label: 'Audit Unit', width: '12%' },
+        { key: 'source_assessment_period', label: 'Source Assessment', width: '12%' },
+        { key: 'target_assessment_period', label: 'Target Assessment', width: '12%' },
+        { key: 'audit_path', label: 'Audit Path', width: '15%' },
+        { key: 'question_account', label: 'Question / Account', width: '17%' },
+        { key: 'previous_observation', label: 'Previous Observation', width: '17%' },
+        { key: 'transfer_date', label: 'Transfer Date', width: '6%', type: 'date' },
+        { key: 'carry_forward_status', label: 'Status', width: '8%', type: 'status' },
+      ],
+      summaryCards: [
+        { key: 'total', label: 'Total Points' },
+        { key: 'transferred', label: 'Transferred' },
+        { key: 'pending', label: 'Pending Transfer' },
+        { key: 'accountPoints', label: 'Account Points' },
+        { key: 'annexurePoints', label: 'Annexure Points' },
       ],
     };
   }
@@ -1933,6 +2001,10 @@ export class ReportsService {
   }
 
   async getReportData(reportSlug: string, query: any) {
+    if (reportSlug === 'carry-forward-report') {
+      return this.getCarryForwardReport(query);
+    }
+
     if (reportSlug === 'audit-complete-report') {
       return this.getAuditCompleteReport(query);
     }
@@ -7333,6 +7405,235 @@ export class ReportsService {
       rows: mappedRows,
       summary: {
         total: mappedRows.length,
+      },
+    };
+  }
+
+  async getCarryForwardReport(query: any) {
+    const auditUnitId = String(query.audit_unit_id || '').trim();
+    const financialYear = String(query.financial_year || 'all').trim();
+    const transferStatus = String(query.transfer_status || 'all').trim();
+    const targetAssessmentId = Number(query.target_assessment_id || 0);
+    const sourceAssessmentId = Number(query.source_assessment_id || 0);
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    const where: string[] = [
+      'source_assessment.deleted_at IS NULL',
+      'audit_unit.deleted_at IS NULL',
+    ];
+    const params: any[] = [];
+
+    if (auditUnitId === 'all_branches') {
+      where.push('audit_unit.section_type_id = 1');
+    } else if (auditUnitId === 'all_head_of_dept') {
+      where.push('audit_unit.section_type_id > 1');
+    } else {
+      params.push(Number(auditUnitId));
+      where.push(`source_assessment.audit_unit_id = $${params.length}`);
+    }
+
+    if (financialYear !== 'all') {
+      params.push(Number(financialYear));
+      where.push(`source_assessment.year_id = $${params.length}`);
+    }
+
+    if (targetAssessmentId > 0) {
+      params.push(targetAssessmentId);
+      where.push(`points.target_assessment_id = $${params.length}`);
+    }
+
+    if (sourceAssessmentId > 0) {
+      params.push(sourceAssessmentId);
+      where.push(`points.source_assessment_id = $${params.length}`);
+    }
+
+    if (transferStatus === 'transferred') {
+      where.push('COALESCE(points.target_assessment_id, 0) > 0');
+    } else if (transferStatus === 'pending') {
+      where.push('COALESCE(points.target_assessment_id, 0) = 0');
+    }
+
+    const authorityIds = String(query.audit_unit_authority || '')
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const userTypeId = Number(query.user_type_id || 0);
+
+    if ([2, 3, 4, 6].includes(userTypeId) && authorityIds.length) {
+      params.push(authorityIds);
+      where.push(`source_assessment.audit_unit_id = ANY($${params.length}::int[])`);
+    }
+
+    const result = await this.db.query(
+      `
+      WITH carry_forward_points AS (
+          SELECT
+              ad.id AS answer_id,
+              0::bigint AS annexure_id,
+              ad.assesment_id AS source_assessment_id,
+              ad.cf_asses_id AS target_assessment_id,
+              ad.cf_transfer_date AS transfer_date,
+              'question'::text AS point_type,
+              ad.dump_id,
+              ad.answer_given AS previous_answer,
+              ad.audit_comment AS previous_audit_comment,
+              ad.audit_commpliance AS manager_response,
+              ad.compliance_reviewer_comment AS reviewer_comment,
+              mm.name AS menu_name,
+              cm.name AS category_name,
+              cm.linked_table_id,
+              qhm.name AS header_name,
+              qm.question
+          FROM answers_data ad
+          LEFT JOIN menu_master mm ON mm.id = ad.menu_id
+          LEFT JOIN category_master cm ON cm.id = ad.category_id
+          LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
+          LEFT JOIN question_master qm ON qm.id = ad.question_id
+          WHERE ad.is_compliance = 1
+              AND ad.compliance_status_id = 5
+              AND ad.deleted_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM answers_data_annexure aa
+                  WHERE aa.answer_id = ad.id
+                      AND aa.assesment_id = ad.assesment_id
+                      AND aa.compliance_status_id = 5
+                      AND aa.deleted_at IS NULL
+              )
+
+          UNION ALL
+
+          SELECT
+              ad.id AS answer_id,
+              aa.id AS annexure_id,
+              aa.assesment_id AS source_assessment_id,
+              aa.cf_asses_id AS target_assessment_id,
+              aa.cf_transfer_date AS transfer_date,
+              'annexure'::text AS point_type,
+              ad.dump_id,
+              aa.answer_given AS previous_answer,
+              aa.audit_comment AS previous_audit_comment,
+              aa.audit_commpliance AS manager_response,
+              aa.compliance_reviewer_comment AS reviewer_comment,
+              mm.name AS menu_name,
+              cm.name AS category_name,
+              cm.linked_table_id,
+              qhm.name AS header_name,
+              qm.question
+          FROM answers_data_annexure aa
+          INNER JOIN answers_data ad
+              ON ad.id = aa.answer_id
+              AND ad.assesment_id = aa.assesment_id
+              AND ad.is_compliance = 1
+              AND ad.deleted_at IS NULL
+          LEFT JOIN menu_master mm ON mm.id = ad.menu_id
+          LEFT JOIN category_master cm ON cm.id = ad.category_id
+          LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
+          LEFT JOIN question_master qm ON qm.id = ad.question_id
+          WHERE aa.compliance_status_id = 5
+              AND aa.deleted_at IS NULL
+      )
+      SELECT
+          points.*,
+          source_assessment.year_id,
+          source_assessment.audit_unit_id,
+          source_assessment.assesment_period_from AS source_period_from,
+          source_assessment.assesment_period_to AS source_period_to,
+          source_assessment.frequency AS source_frequency,
+          target_assessment.assesment_period_from AS target_period_from,
+          target_assessment.assesment_period_to AS target_period_to,
+          target_assessment.frequency AS target_frequency,
+          audit_unit.audit_unit_code,
+          audit_unit.name AS audit_unit_name,
+          COALESCE(deposit.account_no, advance.account_no) AS account_no,
+          COALESCE(deposit.account_holder_name, advance.account_holder_name) AS account_holder_name
+      FROM carry_forward_points points
+      INNER JOIN audit_assesment_master source_assessment
+          ON source_assessment.id = points.source_assessment_id
+      LEFT JOIN audit_assesment_master target_assessment
+          ON target_assessment.id = points.target_assessment_id
+          AND target_assessment.deleted_at IS NULL
+      INNER JOIN audit_unit_master audit_unit
+          ON audit_unit.id = source_assessment.audit_unit_id
+      LEFT JOIN dump_deposits deposit
+          ON points.linked_table_id = 1
+          AND deposit.id = points.dump_id
+          AND deposit.deleted_at IS NULL
+      LEFT JOIN dump_advances advance
+          ON points.linked_table_id = 2
+          AND advance.id = points.dump_id
+          AND advance.deleted_at IS NULL
+      WHERE ${where.join(' AND ')}
+      ORDER BY
+          audit_unit.audit_unit_code,
+          source_assessment.assesment_period_from,
+          points.menu_name,
+          points.category_name,
+          points.header_name,
+          points.answer_id,
+          points.annexure_id;
+      `,
+      params,
+    );
+
+    const rows = result.rows.map((row: any, index: number) => {
+      const sourcePeriod = `${this.dateOnly(row.source_period_from)} to ${this.dateOnly(row.source_period_to)}`;
+      const targetPeriod = row.target_assessment_id
+        ? `${this.dateOnly(row.target_period_from)} to ${this.dateOnly(row.target_period_to)}`
+        : '-';
+      const auditPath = [row.menu_name, row.category_name, row.header_name]
+        .filter(Boolean)
+        .join(' / ');
+      const account = row.account_no
+        ? `${row.account_no}${row.account_holder_name ? ` - ${row.account_holder_name}` : ''}`
+        : '';
+      const questionAccount = [row.question || '-', account]
+        .filter(Boolean)
+        .join(' | ');
+      const previousObservation = row.previous_audit_comment
+        || row.manager_response
+        || row.previous_answer
+        || '-';
+      const transferred = Number(row.target_assessment_id || 0) > 0;
+
+      return {
+        sr_no: index + 1,
+        audit_unit_name: this.auditUnitName(row),
+        source_assessment_period: `${sourcePeriod} (${row.source_frequency || '-'} Months)`,
+        target_assessment_period: transferred
+          ? `${targetPeriod} (${row.target_frequency || '-'} Months)`
+          : '-',
+        audit_path: auditPath || '-',
+        question_account: questionAccount,
+        previous_observation: previousObservation,
+        transfer_date: row.transfer_date,
+        carry_forward_status: transferred ? 'Transferred' : 'Pending Transfer',
+        point_type: row.point_type,
+        source_assessment_id: Number(row.source_assessment_id),
+        target_assessment_id: Number(row.target_assessment_id || 0),
+      };
+    });
+
+    return {
+      filters: {
+        audit_unit_id: auditUnitId,
+        financial_year: financialYear,
+        transfer_status: transferStatus,
+        target_assessment_id: targetAssessmentId || '',
+        source_assessment_id: sourceAssessmentId || '',
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      rows,
+      summary: {
+        total: rows.length,
+        transferred: rows.filter((row: any) => row.target_assessment_id > 0).length,
+        pending: rows.filter((row: any) => row.target_assessment_id === 0).length,
+        accountPoints: rows.filter((row: any) => row.question_account.includes(' | ')).length,
+        annexurePoints: rows.filter((row: any) => row.point_type === 'annexure').length,
       },
     };
   }

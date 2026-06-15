@@ -136,7 +136,38 @@ export class InternalAuditService {
             audit_due_date,
             compliance_due_date,
             is_limit_blocked,
-            compliance_onhold_count
+            compliance_onhold_count,
+            (
+                SELECT (
+                    COUNT(*) FILTER (
+                        WHERE answer.compliance_status_id = 5
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM answers_data_annexure annexure
+                                WHERE annexure.answer_id = answer.id
+                                    AND annexure.assesment_id = answer.assesment_id
+                                    AND annexure.compliance_status_id = 5
+                                    AND annexure.deleted_at IS NULL
+                            )
+                    )
+                    + COALESCE((
+                        SELECT COUNT(*)
+                        FROM answers_data_annexure annexure
+                        INNER JOIN answers_data parent_answer
+                            ON parent_answer.id = annexure.answer_id
+                            AND parent_answer.assesment_id = annexure.assesment_id
+                            AND parent_answer.is_compliance = 1
+                            AND parent_answer.deleted_at IS NULL
+                        WHERE annexure.assesment_id = audit_assesment_master.id
+                            AND annexure.compliance_status_id = 5
+                            AND annexure.deleted_at IS NULL
+                    ), 0)
+                )::int
+                FROM answers_data answer
+                WHERE answer.assesment_id = audit_assesment_master.id
+                    AND answer.is_compliance = 1
+                    AND answer.deleted_at IS NULL
+            ) AS carry_forward_count
         FROM audit_assesment_master
         WHERE audit_unit_id = $1
             AND deleted_at IS NULL
