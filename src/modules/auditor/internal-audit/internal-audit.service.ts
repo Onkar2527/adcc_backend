@@ -167,7 +167,38 @@ export class InternalAuditService {
                 WHERE answer.assesment_id = audit_assesment_master.id
                     AND answer.is_compliance = 1
                     AND answer.deleted_at IS NULL
-            ) AS carry_forward_count
+            ) AS carry_forward_count,
+            (
+                SELECT (
+                    COUNT(*) FILTER (
+                        WHERE answer.compliance_status_id = 9
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM answers_data_annexure annexure
+                                WHERE annexure.answer_id = answer.id
+                                    AND annexure.assesment_id = answer.assesment_id
+                                    AND annexure.compliance_status_id = 9
+                                    AND annexure.deleted_at IS NULL
+                            )
+                    )
+                    + COALESCE((
+                        SELECT COUNT(*)
+                        FROM answers_data_annexure annexure
+                        INNER JOIN answers_data parent_answer
+                            ON parent_answer.id = annexure.answer_id
+                            AND parent_answer.assesment_id = annexure.assesment_id
+                            AND parent_answer.is_compliance = 1
+                            AND parent_answer.deleted_at IS NULL
+                        WHERE annexure.assesment_id = audit_assesment_master.id
+                            AND annexure.compliance_status_id = 9
+                            AND annexure.deleted_at IS NULL
+                    ), 0)
+                )::int
+                FROM answers_data answer
+                WHERE answer.assesment_id = audit_assesment_master.id
+                    AND answer.is_compliance = 1
+                    AND answer.deleted_at IS NULL
+            ) AS partially_pass_count
         FROM audit_assesment_master
         WHERE audit_unit_id = $1
             AND deleted_at IS NULL
@@ -2696,7 +2727,7 @@ export class InternalAuditService {
               ym.year,
               COUNT(DISTINCT ad.id) FILTER (
                   WHERE ad.is_compliance = 1
-                      AND COALESCE(ad.compliance_status_id, 0) IN (0, 2, 3, 5)
+                      AND COALESCE(ad.compliance_status_id, 0) IN (0, 2, 3, 5, 8, 9)
                       AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
               )::int AS total_points,
               COUNT(DISTINCT ad.id) FILTER (
@@ -2739,7 +2770,7 @@ export class InternalAuditService {
               ym.year
           HAVING COUNT(DISTINCT ad.id) FILTER (
               WHERE ad.is_compliance = 1
-                  AND COALESCE(ad.compliance_status_id, 0) = 0
+                  AND COALESCE(ad.compliance_status_id, 0) IN (0, 8)
                   AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
           ) > 0
           ORDER BY aam.id DESC;
@@ -2922,7 +2953,7 @@ export class InternalAuditService {
                 $2::boolean = false
                 OR (
                     NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
-                    AND COALESCE(ad.compliance_status_id, 0) IN (0, 2, 3, 5)
+                    AND COALESCE(ad.compliance_status_id, 0) IN (0, 2, 3, 5, 8, 9)
                 )
             )
         ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id;
@@ -3250,15 +3281,6 @@ export class InternalAuditService {
 
     if (
       action === 7
-      && liveManagerCompliance
-    ) {
-      throw new BadRequestException(
-        'Partially Pass is available only in the regular compliance flow.',
-      );
-    }
-
-    if (
-      action === 7
       && !this.cleanString(comment)
     ) {
       throw new BadRequestException(
@@ -3299,7 +3321,10 @@ export class InternalAuditService {
                 `
                 UPDATE answers_data
                 SET
-                    compliance_status_id = $1,
+                    compliance_status_id = CASE
+                        WHEN $1 = 2 AND compliance_status_id IN (8, 9) THEN 9
+                        ELSE $1
+                    END,
                     compliance_reviewer_emp_id = $2,
                     compliance_reviewer_comment = $3,
                     batch_key = $4
@@ -3327,7 +3352,10 @@ export class InternalAuditService {
                 `
                 UPDATE answers_data_annexure
                 SET
-                    compliance_status_id = $1,
+                    compliance_status_id = CASE
+                        WHEN $1 = 2 AND compliance_status_id IN (8, 9) THEN 9
+                        ELSE $1
+                    END,
                     compliance_reviewer_emp_id = $2,
                     batch_key = $3
                 WHERE answer_id = $4
@@ -3352,7 +3380,10 @@ export class InternalAuditService {
               `
               UPDATE answers_data_annexure aa
               SET
-                  compliance_status_id = $1,
+                  compliance_status_id = CASE
+                      WHEN $1 = 2 AND aa.compliance_status_id IN (8, 9) THEN 9
+                      ELSE $1
+                  END,
                   compliance_reviewer_emp_id = $2,
                   compliance_reviewer_comment = $3,
                   batch_key = $4
@@ -3393,11 +3424,12 @@ export class InternalAuditService {
                 SELECT
                     COUNT(*) FILTER (WHERE compliance_status_id = 3)::int AS rejected_count,
                     COUNT(*) FILTER (WHERE compliance_status_id = 7)::int AS partial_count,
-                    COUNT(*) FILTER (WHERE compliance_status_id = 8)::int AS partial_response_count
+                    COUNT(*) FILTER (WHERE compliance_status_id = 8)::int AS partial_response_count,
+                    COUNT(*) FILTER (WHERE compliance_status_id = 9)::int AS partial_settled_count
                 FROM answers_data_annexure
                 WHERE answer_id = $1
                     AND assesment_id = $2
-                    AND compliance_status_id IN (3, 7, 8)
+                    AND compliance_status_id IN (3, 7, 8, 9)
                     AND deleted_at IS NULL;
                 `,
                 [
@@ -3418,7 +3450,11 @@ export class InternalAuditService {
                       remainingRejections.rows[0]?.partial_response_count || 0,
                     ) > 0
                     ? 8
-                    : 2;
+                    : Number(
+                        remainingRejections.rows[0]?.partial_settled_count || 0,
+                      ) > 0
+                      ? 9
+                      : 2;
 
             await client.query(
               `
@@ -3752,7 +3788,7 @@ export class InternalAuditService {
                 compliance_reviewer_emp_id = $2
             WHERE assesment_id = $1
                 AND is_compliance = 1
-                AND COALESCE(compliance_status_id, 0) NOT IN (2, 3, 5, 7)
+                AND COALESCE(compliance_status_id, 0) NOT IN (2, 3, 5, 7, 9)
                 AND deleted_at IS NULL;
             `,
             [
@@ -3768,7 +3804,7 @@ export class InternalAuditService {
                 compliance_status_id = 2,
                 compliance_reviewer_emp_id = $2
             WHERE aa.assesment_id = $1
-                AND COALESCE(aa.compliance_status_id, 0) NOT IN (2, 3, 5, 7)
+                AND COALESCE(aa.compliance_status_id, 0) NOT IN (2, 3, 5, 7, 9)
                 AND aa.deleted_at IS NULL
                 AND EXISTS (
                     SELECT 1
@@ -4642,7 +4678,7 @@ export class InternalAuditService {
               COUNT(DISTINCT ad.id) FILTER (
                   WHERE ad.is_compliance = 1
                       AND (
-                          COALESCE(ad.compliance_status_id, 0) = 3
+                          COALESCE(ad.compliance_status_id, 0) IN (3, 7)
                           OR (
                               COALESCE(ad.compliance_status_id, 0) IN (0, 4)
                               AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
@@ -4693,7 +4729,7 @@ export class InternalAuditService {
           HAVING COUNT(DISTINCT ad.id) FILTER (
               WHERE ad.is_compliance = 1
                   AND (
-                      COALESCE(ad.compliance_status_id, 0) = 3
+                      COALESCE(ad.compliance_status_id, 0) IN (3, 7)
                       OR (
                           COALESCE(ad.compliance_status_id, 0) IN (0, 4)
                           AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
@@ -5040,7 +5076,7 @@ export class InternalAuditService {
                 (
                     $3::boolean = true
                     AND (
-                        COALESCE(ad.compliance_status_id, 0) = 3
+                        COALESCE(ad.compliance_status_id, 0) IN (3, 7)
                         OR (
                             COALESCE(ad.compliance_status_id, 0) IN (0, 4)
                             AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
@@ -5747,8 +5783,8 @@ ORDER BY id DESC;
                 audit_commpliance = $1,
                 compliance_emp_id = $2,
                 compliance_status_id = CASE
+                    WHEN compliance_status_id = 7 THEN 8
                     WHEN $7::boolean = true THEN 0
-                    WHEN $6::int = 6 AND compliance_status_id = 7 THEN 8
                     WHEN $6::int = 6 THEN compliance_status_id
                     ELSE 0
                 END,
@@ -5796,8 +5832,8 @@ ORDER BY id DESC;
                 audit_commpliance = $1,
                 compliance_emp_id = $2,
                 compliance_status_id = CASE
+                    WHEN aa.compliance_status_id = 7 THEN 8
                     WHEN $7::boolean = true THEN 0
-                    WHEN $6::int = 6 AND aa.compliance_status_id = 7 THEN 8
                     WHEN $6::int = 6 THEN aa.compliance_status_id
                     ELSE 0
                 END,
@@ -11871,7 +11907,7 @@ SELECT (
     const applyStatus =
       (status: number) => {
         if (
-          status === 2
+          [2, 9].includes(status)
         ) {
           accepted++;
         } else if (
@@ -11993,7 +12029,7 @@ SELECT (
     const applyStatus =
       (status: number) => {
         if (
-          status === 2
+          [2, 9].includes(status)
         ) {
           accepted++;
         } else if (
