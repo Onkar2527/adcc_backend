@@ -408,18 +408,36 @@ async function updateAllAssessmentRatingsForYear(db: DatabaseService, yearId: nu
 
   const labelsMap: Record<number, string> = { 1: 'HIGH', 2: 'MEDIUM', 3: 'LOW' };
 
-  // Update each assessment's risk_rating and risk_rating_id
-  for (const a of assessments) {
+  // Calculate ratings first, then persist all assessments in one query.
+  const assessmentRatings = assessments.map(a => {
     const score = Number(a.weighted_score || 0);
     const percentShare = yearTotal > 0 ? (score / yearTotal) * 100 : 0;
     const ratingId = getMatchedRating(percentShare, Number(a.audit_unit_id));
     const ratingLabel = labelsMap[ratingId] || 'LOW';
 
-    await db.query(
-      `UPDATE audit_assesment_master
-       SET risk_rating_id = $1, risk_rating = $2, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3`,
-      [ratingId, ratingLabel, a.id]
-    );
-  }
+    return {
+      id: Number(a.id),
+      rating_id: ratingId,
+      rating_label: ratingLabel,
+    };
+  });
+
+  await db.query(
+    `UPDATE audit_assesment_master assessment
+     SET
+       risk_rating_id = ratings.rating_id,
+       risk_rating = ratings.rating_label,
+       updated_at = CURRENT_TIMESTAMP
+     FROM jsonb_to_recordset($1::jsonb) AS ratings(
+       id bigint,
+       rating_id bigint,
+       rating_label text
+     )
+     WHERE assessment.id = ratings.id
+       AND (
+         assessment.risk_rating_id IS DISTINCT FROM ratings.rating_id
+         OR assessment.risk_rating IS DISTINCT FROM ratings.rating_label
+       )`,
+    [JSON.stringify(assessmentRatings)]
+  );
 }
