@@ -2637,7 +2637,7 @@ export class InternalAuditService {
             COUNT(ad.id) FILTER (WHERE ad.is_compliance = 1)::int AS compliance_points,
             COUNT(ad.id) FILTER (
                 WHERE (aam.audit_status_id = 2 AND ad.audit_status_id = 3)
-                    OR (aam.audit_status_id = 5 AND ad.compliance_status_id = 3)
+                    OR (aam.audit_status_id = 5 AND ad.compliance_status_id IN (3, 7, 8))
             )::int AS rejected_points,
             CASE
                 WHEN aam.audit_status_id = 5 THEN 'Compliance Review'
@@ -3239,10 +3239,28 @@ export class InternalAuditService {
     }
 
     if (
-      ![2, 3, 5].includes(action)
+      ![2, 3, 5, 7].includes(action)
     ) {
       throw new BadRequestException(
-        'Choose Accepted, Re-Compliance Needed, or Carry Forward.',
+        'Choose Accepted, Re-Compliance Needed, Carry Forward, or Partially Pass.',
+      );
+    }
+
+    if (
+      action === 7
+      && liveManagerCompliance
+    ) {
+      throw new BadRequestException(
+        'Partially Pass is available only in the regular compliance flow.',
+      );
+    }
+
+    if (
+      action === 7
+      && !this.cleanString(comment)
+    ) {
+      throw new BadRequestException(
+        'Reviewer comment is required for Partially Pass.',
       );
     }
 
@@ -3370,11 +3388,14 @@ export class InternalAuditService {
             const remainingRejections =
               await client.query(
                 `
-                SELECT COUNT(*)::int AS rejected_count
+                SELECT
+                    COUNT(*) FILTER (WHERE compliance_status_id = 3)::int AS rejected_count,
+                    COUNT(*) FILTER (WHERE compliance_status_id = 7)::int AS partial_count,
+                    COUNT(*) FILTER (WHERE compliance_status_id = 8)::int AS partial_response_count
                 FROM answers_data_annexure
                 WHERE answer_id = $1
                     AND assesment_id = $2
-                    AND compliance_status_id = 3
+                    AND compliance_status_id IN (3, 7, 8)
                     AND deleted_at IS NULL;
                 `,
                 [
@@ -3387,7 +3408,15 @@ export class InternalAuditService {
                 remainingRejections.rows[0]?.rejected_count || 0,
               ) > 0
                 ? 3
-                : 2;
+                : Number(
+                    remainingRejections.rows[0]?.partial_count || 0,
+                  ) > 0
+                  ? 7
+                  : Number(
+                      remainingRejections.rows[0]?.partial_response_count || 0,
+                    ) > 0
+                    ? 8
+                    : 2;
 
             await client.query(
               `
@@ -3431,7 +3460,9 @@ export class InternalAuditService {
           ? 'Compliance response accepted.'
           : action === 5
             ? 'Compliance response marked as carry forward.'
-            : 'Compliance response marked for re-compliance.',
+            : action === 7
+              ? 'Compliance response marked as Partially Pass.'
+              : 'Compliance response marked for re-compliance.',
     };
   }
 
@@ -3670,6 +3701,43 @@ export class InternalAuditService {
       );
     }
 
+    const pendingPartialResponses =
+      await this.db.findOne(
+        `
+        SELECT (
+            (SELECT COUNT(*)
+                FROM answers_data
+                WHERE assesment_id = $1
+                    AND is_compliance = 1
+                    AND compliance_status_id = 8
+                    AND deleted_at IS NULL)
+            +
+            (SELECT COUNT(*)
+                FROM answers_data_annexure aa
+                WHERE aa.assesment_id = $1
+                    AND aa.compliance_status_id = 8
+                    AND aa.deleted_at IS NULL
+                    AND EXISTS (
+                        SELECT 1
+                        FROM answers_data ad
+                        WHERE ad.id = aa.answer_id
+                            AND ad.assesment_id = aa.assesment_id
+                            AND ad.is_compliance = 1
+                            AND ad.deleted_at IS NULL
+                    ))
+        )::int AS pending_count;
+        `,
+        [assessmentId],
+      );
+
+    if (
+      Number(pendingPartialResponses?.pending_count || 0) > 0
+    ) {
+      throw new BadRequestException(
+        'Review all manager responses for Partially Pass points before submitting.',
+      );
+    }
+
     const result =
       await this.db.transaction(
         async (client) => {
@@ -3682,7 +3750,7 @@ export class InternalAuditService {
                 compliance_reviewer_emp_id = $2
             WHERE assesment_id = $1
                 AND is_compliance = 1
-                AND COALESCE(compliance_status_id, 0) NOT IN (2, 3, 5)
+                AND COALESCE(compliance_status_id, 0) NOT IN (2, 3, 5, 7)
                 AND deleted_at IS NULL;
             `,
             [
@@ -3698,7 +3766,7 @@ export class InternalAuditService {
                 compliance_status_id = 2,
                 compliance_reviewer_emp_id = $2
             WHERE aa.assesment_id = $1
-                AND COALESCE(aa.compliance_status_id, 0) NOT IN (2, 3, 5)
+                AND COALESCE(aa.compliance_status_id, 0) NOT IN (2, 3, 5, 7)
                 AND aa.deleted_at IS NULL
                 AND EXISTS (
                     SELECT 1
@@ -3739,7 +3807,29 @@ export class InternalAuditService {
                                   AND ad.is_compliance = 1
                                   AND ad.deleted_at IS NULL
                           ))
-              )::int AS rejected_count;
+              )::int AS rejected_count,
+              (
+                  (SELECT COUNT(*)
+                      FROM answers_data
+                      WHERE assesment_id = $1
+                          AND is_compliance = 1
+                          AND compliance_status_id = 7
+                          AND deleted_at IS NULL)
+                  +
+                  (SELECT COUNT(*)
+                      FROM answers_data_annexure aa
+                      WHERE aa.assesment_id = $1
+                          AND aa.compliance_status_id = 7
+                          AND aa.deleted_at IS NULL
+                          AND EXISTS (
+                              SELECT 1
+                              FROM answers_data ad
+                              WHERE ad.id = aa.answer_id
+                                  AND ad.assesment_id = aa.assesment_id
+                                  AND ad.is_compliance = 1
+                                  AND ad.deleted_at IS NULL
+                          ))
+              )::int AS partial_count;
               `,
               [assessmentId],
             );
@@ -3780,8 +3870,12 @@ export class InternalAuditService {
             Number(
               carryForwardSummary.rows[0]?.carry_forward_count || 0,
             );
+          const partialCount =
+            Number(
+              reviewSummary.rows[0]?.partial_count || 0,
+            );
           const nextStatus =
-            rejectedCount > 0
+            rejectedCount > 0 || partialCount > 0
               ? 6
               : 7;
 
@@ -3838,7 +3932,7 @@ export class InternalAuditService {
             [
               assessmentId,
               nextStatus,
-              rejectedCount,
+              rejectedCount + partialCount,
               employeeId,
               updated.rows[0].batch_key,
             ],
@@ -3846,16 +3940,19 @@ export class InternalAuditService {
 
           return {
             rejectedCount,
+            partialCount,
             nextStatus,
             carryForwardCount,
           };
         },
       );
 
-    try {
-      await syncAssessmentScoring(this.db, assessmentId);
-    } catch (err) {
-      console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+    if (result.nextStatus === 7) {
+      try {
+        await syncAssessmentScoring(this.db, assessmentId);
+      } catch (err) {
+        console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
+      }
     }
 
     return {
@@ -3867,9 +3964,11 @@ export class InternalAuditService {
         result.rejectedCount,
       carry_forward_count:
         result.carryForwardCount,
+      partially_passed_count:
+        result.partialCount,
       message:
         result.nextStatus === 6
-          ? 'Compliance review submitted. Rejected responses returned to Manager.'
+          ? 'Compliance review submitted. Re-compliance and partially passed points returned to Manager.'
           : 'Compliance review submitted. Assessment completed.',
     };
   }
@@ -4632,7 +4731,7 @@ export class InternalAuditService {
                         AND ad.audit_status_id = 2
                         AND (
                             aam.audit_status_id = 4
-                            OR ad.compliance_status_id = 3
+                            OR ad.compliance_status_id IN (3, 7, 8)
                         )
                 )
                 +
@@ -4642,7 +4741,7 @@ export class InternalAuditService {
                         AND aa.audit_status_id = 2
                         AND (
                             aam.audit_status_id = 4
-                            OR aa.compliance_status_id = 3
+                            OR aa.compliance_status_id IN (3, 7, 8)
                         )
                 )
             )::int AS compliance_points,
@@ -4652,7 +4751,7 @@ export class InternalAuditService {
                         AND ad.audit_status_id = 2
                         AND (
                             aam.audit_status_id = 4
-                            OR ad.compliance_status_id = 3
+                            OR ad.compliance_status_id IN (3, 7, 8)
                         )
                         AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
                         AND (
@@ -4667,7 +4766,7 @@ export class InternalAuditService {
                         AND aa.audit_status_id = 2
                         AND (
                             aam.audit_status_id = 4
-                            OR aa.compliance_status_id = 3
+                            OR aa.compliance_status_id IN (3, 7, 8)
                         )
                         AND NULLIF(BTRIM(COALESCE(aa.audit_commpliance, '')), '') IS NOT NULL
                         AND (
@@ -4949,13 +5048,13 @@ export class InternalAuditService {
                     AND ad.audit_status_id = 2
                     AND (
                         $2::int = 4
-                        OR ad.compliance_status_id = 3
+                        OR ad.compliance_status_id IN (3, 7, 8)
                         OR EXISTS (
                             SELECT 1
                             FROM answers_data_annexure aa
                             WHERE aa.answer_id = ad.id
                                 AND aa.assesment_id = ad.assesment_id
-                                AND aa.compliance_status_id = 3
+                                AND aa.compliance_status_id IN (3, 7, 8)
                                 AND aa.deleted_at IS NULL
                         )
                     )
@@ -5017,7 +5116,7 @@ export class InternalAuditService {
                       AND audit_status_id = 2
                       AND (
                           $3::int = 4
-                          OR compliance_status_id = 3
+                          OR compliance_status_id IN (3, 7, 8)
                       )
                   )
               )
@@ -5148,8 +5247,9 @@ ORDER BY id DESC;
             liveManagerCompliance
             ||
             complianceStatus === 4
-            ||
-            Number(row.compliance_status_id) === 3,
+            || [3, 7, 8].includes(
+              Number(row.compliance_status_id),
+            ),
           evidences:
             auditEvidenceMap.get(
               `${Number(row.id)}:0`,
@@ -5178,8 +5278,9 @@ ORDER BY id DESC;
                   liveManagerCompliance
                   ||
                   complianceStatus === 4
-                  ||
-                  Number(annexure.compliance_status_id) === 3,
+                  || [3, 7, 8].includes(
+                    Number(annexure.compliance_status_id),
+                  ),
               }),
             ),
         }),
@@ -5248,20 +5349,20 @@ ORDER BY id DESC;
             AND (
                 (
                     $3::int IN (1, 3)
-                    AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4)
+                    AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4, 7)
                 )
                 OR (
                     $3::int IN (4, 6)
                     AND ad.audit_status_id = 2
                     AND (
                         $3::int = 4
-                        OR ad.compliance_status_id = 3
+                        OR ad.compliance_status_id IN (3, 7, 8)
                         OR EXISTS (
                             SELECT 1
                             FROM answers_data_annexure aa
                             WHERE aa.answer_id = ad.id
                                 AND aa.assesment_id = ad.assesment_id
-                                AND aa.compliance_status_id = 3
+                                AND aa.compliance_status_id IN (3, 7, 8)
                                 AND aa.deleted_at IS NULL
                         )
                     )
@@ -5364,20 +5465,20 @@ ORDER BY id DESC;
             AND (
                 (
                     $3::int IN (1, 3)
-                    AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4)
+                    AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4, 7)
                 )
                 OR (
                     $3::int IN (4, 6)
                     AND ad.audit_status_id = 2
                     AND (
                         $3::int = 4
-                        OR ad.compliance_status_id = 3
+                        OR ad.compliance_status_id IN (3, 7, 8)
                         OR EXISTS (
                             SELECT 1
                             FROM answers_data_annexure aa
                             WHERE aa.answer_id = ad.id
                                 AND aa.assesment_id = ad.assesment_id
-                                AND aa.compliance_status_id = 3
+                                AND aa.compliance_status_id IN (3, 7, 8)
                                 AND aa.deleted_at IS NULL
                         )
                     )
@@ -5641,6 +5742,7 @@ ORDER BY id DESC;
                 compliance_emp_id = $2,
                 compliance_status_id = CASE
                     WHEN $7::boolean = true THEN 0
+                    WHEN $6::int = 6 AND compliance_status_id = 7 THEN 8
                     WHEN $6::int = 6 THEN compliance_status_id
                     ELSE 0
                 END,
@@ -5653,7 +5755,7 @@ ORDER BY id DESC;
                     (
                         $7::boolean = true
                         AND (
-                            COALESCE(compliance_status_id, 0) = 3
+                            COALESCE(compliance_status_id, 0) IN (3, 7, 8)
                             OR (
                                 COALESCE(compliance_status_id, 0) IN (0, 4)
                                 AND NULLIF(BTRIM(COALESCE(audit_commpliance, '')), '') IS NULL
@@ -5665,7 +5767,7 @@ ORDER BY id DESC;
                         AND audit_status_id = 2
                         AND (
                             $6::int = 4
-                            OR compliance_status_id = 3
+                            OR compliance_status_id IN (3, 7, 8)
                         )
                     )
                 )
@@ -5689,7 +5791,8 @@ ORDER BY id DESC;
                 compliance_emp_id = $2,
                 compliance_status_id = CASE
                     WHEN $7::boolean = true THEN 0
-                    WHEN $6::int = 6 THEN compliance_status_id
+                    WHEN $6::int = 6 AND aa.compliance_status_id = 7 THEN 8
+                    WHEN $6::int = 6 THEN aa.compliance_status_id
                     ELSE 0
                 END,
                 batch_key = $3
@@ -5700,7 +5803,7 @@ ORDER BY id DESC;
                     (
                         $7::boolean = true
                         AND (
-                            COALESCE(aa.compliance_status_id, 0) = 3
+                            COALESCE(aa.compliance_status_id, 0) IN (3, 7, 8)
                             OR (
                                 COALESCE(aa.compliance_status_id, 0) IN (0, 4)
                                 AND NULLIF(BTRIM(COALESCE(aa.audit_commpliance, '')), '') IS NULL
@@ -5712,7 +5815,7 @@ ORDER BY id DESC;
                         AND aa.audit_status_id = 2
                         AND (
                             $6::int = 4
-                            OR aa.compliance_status_id = 3
+                            OR aa.compliance_status_id IN (3, 7, 8)
                         )
                     )
                 )
@@ -9328,14 +9431,14 @@ ORDER BY id DESC;
               AND (
                   (
                       $3::int IN (1, 3)
-                      AND COALESCE(compliance_status_id, 0) IN (0, 3, 4)
+                      AND COALESCE(compliance_status_id, 0) IN (0, 3, 4, 7)
                   )
                   OR (
                       $3::int IN (4, 6)
                       AND audit_status_id = 2
                       AND (
                           $3::int = 4
-                          OR compliance_status_id = 3
+                          OR compliance_status_id IN (3, 7, 8)
                       )
                   )
               )
@@ -9380,14 +9483,14 @@ ORDER BY id DESC;
             AND (
                 (
                     $3::int IN (1, 3)
-                    AND COALESCE(aa.compliance_status_id, 0) IN (0, 3, 4)
+                    AND COALESCE(aa.compliance_status_id, 0) IN (0, 3, 4, 7)
                 )
                 OR (
                     $3::int IN (4, 6)
                     AND aa.audit_status_id = 2
                     AND (
                         $3::int = 4
-                        OR aa.compliance_status_id = 3
+                        OR aa.compliance_status_id IN (3, 7, 8)
                     )
                 )
             )
@@ -11756,6 +11859,7 @@ SELECT (
 
     let accepted = 0;
     let rejected = 0;
+    let partiallyPassed = 0;
     let pending = 0;
 
     const applyStatus =
@@ -11768,6 +11872,10 @@ SELECT (
           status === 3
         ) {
           rejected++;
+        } else if (
+          [7, 8].includes(status)
+        ) {
+          partiallyPassed++;
         } else {
           pending++;
         }
@@ -11795,11 +11903,14 @@ SELECT (
       total:
         accepted
         + rejected
+        + partiallyPassed
         + pending,
       compliance:
         answers.length,
       accepted,
       rejected,
+      partially_passed:
+        partiallyPassed,
       pending,
     };
   }
