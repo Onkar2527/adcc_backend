@@ -3105,6 +3105,8 @@ export class InternalAuditService {
         }),
       );
 
+    await this.attachTimelines(answers, assessmentId);
+
     return {
       overview:
         {
@@ -4220,6 +4222,8 @@ export class InternalAuditService {
         }),
       );
 
+    await this.attachTimelines(answers, assessmentId);
+
     return {
       overview,
       answers,
@@ -5285,6 +5289,8 @@ ORDER BY id DESC;
             ),
         }),
       );
+
+    await this.attachTimelines(answers, assessmentId);
 
     return {
       overview:
@@ -6427,6 +6433,18 @@ ORDER BY id DESC;
       sets,
       assessmentId,
     );
+
+    const answersList: any[] = [];
+    const questionMap = new Map<number, any>();
+    this.collectQuestions(sets, questionMap);
+    for (const q of questionMap.values()) {
+      if (q.answer) {
+        answersList.push(q.answer);
+      }
+    }
+    if (answersList.length) {
+      await this.attachTimelines(answersList, assessmentId);
+    }
 
     if (
       reAuditScope
@@ -9386,6 +9404,116 @@ ORDER BY id DESC;
 
         row.compliance_evidence =
           row.compliance_evidences[0] || null;
+      }
+    }
+  }
+
+  private async attachTimelines(
+    answers: any[],
+    assessmentId: number,
+  ) {
+
+    const answerIds = answers
+      .map((ans) => Number(ans.id || ans.answer_id || 0))
+      .filter(Boolean);
+
+    if (!answerIds.length) {
+      return;
+    }
+
+    const timelineResult = await this.db.query(
+      `
+      SELECT
+          id,
+          answer_id,
+          annex_id,
+          assesment_id,
+          created_at,
+          audit_reviewer_comment,
+          compliance_reviewer_comment,
+          audit_commpliance AS compliance_response,
+          answer_given,
+          audit_comment,
+          business_risk,
+          control_risk
+      FROM answers_data_timeline
+      WHERE answer_id = ANY($1::bigint[])
+          AND deleted_at IS NULL
+      ORDER BY answer_id, annex_id, id ASC;
+      `,
+      [answerIds],
+    );
+
+    const evidenceResult = await this.db.query(
+      `
+      SELECT
+          id,
+          answer_id,
+          annex_id,
+          evi_type,
+          file_name,
+          file_type,
+          description,
+          created_at
+      FROM evidence_master
+      WHERE assesment_id = $1
+          AND answer_id = ANY($2::int[])
+          AND evi_type IN (1, 2)
+          AND deleted_at IS NULL
+      ORDER BY answer_id, annex_id, id ASC;
+      `,
+      [assessmentId, answerIds],
+    );
+
+    const timelineMap = new Map<string, any[]>();
+    for (const row of timelineResult.rows) {
+      const key = `${Number(row.answer_id)}:${Number(row.annex_id || 0)}`;
+      if (!timelineMap.has(key)) {
+        timelineMap.set(key, []);
+      }
+      
+      const timelineItem = {
+        ...row,
+        evidences: [],
+        compliance_evidences: [],
+      };
+      
+      timelineMap.get(key)?.push(timelineItem);
+    }
+
+    for (const ev of evidenceResult.rows) {
+      const key = `${Number(ev.answer_id)}:${Number(ev.annex_id || 0)}`;
+      const timelines = timelineMap.get(key) || [];
+      if (!timelines.length) {
+        continue;
+      }
+
+      const evTime = new Date(ev.created_at).getTime();
+      const matchedTimeline = timelines.find((timeline) => {
+        const timelineTime = new Date(timeline.created_at).getTime();
+        return evTime <= timelineTime + 2000;
+      });
+
+      if (matchedTimeline) {
+        if (Number(ev.evi_type) === 2) {
+          matchedTimeline.compliance_evidences.push(ev);
+        } else {
+          matchedTimeline.evidences.push(ev);
+        }
+      }
+    }
+
+    for (const ans of answers) {
+      const answerId = Number(ans.id || ans.answer_id || 0);
+      if (!answerId) {
+        continue;
+      }
+
+      ans.answers_data_timeline = timelineMap.get(`${answerId}:0`) || [];
+
+      for (const row of ans.annexure_rows || []) {
+        const rowId = Number(row.id);
+        row.answers_data_timeline = timelineMap.get(`${answerId}:${rowId}`) || [];
       }
     }
   }
