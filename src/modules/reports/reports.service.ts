@@ -12,6 +12,12 @@ type ReportStatusOption = {
 
 @Injectable()
 export class ReportsService {
+  private readonly auditTypeOptions: ReportStatusOption[] = [
+    { value: 'all', label: 'All Audit Types' },
+    { value: '1', label: 'Internal Audit' },
+    { value: '2', label: 'Special Audit' },
+  ];
+
   private readonly auditStatusOptions: ReportStatusOption[] = [
     { value: 'all', label: 'All Audit' },
     { value: '1', label: 'Pending' },
@@ -38,6 +44,25 @@ export class ReportsService {
   ];
 
   constructor(private readonly db: DatabaseService) {}
+
+  private normalizeAuditType(query: any) {
+    const value = String(query?.audit_type_id || 'all').trim();
+    return ['1', '2'].includes(value) ? Number(value) : null;
+  }
+
+  private applyAssessmentAuditTypeFilter(
+    where: string[],
+    params: any[],
+    query: any,
+    field: string,
+  ) {
+    const auditTypeId = this.normalizeAuditType(query);
+
+    if (auditTypeId) {
+      params.push(auditTypeId);
+      where.push(`COALESCE(${field}, 1) = $${params.length}`);
+    }
+  }
 
   async getReportDefinition(reportSlug: string, isFreeFlow = false) {
     if (reportSlug === 'audit-status-report') {
@@ -2229,6 +2254,7 @@ export class ReportsService {
       this.db.query(`
         SELECT
           asm.id,
+          COALESCE(asm.audit_type_id, 1) AS audit_type_id,
           asm.year_id,
           asm.audit_unit_id,
           asm.assesment_period_from,
@@ -2273,6 +2299,7 @@ export class ReportsService {
           value: String(row.id),
           label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
           audit_unit_id: row.audit_unit_id,
+          audit_type_id: String(row.audit_type_id || '1'),
           year_id: String(row.year_id || ''),
         })),
       ],
@@ -2306,6 +2333,7 @@ export class ReportsService {
       this.db.query(`
         SELECT
           asm.id,
+          COALESCE(asm.audit_type_id, 1) AS audit_type_id,
           asm.year_id,
           asm.audit_unit_id,
           asm.assesment_period_from,
@@ -2350,6 +2378,7 @@ export class ReportsService {
           value: String(row.id),
           label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
           audit_unit_id: row.audit_unit_id,
+          audit_type_id: String(row.audit_type_id || '1'),
           year_id: String(row.year_id || ''),
         })),
       ],
@@ -2383,6 +2412,7 @@ export class ReportsService {
       this.db.query(`
         SELECT
           asm.id,
+          COALESCE(asm.audit_type_id, 1) AS audit_type_id,
           asm.year_id,
           asm.audit_unit_id,
           asm.assesment_period_from,
@@ -2417,6 +2447,7 @@ export class ReportsService {
           value: String(row.id),
           label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
           audit_unit_id: row.audit_unit_id,
+          audit_type_id: String(row.audit_type_id || '1'),
           year_id: String(row.year_id || ''),
         })),
       ],
@@ -2651,6 +2682,8 @@ export class ReportsService {
       'qm.deleted_at IS NULL',
     ];
 
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'aam.audit_type_id');
+
     if (riskCategoryIds.length) {
       params.push(riskCategoryIds);
       where.push(`qm.risk_category_id = ANY($${params.length}::int[])`);
@@ -2803,6 +2836,7 @@ export class ReportsService {
       filters: {
         reportAuditUnit: String(auditUnitId),
         reportAuditAssesment: String(assessmentId),
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         risk_category_arr: riskCategoryIds,
         business_risk_arr: businessRiskIds,
         control_risk_arr: controlRiskIds,
@@ -2855,6 +2889,8 @@ export class ReportsService {
       'qm.deleted_at IS NULL',
       'ad.is_compliance = 1',
     ];
+
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'aam.audit_type_id');
 
     if (riskCategoryIds.length) {
       params.push(riskCategoryIds);
@@ -3008,6 +3044,7 @@ export class ReportsService {
       filters: {
         reportAuditUnit: String(auditUnitId),
         reportAuditAssesment: String(assessmentId),
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         risk_category_arr: riskCategoryIds,
         business_risk_arr: businessRiskIds,
         control_risk_arr: controlRiskIds,
@@ -3056,6 +3093,8 @@ export class ReportsService {
       'qm.deleted_at IS NULL',
       'ad.is_compliance = 1',
     ];
+
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'aam.audit_type_id');
 
     if (riskCategoryIds.length) {
       params.push(riskCategoryIds);
@@ -3211,6 +3250,7 @@ export class ReportsService {
       filters: {
         reportAuditUnit: String(auditUnitId),
         reportAuditAssesment: String(assessmentId),
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         risk_category_arr: riskCategoryIds,
         business_risk_arr: businessRiskIds,
         control_risk_arr: controlRiskIds,
@@ -7303,6 +7343,8 @@ export class ReportsService {
       where.push(`asm.year_id = $${params.length}`);
     }
 
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'asm.audit_type_id');
+
     params.push(today);
 
     if (auditStatus === '11') {
@@ -7358,6 +7400,7 @@ export class ReportsService {
       filters: {
         audit_unit_id: auditUnitId,
         financial_year: financialYear,
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         audit_status: auditStatus,
       },
       total: rows.length,
@@ -7374,6 +7417,7 @@ export class ReportsService {
   async getAssessmentTimelineReport(query: any) {
     const auditUnitId = Number(query.reportAuditUnit || 0);
     const assessmentId = Number(query.reportAuditAssesment || 0);
+    const auditTypeId = this.normalizeAuditType(query);
 
     if (!auditUnitId) {
       throw new BadRequestException('Audit unit is required');
@@ -7401,11 +7445,12 @@ export class ReportsService {
         ON emp.id = aut.reviewer_emp_id
       WHERE aut.assesment_id = $1
         AND asm.audit_unit_id = $2
+        AND ($3::int IS NULL OR COALESCE(asm.audit_type_id, 1) = $3)
         AND aut.deleted_at IS NULL
         AND asm.deleted_at IS NULL
       ORDER BY aut.type_id::int ASC, aut.created_at ASC, aut.id ASC
       `,
-      [assessmentId, auditUnitId],
+      [assessmentId, auditUnitId, auditTypeId],
     );
 
     const rows = result.rows.map((row: any, index: number) => ({
@@ -7427,6 +7472,7 @@ export class ReportsService {
       filters: {
         reportAuditUnit: String(auditUnitId),
         reportAuditAssesment: String(assessmentId),
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
       },
       total: rows.length,
       generatedAt: new Date().toISOString(),
@@ -7533,6 +7579,13 @@ export class ReportsService {
       params.push(Number(financialYear));
       where.push(`source_assessment.year_id = $${params.length}`);
     }
+
+    this.applyAssessmentAuditTypeFilter(
+      where,
+      params,
+      query,
+      'source_assessment.audit_type_id',
+    );
 
     if (targetAssessmentId > 0) {
       params.push(targetAssessmentId);
@@ -7738,6 +7791,7 @@ export class ReportsService {
       filters: {
         audit_unit_id: auditUnitId,
         financial_year: financialYear,
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         transfer_status: transferStatus,
         target_assessment_id: targetAssessmentId || '',
         source_assessment_id: sourceAssessmentId || '',
@@ -7784,6 +7838,13 @@ export class ReportsService {
       params.push(Number(financialYear));
       where.push(`assessment.year_id = $${params.length}`);
     }
+
+    this.applyAssessmentAuditTypeFilter(
+      where,
+      params,
+      query,
+      'assessment.audit_type_id',
+    );
 
     if (sourceAssessmentId > 0) {
       params.push(sourceAssessmentId);
@@ -7976,6 +8037,7 @@ export class ReportsService {
       filters: {
         audit_unit_id: auditUnitId,
         financial_year: financialYear,
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         partial_status: partialStatus,
         source_assessment_id: sourceAssessmentId || '',
       },
@@ -8020,6 +8082,8 @@ export class ReportsService {
       params.push(Number(financialYear));
       where.push(`asm.year_id = $${params.length}`);
     }
+
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'asm.audit_type_id');
 
     this.applyAuditStatusFilter(where, auditStatus);
     this.applyComplianceStatusFilter(where, complianceStatus);
@@ -8070,6 +8134,7 @@ export class ReportsService {
       filters: {
         audit_unit_id: auditUnitId,
         financial_year: financialYear,
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         audit_status: auditStatus,
         comp_status: complianceStatus,
       },

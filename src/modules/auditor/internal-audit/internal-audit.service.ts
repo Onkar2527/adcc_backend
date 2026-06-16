@@ -2718,6 +2718,7 @@ export class InternalAuditService {
         `
         SELECT
             aam.id,
+            aam.audit_type_id,
             aam.audit_unit_id,
             aam.audit_status_id,
             aam.assesment_period_from,
@@ -2725,6 +2726,7 @@ export class InternalAuditService {
             aam.audit_end_date,
             au.audit_unit_code,
             au.name AS audit_unit_name,
+            sam.title AS special_audit_title,
             ym.year,
             COUNT(ad.id) FILTER (
                 WHERE aam.audit_status_id = 2
@@ -2742,6 +2744,9 @@ export class InternalAuditService {
             FROM audit_assesment_master aam
             INNER JOIN audit_unit_master au
                 ON au.id = aam.audit_unit_id
+            LEFT JOIN special_audit_master sam
+                ON sam.assessment_id = aam.id
+                AND sam.deleted_at IS NULL
             LEFT JOIN year_master ym
                 ON ym.id = aam.year_id
             LEFT JOIN answers_data ad
@@ -2766,6 +2771,7 @@ export class InternalAuditService {
             aam.id,
             au.audit_unit_code,
             au.name,
+            sam.title,
             ym.year
         ORDER BY aam.audit_status_id, aam.audit_end_date DESC NULLS LAST, aam.id DESC;
         `, [employeeId]
@@ -2780,16 +2786,18 @@ export class InternalAuditService {
       const liveResult =
         await this.db.query(
           `
-          SELECT
-              aam.id,
-              aam.audit_unit_id,
-              aam.audit_status_id,
-              aam.assesment_period_from,
-              aam.assesment_period_to,
-              aam.audit_end_date,
-              au.audit_unit_code,
-              au.name AS audit_unit_name,
-              ym.year,
+        SELECT
+            aam.id,
+            aam.audit_type_id,
+            aam.audit_unit_id,
+            aam.audit_status_id,
+            aam.assesment_period_from,
+            aam.assesment_period_to,
+            aam.audit_end_date,
+            au.audit_unit_code,
+            au.name AS audit_unit_name,
+            sam.title AS special_audit_title,
+            ym.year,
               COUNT(DISTINCT ad.id) FILTER (
                   WHERE ad.is_compliance = 1
                       AND COALESCE(ad.compliance_status_id, 0) IN (0, 2, 3, 5, 8, 9)
@@ -2808,6 +2816,9 @@ export class InternalAuditService {
           FROM audit_assesment_master aam
           INNER JOIN audit_unit_master au
               ON au.id = aam.audit_unit_id
+          LEFT JOIN special_audit_master sam
+              ON sam.assessment_id = aam.id
+              AND sam.deleted_at IS NULL
           LEFT JOIN year_master ym
               ON ym.id = aam.year_id
           LEFT JOIN answers_data ad
@@ -2832,6 +2843,7 @@ export class InternalAuditService {
               aam.id,
               au.audit_unit_code,
               au.name,
+              sam.title,
               ym.year
           HAVING COUNT(DISTINCT ad.id) FILTER (
               WHERE ad.is_compliance = 1
@@ -4730,6 +4742,7 @@ export class InternalAuditService {
           `
           SELECT
               aam.id,
+              aam.audit_type_id,
               aam.audit_unit_id,
               aam.audit_status_id,
               aam.assesment_period_from,
@@ -4738,6 +4751,7 @@ export class InternalAuditService {
               aam.compliance_due_date,
               au.audit_unit_code,
               au.name AS audit_unit_name,
+              sam.title AS special_audit_title,
               ym.year,
               'Live Compliance' AS compliance_stage,
               COUNT(DISTINCT ad.id) FILTER (
@@ -4759,6 +4773,9 @@ export class InternalAuditService {
           FROM audit_assesment_master aam
           INNER JOIN audit_unit_master au
               ON au.id = aam.audit_unit_id
+          LEFT JOIN special_audit_master sam
+              ON sam.assessment_id = aam.id
+              AND sam.deleted_at IS NULL
           LEFT JOIN year_master ym
               ON ym.id = aam.year_id
           LEFT JOIN answers_data ad
@@ -4790,6 +4807,7 @@ export class InternalAuditService {
               aam.id,
               au.audit_unit_code,
               au.name,
+              sam.title,
               ym.year
           HAVING COUNT(DISTINCT ad.id) FILTER (
               WHERE ad.is_compliance = 1
@@ -4817,6 +4835,7 @@ export class InternalAuditService {
         `
         SELECT
             aam.id,
+            aam.audit_type_id,
             aam.audit_unit_id,
             aam.audit_status_id,
             aam.assesment_period_from,
@@ -4825,6 +4844,7 @@ export class InternalAuditService {
             aam.compliance_due_date,
             au.audit_unit_code,
             au.name AS audit_unit_name,
+            sam.title AS special_audit_title,
             ym.year,
             CASE
                 WHEN aam.audit_status_id = 6 THEN 'Re-Compliance'
@@ -4883,6 +4903,9 @@ export class InternalAuditService {
         FROM audit_assesment_master aam
         INNER JOIN audit_unit_master au
             ON au.id = aam.audit_unit_id
+        LEFT JOIN special_audit_master sam
+            ON sam.assessment_id = aam.id
+            AND sam.deleted_at IS NULL
         LEFT JOIN year_master ym
             ON ym.id = aam.year_id
         LEFT JOIN answers_data ad
@@ -4918,6 +4941,7 @@ export class InternalAuditService {
             aam.id,
             au.audit_unit_code,
             au.name,
+            sam.title,
             ym.year
         ORDER BY aam.compliance_start_date DESC NULLS LAST, aam.id DESC;
         `, [employeeId]
@@ -11677,12 +11701,16 @@ ORDER BY id DESC;
           ym.year,
           au.name AS audit_unit_name,
           au.audit_unit_code,
+          sam.title AS special_audit_title,
           asm.name AS section_type_name
       FROM audit_assesment_master aam
       LEFT JOIN year_master ym
           ON ym.id = aam.year_id
       LEFT JOIN audit_unit_master au
           ON au.id = aam.audit_unit_id
+      LEFT JOIN special_audit_master sam
+          ON sam.assessment_id = aam.id
+          AND sam.deleted_at IS NULL
       LEFT JOIN audit_section_master asm
           ON asm.id = au.section_type_id
       WHERE aam.id = $1
