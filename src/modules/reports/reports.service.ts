@@ -12,6 +12,9 @@ type ReportStatusOption = {
 
 @Injectable()
 export class ReportsService {
+
+  // Options
+
   private readonly auditTypeOptions: ReportStatusOption[] = [
     { value: 'all', label: 'All Audit Types' },
     { value: '1', label: 'Internal Audit' },
@@ -43,8 +46,9 @@ export class ReportsService {
     { value: '4', label: 'No Risk' },
   ];
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly db: DatabaseService) { }
 
+  // Special Audit Filter
   private normalizeAuditType(query: any) {
     const value = String(query?.audit_type_id || 'all').trim();
     return ['1', '2'].includes(value) ? Number(value) : null;
@@ -63,6 +67,8 @@ export class ReportsService {
       where.push(`COALESCE(${field}, 1) = $${params.length}`);
     }
   }
+
+  // Report Definitions
 
   async getReportDefinition(reportSlug: string, isFreeFlow = false) {
     if (reportSlug === 'audit-status-report') {
@@ -3519,8 +3525,8 @@ export class ReportsService {
       assessmentIds.length === 1
         ? assessmentHeaderById.get(assessmentIds[0])
         : {
-            assessmentPeriod: `${startDate || this.dateOnly(assessments[0]?.assesment_period_from)} to ${endDate || this.dateOnly(assessments[assessments.length - 1]?.assesment_period_to)}`,
-          };
+          assessmentPeriod: `${startDate || this.dateOnly(assessments[0]?.assesment_period_from)} to ${endDate || this.dateOnly(assessments[assessments.length - 1]?.assesment_period_to)}`,
+        };
 
     return {
       filters: {
@@ -4291,7 +4297,7 @@ export class ReportsService {
 
     const annexuresResult = annexureAnswerIds.length
       ? await this.db.query(
-          `
+        `
         SELECT
           ax.answer_id,
           ax.business_risk,
@@ -4316,8 +4322,8 @@ export class ReportsService {
           )
           AND ax.deleted_at IS NULL
         `,
-          [annexureAnswerIds, assessmentIds],
-        )
+        [annexureAnswerIds, assessmentIds],
+      )
       : { rows: [] };
 
     const assessmentStats = new Map<
@@ -4478,15 +4484,15 @@ export class ReportsService {
 
     const ratingsResult = ratingYearId
       ? await this.db.query(
-          `
+        `
         SELECT audit_unit_id, risk_type_id, range_from, range_to
         FROM risk_branch_rating
         WHERE year_id = $1
           AND audit_type_id = 1
           AND deleted_at IS NULL
         `,
-          [ratingYearId],
-        )
+        [ratingYearId],
+      )
       : { rows: [] };
 
     const ratingMap = new Map<number, any[]>();
@@ -5130,7 +5136,7 @@ export class ReportsService {
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-          `
+        `
           SELECT
             ax.business_risk,
             ax.control_risk,
@@ -5142,8 +5148,8 @@ export class ReportsService {
             AND ax.assesment_id = ANY($2::int[])
             AND ax.deleted_at IS NULL
           `,
-          [answerIds, assessmentIds],
-        )
+        [answerIds, assessmentIds],
+      )
       : { rows: [] };
 
     // Group answers and annexures by assessment
@@ -5620,15 +5626,15 @@ export class ReportsService {
     );
     const riskWeightsResult = yearIds.length
       ? await this.db.query(
-          `
+        `
         SELECT year_id, risk_category_id, risk_weight
         FROM risk_category_weights
         WHERE year_id = ANY($1::int[])
           AND is_active = 1
           AND deleted_at IS NULL
         `,
-          [yearIds],
-        )
+        [yearIds],
+      )
       : { rows: [] };
 
     const riskWeightMap = new Map<string, number>();
@@ -5641,15 +5647,15 @@ export class ReportsService {
 
     const ratingsResult = yearIds.length
       ? await this.db.query(
-          `
+        `
         SELECT audit_unit_id, year_id, risk_type_id, range_from, range_to
         FROM risk_branch_rating
         WHERE year_id = ANY($1::int[])
           AND audit_type_id = 1
           AND deleted_at IS NULL
         `,
-          [yearIds],
-        )
+        [yearIds],
+      )
       : { rows: [] };
 
     const ratingsMap = new Map<string, any[]>();
@@ -5689,7 +5695,7 @@ export class ReportsService {
         assessmentFrom >= period1.startDate && assessmentTo <= period1.endDate
           ? 'period1'
           : assessmentFrom >= period2.startDate &&
-              assessmentTo <= period2.endDate
+            assessmentTo <= period2.endDate
             ? 'period2'
             : '';
 
@@ -6183,7 +6189,7 @@ export class ReportsService {
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-          `
+        `
         SELECT
           ax.business_risk,
           ax.control_risk,
@@ -6193,8 +6199,8 @@ export class ReportsService {
           AND ax.assesment_id = ANY($2::int[])
           AND ax.deleted_at IS NULL
         `,
-          [answerIds, assessmentIds],
-        )
+        [answerIds, assessmentIds],
+      )
       : { rows: [] };
 
     answersResult.rows.forEach((row: any) => {
@@ -6290,8 +6296,8 @@ export class ReportsService {
         percent_to_total: this.formatDecimal(
           totalObtainedScoreWeighted > 0
             ? (Number(row.__obtained_weighted_value || 0) /
-                totalObtainedScoreWeighted) *
-                100
+              totalObtainedScoreWeighted) *
+            100
             : 0,
           2,
         ),
@@ -6669,7 +6675,7 @@ export class ReportsService {
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-          `
+        `
         SELECT
           ax.business_risk,
           ax.control_risk,
@@ -6686,8 +6692,8 @@ export class ReportsService {
           AND ax.assesment_id = ANY($2::int[])
           AND ax.deleted_at IS NULL
         `,
-          [answerIds, assessmentIds],
-        )
+        [answerIds, assessmentIds],
+      )
       : { rows: [] };
 
     answersResult.rows.forEach((row: any) => {
@@ -6808,8 +6814,8 @@ export class ReportsService {
         percent_to_total: this.formatDecimal(
           totalObtainedScoreWeighted > 0
             ? (Number(row.__obtained_weighted_value || 0) /
-                totalObtainedScoreWeighted) *
-                100
+              totalObtainedScoreWeighted) *
+            100
             : 0,
           2,
         ),
@@ -8241,10 +8247,10 @@ export class ReportsService {
       compliance_due_date: row.compliance_due_date,
       compliance_status_label: auditCompleted
         ? this.complianceStatusLabel(
-            auditStatusId,
-            isBlocked,
-            complianceExpired,
-          )
+          auditStatusId,
+          isBlocked,
+          complianceExpired,
+        )
         : '-',
       compliance_expired: complianceExpired,
       is_limit_blocked: isBlocked ? 1 : 0,
@@ -8623,9 +8629,9 @@ export class ReportsService {
         ),
         __vouching_rows: this.isVouchingTransactionRow(base)
           ? this.formatVouchingRows(
-              annexureRows,
-              base.annexure_columns || [],
-            )
+            annexureRows,
+            base.annexure_columns || [],
+          )
           : [],
       };
     });
@@ -9358,7 +9364,7 @@ export class ReportsService {
         `SELECT audit_unit_ids FROM region_master WHERE LOWER(TRIM(region_name)) = LOWER(TRIM($1)) AND deleted_at IS NULL`,
         [regionName]
       );
-      const assignedIds = assignedUnitsResult.rows.flatMap((row: any) => 
+      const assignedIds = assignedUnitsResult.rows.flatMap((row: any) =>
         String(row.audit_unit_ids || '')
           .split(',')
           .map((s) => Number(s.trim()))
@@ -9412,7 +9418,7 @@ export class ReportsService {
       const unitIds = auditUnits.map((u: any) => u.id);
       const assessmentsResult = isAllYears
         ? await this.db.query(
-            `
+          `
             SELECT
               id,
               year_id,
@@ -9428,10 +9434,10 @@ export class ReportsService {
             WHERE deleted_at IS NULL
               AND audit_unit_id = ANY($1::int[])
             `,
-            [unitIds],
-          )
+          [unitIds],
+        )
         : await this.db.query(
-            `
+          `
             SELECT
               id,
               year_id,
@@ -9448,8 +9454,8 @@ export class ReportsService {
               AND year_id = $1
               AND audit_unit_id = ANY($2::int[])
             `,
-            [Number(financialYear), unitIds],
-          );
+          [Number(financialYear), unitIds],
+        );
 
       const assessments = assessmentsResult.rows;
       for (const assessment of assessments) {
