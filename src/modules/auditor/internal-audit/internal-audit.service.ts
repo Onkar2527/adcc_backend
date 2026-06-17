@@ -12649,6 +12649,43 @@ SELECT (
     if (
       !selectedControl
       &&
+      !freeFlow
+      &&
+      Number(unit.frequency || 0) === 12
+      &&
+      result.rows.length > 0
+    ) {
+
+      const sorted =
+        [...result.rows].sort(
+          (a, b) =>
+            a.start_month_year.localeCompare(b.start_month_year),
+        );
+
+      for (
+        const row
+        of sorted
+      ) {
+
+        const valid =
+          this.validControl(
+            row,
+            unit.section_type_id,
+          );
+
+        if (
+          valid
+        ) {
+
+          selectedControl = valid;
+          break;
+        }
+      }
+    }
+
+    if (
+      !selectedControl
+      &&
       freeFlow
       &&
       result.rows.length > 0
