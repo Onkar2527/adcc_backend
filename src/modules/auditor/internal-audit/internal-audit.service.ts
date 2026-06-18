@@ -2320,12 +2320,22 @@ export class InternalAuditService {
           d.account_holder_name,
           'Account assessment is not marked complete.' AS message
       FROM account_categories ac
-      INNER JOIN dump_deposits d
+      INNER JOIN scheme_master sm
           ON ac.linked_table_id = 1
-          AND d.branch_id = $3
+          AND sm.category_id = ac.category_id
+          AND sm.scheme_type_id = 1
+          AND sm.is_active = 1
+          AND sm.deleted_at IS NULL
+      INNER JOIN dump_deposits d
+          ON d.branch_id = $3
+          AND d.scheme_id = sm.id
+          AND d.account_opening_date BETWEEN $5 AND $6
           AND d.sampling_filter = 1
           AND d.deleted_at IS NULL
           AND COALESCE(d.assesment_period_id, 0) <> $1
+          AND d.scheme_id::text = ANY(
+              string_to_array($4, ',')
+          )
       UNION ALL
       SELECT
           ac.category_id,
@@ -2336,12 +2346,25 @@ export class InternalAuditService {
           a.account_holder_name,
           'Account assessment is not marked complete.' AS message
       FROM account_categories ac
-      INNER JOIN dump_advances a
+      INNER JOIN scheme_master sm
           ON ac.linked_table_id = 2
-          AND a.branch_id = $3
+          AND sm.category_id = ac.category_id
+          AND sm.scheme_type_id = 2
+          AND sm.is_active = 1
+          AND sm.deleted_at IS NULL
+      INNER JOIN dump_advances a
+          ON a.branch_id = $3
+          AND a.scheme_id = sm.id
+          AND (
+              a.account_opening_date BETWEEN $5 AND $6
+              OR a.renewal_date BETWEEN $5 AND $6
+          )
           AND a.sampling_filter = 1
           AND a.deleted_at IS NULL
           AND COALESCE(a.assesment_period_id, 0) <> $1
+          AND a.scheme_id::text = ANY(
+              string_to_array($7, ',')
+          )
       ORDER BY
           category_id,
           dump_id;
@@ -2350,6 +2373,10 @@ export class InternalAuditService {
           assessmentId,
           overview.cat_ids || '',
           Number(overview.audit_unit_id || 0),
+          String(overview.deposits_scheme_ids || ''),
+          overview.assesment_period_from,
+          overview.assesment_period_to,
+          String(overview.advances_scheme_ids || ''),
         ],
       );
 
