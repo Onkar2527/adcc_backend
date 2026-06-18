@@ -6268,6 +6268,21 @@ ORDER BY id DESC;
         )
         : [];
 
+    let unsampledAccountCount = 0;
+    if (
+      [1, 2].includes(
+        Number(category.linked_table_id),
+      )
+    ) {
+      const candidates = await this.getSamplingCandidates(
+        category,
+        overview,
+      );
+      unsampledAccountCount = (candidates?.accounts || [])
+        .filter((acc: any) => Number(acc.sampling_filter) === 0)
+        .length;
+    }
+
     if (
       reAuditScope
       &&
@@ -6633,6 +6648,8 @@ ORDER BY id DESC;
       overview,
       category,
       accounts,
+      unsampled_account_count:
+        unsampledAccountCount,
       selected_account:
         accounts.find(
           (account: any) =>
@@ -11092,11 +11109,53 @@ ORDER BY id DESC;
       );
     }
 
+    // Identify previously sampled accounts
+    const currentlySampled = await this.getSampledAccounts(
+      detail.category,
+      detail.overview,
+    );
+
+    const newSelectedSet = new Set(selectedIds.map(Number));
+
+    // Find deselected accounts
+    const deselectedAccounts = currentlySampled.filter(
+      (acc: any) => !newSelectedSet.has(Number(acc.id)),
+    );
+
+    // Validate deselected accounts are safe to remove
+    for (const acc of deselectedAccounts) {
+      if (Number(acc.assesment_period_id || 0)) {
+        throw new BadRequestException(
+          `Completed account ${acc.account_no} cannot be removed from sampling.`,
+        );
+      }
+
+      const answered = await this.db.findOne(
+        `
+        SELECT id
+        FROM answers_data
+        WHERE assesment_id = $1
+            AND category_id = $2
+            AND dump_id = $3
+            AND deleted_at IS NULL
+        LIMIT 1;
+        `,
+        [assessmentId, categoryId, Number(acc.id)],
+      );
+
+      if (answered?.id) {
+        throw new BadRequestException(
+          `Sampled account ${acc.account_no} already has audit answers and cannot be removed.`,
+        );
+      }
+    }
+
     const table =
       Number(detail.category.linked_table_id) === 1
         ? 'dump_deposits'
         : 'dump_advances';
 
+    // 1. Add new samples
     await this.db.query(
       `
       UPDATE ${table}
@@ -11105,10 +11164,23 @@ ORDER BY id DESC;
           AND COALESCE(sampling_filter, 0) = 0
           AND deleted_at IS NULL;
       `,
-      [
-        selectedIds,
-      ],
+      [selectedIds],
     );
+
+    // 2. Remove deselected samples
+    if (deselectedAccounts.length > 0) {
+      const deselectedIds = deselectedAccounts.map((acc: any) => Number(acc.id));
+      await this.db.query(
+        `
+        UPDATE ${table}
+        SET sampling_filter = 0
+        WHERE id = ANY($1::int[])
+            AND sampling_filter = 1
+            AND deleted_at IS NULL;
+        `,
+        [deselectedIds],
+      );
+    }
 
     return {
       success:
@@ -11316,13 +11388,14 @@ ORDER BY id DESC;
       overview.assesment_period_to,
       overview.audit_unit_id,
       String(schemeIds),
+      overview.id, // $7
     ];
 
     if (
       filterType === 1
     ) {
       filterClause =
-        ' AND d.account_no BETWEEN $7 AND $8';
+        ' AND d.account_no BETWEEN $8 AND $9';
       params.push(
         String(primaryValue).trim(),
         String(secondaryValue).trim(),
@@ -11356,7 +11429,20 @@ ORDER BY id DESC;
             ${renewalColumn},
             ${amountColumn} AS ${amountAlias},
             sm.name AS scheme_name,
-            sm.scheme_code
+            sm.scheme_code,
+            COALESCE(d.sampling_filter, 0) AS sampling_filter,
+            CASE
+                WHEN d.assesment_period_id = $7 THEN true
+                ELSE false
+            END AS is_completed,
+            EXISTS (
+                SELECT 1
+                FROM answers_data ad
+                WHERE ad.assesment_id = $7
+                    AND ad.category_id = $2
+                    AND ad.dump_id = d.id
+                    AND ad.deleted_at IS NULL
+            ) AS has_answers
         FROM ${table} d
         INNER JOIN scheme_master sm
             ON sm.id = d.scheme_id
@@ -11369,7 +11455,7 @@ ORDER BY id DESC;
                 string_to_array($6, ',')
             )
             AND ${periodCondition}
-            AND COALESCE(d.sampling_filter, 0) = 0
+            AND (COALESCE(d.sampling_filter, 0) = 0 OR d.sampling_filter = 1)
             AND d.deleted_at IS NULL
             ${filterClause}
         ORDER BY
