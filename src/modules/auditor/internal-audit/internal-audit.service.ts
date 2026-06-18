@@ -4810,26 +4810,7 @@ export class InternalAuditService {
               AND ad.deleted_at IS NULL
           WHERE aam.audit_status_id IN (1, 3)
               AND aam.deleted_at IS NULL
-              AND (
-                au.branch_head_id = $1
-                OR EXISTS (
-                SELECT 1
-                FROM employee_master em
-                WHERE em.id = $1
-                    AND em.deleted_at IS NULL
-                    AND em.audit_unit_authority IS NOT NULL
-                    AND EXISTS (
-                        SELECT 1
-                        FROM unnest(
-                            string_to_array(
-                                COALESCE(em.audit_unit_authority, ''),
-                                ','
-                            )
-                        ) unit_id
-                        WHERE trim(unit_id) = aam.audit_unit_id::text
-                    )
-                )
-            )
+              AND aam.branch_head_id = $1
           GROUP BY
               aam.id,
               au.audit_unit_code,
@@ -4944,26 +4925,7 @@ export class InternalAuditService {
             AND aa.deleted_at IS NULL
         WHERE aam.audit_status_id IN (4, 6)
             AND aam.deleted_at IS NULL
-            AND (
-              au.branch_head_id = $1
-              OR EXISTS (
-              SELECT 1
-              FROM employee_master em
-              WHERE em.id = $1
-                  AND em.deleted_at IS NULL
-                  AND em.audit_unit_authority IS NOT NULL
-                  AND EXISTS (
-                      SELECT 1
-                      FROM unnest(
-                          string_to_array(
-                              COALESCE(em.audit_unit_authority, ''),
-                              ','
-                          )
-                      ) unit_id
-                      WHERE trim(unit_id) = aam.audit_unit_id::text
-                  )
-              )
-          )
+            AND aam.branch_head_id = $1
         GROUP BY
             aam.id,
             au.audit_unit_code,
@@ -4998,21 +4960,7 @@ export class InternalAuditService {
           AND au.deleted_at IS NULL
       WHERE aam.id = $1
           AND aam.deleted_at IS NULL
-          AND (
-              au.branch_head_id = $2
-              OR EXISTS (
-                  SELECT 1
-                  FROM employee_master em
-                  WHERE em.id = $2
-                      AND em.deleted_at IS NULL
-                      AND em.audit_unit_authority IS NOT NULL
-                      AND EXISTS (
-                          SELECT 1
-                          FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
-                          WHERE trim(unit_id) = aam.audit_unit_id::text
-                      )
-              )
-          )
+          AND aam.branch_head_id = $2
       LIMIT 1;
       `,
         [
