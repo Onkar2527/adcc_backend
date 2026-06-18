@@ -12,6 +12,15 @@ type ReportStatusOption = {
 
 @Injectable()
 export class ReportsService {
+
+  // Options
+
+  private readonly auditTypeOptions: ReportStatusOption[] = [
+    { value: 'all', label: 'All Audit Types' },
+    { value: '1', label: 'Internal Audit' },
+    { value: '2', label: 'Special Audit' },
+  ];
+
   private readonly auditStatusOptions: ReportStatusOption[] = [
     { value: 'all', label: 'All Audit' },
     { value: '1', label: 'Pending' },
@@ -37,7 +46,29 @@ export class ReportsService {
     { value: '4', label: 'No Risk' },
   ];
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly db: DatabaseService) { }
+
+  // Special Audit Filter
+  private normalizeAuditType(query: any) {
+    const value = String(query?.audit_type_id || 'all').trim();
+    return ['1', '2'].includes(value) ? Number(value) : null;
+  }
+
+  private applyAssessmentAuditTypeFilter(
+    where: string[],
+    params: any[],
+    query: any,
+    field: string,
+  ) {
+    const auditTypeId = this.normalizeAuditType(query);
+
+    if (auditTypeId) {
+      params.push(auditTypeId);
+      where.push(`COALESCE(${field}, 1) = $${params.length}`);
+    }
+  }
+
+  // Report Definitions
 
   async getReportDefinition(reportSlug: string, isFreeFlow = false) {
     if (reportSlug === 'audit-status-report') {
@@ -46,6 +77,10 @@ export class ReportsService {
 
     if (reportSlug === 'carry-forward-report') {
       return this.getCarryForwardDefinition();
+    }
+
+    if (reportSlug === 'partially-pass-report') {
+      return this.getPartiallyPassDefinition();
     }
 
     if (reportSlug === 'audit-status-expired-report') {
@@ -285,14 +320,12 @@ export class ReportsService {
       ],
       columns: [
         { key: 'sr_no', label: 'Sr. No.', width: '5%', align: 'center' },
-        { key: 'audit_unit_name', label: 'Audit Unit', width: '12%' },
-        { key: 'source_assessment_period', label: 'Source Assessment', width: '12%' },
-        { key: 'target_assessment_period', label: 'Target Assessment', width: '12%' },
-        { key: 'audit_path', label: 'Audit Path', width: '15%' },
-        { key: 'question_account', label: 'Question / Account', width: '17%' },
-        { key: 'previous_observation', label: 'Previous Observation', width: '17%' },
-        { key: 'transfer_date', label: 'Transfer Date', width: '6%', type: 'date' },
-        { key: 'carry_forward_status', label: 'Status', width: '8%', type: 'status' },
+        { key: 'question', label: 'Question', width: '27%' },
+        { key: 'answer_given', label: 'Audit Point', width: '11%' },
+        { key: 'audit_comment', label: 'Audit Comment', width: '19%' },
+        { key: 'manager_response', label: 'Manager Response', width: '16%' },
+        { key: 'reviewer_comment', label: 'Reviewer Comment', width: '16%' },
+        { key: 'carry_forward_status', label: 'Status', width: '11%', type: 'status' },
       ],
       summaryCards: [
         { key: 'total', label: 'Total Points' },
@@ -300,6 +333,68 @@ export class ReportsService {
         { key: 'pending', label: 'Pending Transfer' },
         { key: 'accountPoints', label: 'Account Points' },
         { key: 'annexurePoints', label: 'Annexure Points' },
+      ],
+    };
+  }
+
+  private async getPartiallyPassDefinition() {
+    const lookups = await this.getAuditStatusLookups();
+
+    return {
+      slug: 'partially-pass-report',
+      title: 'Partially Pass Report',
+      category: 'Audit Reports',
+      page: 'A4L',
+      fileName: 'partially-pass-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        audit_unit_id: 'all_branches',
+        financial_year: 'all',
+        partial_status: 'all',
+      },
+      filters: [
+        {
+          key: 'audit_unit_id',
+          label: 'Audit Unit',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          options: lookups.years,
+        },
+        {
+          key: 'partial_status',
+          label: 'Partially Pass Status',
+          type: 'select',
+          options: [
+            { value: 'all', label: 'All Points' },
+            { value: 'manager_pending', label: 'Pending with Manager' },
+            { value: 'reviewer_pending', label: 'Pending with Reviewer' },
+            { value: 'settled', label: 'Settled' },
+          ],
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No.', width: '5%', align: 'center' },
+        { key: 'question', label: 'Question', width: '27%' },
+        { key: 'answer_given', label: 'Audit Point', width: '11%' },
+        { key: 'audit_comment', label: 'Audit Comment', width: '19%' },
+        { key: 'manager_response', label: 'Manager Response', width: '16%' },
+        { key: 'reviewer_comment', label: 'Reviewer Comment', width: '16%' },
+        { key: 'partial_pass_status', label: 'Status', width: '11%', type: 'status' },
+      ],
+      summaryCards: [
+        { key: 'total', label: 'Total Points' },
+        { key: 'managerPending', label: 'Pending with Manager' },
+        { key: 'reviewerPending', label: 'Pending with Reviewer' },
+        { key: 'settled', label: 'Settled' },
       ],
     };
   }
@@ -2007,6 +2102,10 @@ export class ReportsService {
       return this.getCarryForwardReport(query);
     }
 
+    if (reportSlug === 'partially-pass-report') {
+      return this.getPartiallyPassReport(query);
+    }
+
     if (reportSlug === 'audit-complete-report') {
       return this.getAuditCompleteReport(query);
     }
@@ -2161,6 +2260,7 @@ export class ReportsService {
       this.db.query(`
         SELECT
           asm.id,
+          COALESCE(asm.audit_type_id, 1) AS audit_type_id,
           asm.year_id,
           asm.audit_unit_id,
           asm.assesment_period_from,
@@ -2205,6 +2305,7 @@ export class ReportsService {
           value: String(row.id),
           label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
           audit_unit_id: row.audit_unit_id,
+          audit_type_id: String(row.audit_type_id || '1'),
           year_id: String(row.year_id || ''),
         })),
       ],
@@ -2238,6 +2339,7 @@ export class ReportsService {
       this.db.query(`
         SELECT
           asm.id,
+          COALESCE(asm.audit_type_id, 1) AS audit_type_id,
           asm.year_id,
           asm.audit_unit_id,
           asm.assesment_period_from,
@@ -2282,6 +2384,7 @@ export class ReportsService {
           value: String(row.id),
           label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
           audit_unit_id: row.audit_unit_id,
+          audit_type_id: String(row.audit_type_id || '1'),
           year_id: String(row.year_id || ''),
         })),
       ],
@@ -2315,6 +2418,7 @@ export class ReportsService {
       this.db.query(`
         SELECT
           asm.id,
+          COALESCE(asm.audit_type_id, 1) AS audit_type_id,
           asm.year_id,
           asm.audit_unit_id,
           asm.assesment_period_from,
@@ -2349,6 +2453,7 @@ export class ReportsService {
           value: String(row.id),
           label: `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)} (Frequency: ${row.frequency || '-'} Months)`,
           audit_unit_id: row.audit_unit_id,
+          audit_type_id: String(row.audit_type_id || '1'),
           year_id: String(row.year_id || ''),
         })),
       ],
@@ -2583,6 +2688,8 @@ export class ReportsService {
       'qm.deleted_at IS NULL',
     ];
 
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'aam.audit_type_id');
+
     if (riskCategoryIds.length) {
       params.push(riskCategoryIds);
       where.push(`qm.risk_category_id = ANY($${params.length}::int[])`);
@@ -2735,6 +2842,7 @@ export class ReportsService {
       filters: {
         reportAuditUnit: String(auditUnitId),
         reportAuditAssesment: String(assessmentId),
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         risk_category_arr: riskCategoryIds,
         business_risk_arr: businessRiskIds,
         control_risk_arr: controlRiskIds,
@@ -2787,6 +2895,8 @@ export class ReportsService {
       'qm.deleted_at IS NULL',
       'ad.is_compliance = 1',
     ];
+
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'aam.audit_type_id');
 
     if (riskCategoryIds.length) {
       params.push(riskCategoryIds);
@@ -2940,6 +3050,7 @@ export class ReportsService {
       filters: {
         reportAuditUnit: String(auditUnitId),
         reportAuditAssesment: String(assessmentId),
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         risk_category_arr: riskCategoryIds,
         business_risk_arr: businessRiskIds,
         control_risk_arr: controlRiskIds,
@@ -2988,6 +3099,8 @@ export class ReportsService {
       'qm.deleted_at IS NULL',
       'ad.is_compliance = 1',
     ];
+
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'aam.audit_type_id');
 
     if (riskCategoryIds.length) {
       params.push(riskCategoryIds);
@@ -3143,6 +3256,7 @@ export class ReportsService {
       filters: {
         reportAuditUnit: String(auditUnitId),
         reportAuditAssesment: String(assessmentId),
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         risk_category_arr: riskCategoryIds,
         business_risk_arr: businessRiskIds,
         control_risk_arr: controlRiskIds,
@@ -3411,8 +3525,8 @@ export class ReportsService {
       assessmentIds.length === 1
         ? assessmentHeaderById.get(assessmentIds[0])
         : {
-            assessmentPeriod: `${startDate || this.dateOnly(assessments[0]?.assesment_period_from)} to ${endDate || this.dateOnly(assessments[assessments.length - 1]?.assesment_period_to)}`,
-          };
+          assessmentPeriod: `${startDate || this.dateOnly(assessments[0]?.assesment_period_from)} to ${endDate || this.dateOnly(assessments[assessments.length - 1]?.assesment_period_to)}`,
+        };
 
     return {
       filters: {
@@ -4183,7 +4297,7 @@ export class ReportsService {
 
     const annexuresResult = annexureAnswerIds.length
       ? await this.db.query(
-          `
+        `
         SELECT
           ax.answer_id,
           ax.business_risk,
@@ -4208,8 +4322,8 @@ export class ReportsService {
           )
           AND ax.deleted_at IS NULL
         `,
-          [annexureAnswerIds, assessmentIds],
-        )
+        [annexureAnswerIds, assessmentIds],
+      )
       : { rows: [] };
 
     const assessmentStats = new Map<
@@ -4370,15 +4484,15 @@ export class ReportsService {
 
     const ratingsResult = ratingYearId
       ? await this.db.query(
-          `
+        `
         SELECT audit_unit_id, risk_type_id, range_from, range_to
         FROM risk_branch_rating
         WHERE year_id = $1
           AND audit_type_id = 1
           AND deleted_at IS NULL
         `,
-          [ratingYearId],
-        )
+        [ratingYearId],
+      )
       : { rows: [] };
 
     const ratingMap = new Map<number, any[]>();
@@ -5022,7 +5136,7 @@ export class ReportsService {
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-          `
+        `
           SELECT
             ax.business_risk,
             ax.control_risk,
@@ -5034,8 +5148,8 @@ export class ReportsService {
             AND ax.assesment_id = ANY($2::int[])
             AND ax.deleted_at IS NULL
           `,
-          [answerIds, assessmentIds],
-        )
+        [answerIds, assessmentIds],
+      )
       : { rows: [] };
 
     // Group answers and annexures by assessment
@@ -5512,15 +5626,15 @@ export class ReportsService {
     );
     const riskWeightsResult = yearIds.length
       ? await this.db.query(
-          `
+        `
         SELECT year_id, risk_category_id, risk_weight
         FROM risk_category_weights
         WHERE year_id = ANY($1::int[])
           AND is_active = 1
           AND deleted_at IS NULL
         `,
-          [yearIds],
-        )
+        [yearIds],
+      )
       : { rows: [] };
 
     const riskWeightMap = new Map<string, number>();
@@ -5533,15 +5647,15 @@ export class ReportsService {
 
     const ratingsResult = yearIds.length
       ? await this.db.query(
-          `
+        `
         SELECT audit_unit_id, year_id, risk_type_id, range_from, range_to
         FROM risk_branch_rating
         WHERE year_id = ANY($1::int[])
           AND audit_type_id = 1
           AND deleted_at IS NULL
         `,
-          [yearIds],
-        )
+        [yearIds],
+      )
       : { rows: [] };
 
     const ratingsMap = new Map<string, any[]>();
@@ -5581,7 +5695,7 @@ export class ReportsService {
         assessmentFrom >= period1.startDate && assessmentTo <= period1.endDate
           ? 'period1'
           : assessmentFrom >= period2.startDate &&
-              assessmentTo <= period2.endDate
+            assessmentTo <= period2.endDate
             ? 'period2'
             : '';
 
@@ -6075,7 +6189,7 @@ export class ReportsService {
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-          `
+        `
         SELECT
           ax.business_risk,
           ax.control_risk,
@@ -6085,8 +6199,8 @@ export class ReportsService {
           AND ax.assesment_id = ANY($2::int[])
           AND ax.deleted_at IS NULL
         `,
-          [answerIds, assessmentIds],
-        )
+        [answerIds, assessmentIds],
+      )
       : { rows: [] };
 
     answersResult.rows.forEach((row: any) => {
@@ -6182,8 +6296,8 @@ export class ReportsService {
         percent_to_total: this.formatDecimal(
           totalObtainedScoreWeighted > 0
             ? (Number(row.__obtained_weighted_value || 0) /
-                totalObtainedScoreWeighted) *
-                100
+              totalObtainedScoreWeighted) *
+            100
             : 0,
           2,
         ),
@@ -6561,7 +6675,7 @@ export class ReportsService {
     const answerIds = answersResult.rows.map((row: any) => Number(row.id));
     const annexuresResult = answerIds.length
       ? await this.db.query(
-          `
+        `
         SELECT
           ax.business_risk,
           ax.control_risk,
@@ -6578,8 +6692,8 @@ export class ReportsService {
           AND ax.assesment_id = ANY($2::int[])
           AND ax.deleted_at IS NULL
         `,
-          [answerIds, assessmentIds],
-        )
+        [answerIds, assessmentIds],
+      )
       : { rows: [] };
 
     answersResult.rows.forEach((row: any) => {
@@ -6700,8 +6814,8 @@ export class ReportsService {
         percent_to_total: this.formatDecimal(
           totalObtainedScoreWeighted > 0
             ? (Number(row.__obtained_weighted_value || 0) /
-                totalObtainedScoreWeighted) *
-                100
+              totalObtainedScoreWeighted) *
+            100
             : 0,
           2,
         ),
@@ -7235,6 +7349,8 @@ export class ReportsService {
       where.push(`asm.year_id = $${params.length}`);
     }
 
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'asm.audit_type_id');
+
     params.push(today);
 
     if (auditStatus === '11') {
@@ -7290,6 +7406,7 @@ export class ReportsService {
       filters: {
         audit_unit_id: auditUnitId,
         financial_year: financialYear,
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         audit_status: auditStatus,
       },
       total: rows.length,
@@ -7306,6 +7423,7 @@ export class ReportsService {
   async getAssessmentTimelineReport(query: any) {
     const auditUnitId = Number(query.reportAuditUnit || 0);
     const assessmentId = Number(query.reportAuditAssesment || 0);
+    const auditTypeId = this.normalizeAuditType(query);
 
     if (!auditUnitId) {
       throw new BadRequestException('Audit unit is required');
@@ -7333,11 +7451,12 @@ export class ReportsService {
         ON emp.id = aut.reviewer_emp_id
       WHERE aut.assesment_id = $1
         AND asm.audit_unit_id = $2
+        AND ($3::int IS NULL OR COALESCE(asm.audit_type_id, 1) = $3)
         AND aut.deleted_at IS NULL
         AND asm.deleted_at IS NULL
       ORDER BY aut.type_id::int ASC, aut.created_at ASC, aut.id ASC
       `,
-      [assessmentId, auditUnitId],
+      [assessmentId, auditUnitId, auditTypeId],
     );
 
     const rows = result.rows.map((row: any, index: number) => ({
@@ -7359,6 +7478,7 @@ export class ReportsService {
       filters: {
         reportAuditUnit: String(auditUnitId),
         reportAuditAssesment: String(assessmentId),
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
       },
       total: rows.length,
       generatedAt: new Date().toISOString(),
@@ -7466,6 +7586,13 @@ export class ReportsService {
       where.push(`source_assessment.year_id = $${params.length}`);
     }
 
+    this.applyAssessmentAuditTypeFilter(
+      where,
+      params,
+      query,
+      'source_assessment.audit_type_id',
+    );
+
     if (targetAssessmentId > 0) {
       params.push(targetAssessmentId);
       where.push(`points.target_assessment_id = $${params.length}`);
@@ -7506,18 +7633,32 @@ export class ReportsService {
               ad.dump_id,
               ad.answer_given AS previous_answer,
               ad.audit_comment AS previous_audit_comment,
+              ad.business_risk,
+              ad.control_risk,
               ad.audit_commpliance AS manager_response,
               ad.compliance_reviewer_comment AS reviewer_comment,
               mm.name AS menu_name,
               cm.name AS category_name,
               cm.linked_table_id,
               qhm.name AS header_name,
-              qm.question
+              qm.question,
+              qm.option_id,
+              qm.annexure_id AS question_annexure_id,
+              ac.columns_json AS annexure_columns,
+              rc.risk_category
           FROM answers_data ad
           LEFT JOIN menu_master mm ON mm.id = ad.menu_id
           LEFT JOIN category_master cm ON cm.id = ad.category_id
           LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
           LEFT JOIN question_master qm ON qm.id = ad.question_id
+          LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
+          LEFT JOIN (
+              SELECT columns_source.annexure_id,
+                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
+              FROM annexure_columns columns_source
+              WHERE columns_source.deleted_at IS NULL
+              GROUP BY columns_source.annexure_id
+          ) ac ON ac.annexure_id = qm.annexure_id
           WHERE ad.is_compliance = 1
               AND ad.compliance_status_id = 5
               AND ad.deleted_at IS NULL
@@ -7542,13 +7683,19 @@ export class ReportsService {
               ad.dump_id,
               aa.answer_given AS previous_answer,
               aa.audit_comment AS previous_audit_comment,
+              aa.business_risk,
+              aa.control_risk,
               aa.audit_commpliance AS manager_response,
               aa.compliance_reviewer_comment AS reviewer_comment,
               mm.name AS menu_name,
               cm.name AS category_name,
               cm.linked_table_id,
               qhm.name AS header_name,
-              qm.question
+              qm.question,
+              qm.option_id,
+              qm.annexure_id AS question_annexure_id,
+              ac.columns_json AS annexure_columns,
+              rc.risk_category
           FROM answers_data_annexure aa
           INNER JOIN answers_data ad
               ON ad.id = aa.answer_id
@@ -7559,6 +7706,14 @@ export class ReportsService {
           LEFT JOIN category_master cm ON cm.id = ad.category_id
           LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
           LEFT JOIN question_master qm ON qm.id = ad.question_id
+          LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
+          LEFT JOIN (
+              SELECT columns_source.annexure_id,
+                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
+              FROM annexure_columns columns_source
+              WHERE columns_source.deleted_at IS NULL
+              GROUP BY columns_source.annexure_id
+          ) ac ON ac.annexure_id = qm.annexure_id
           WHERE aa.compliance_status_id = 5
               AND aa.deleted_at IS NULL
       )
@@ -7575,7 +7730,22 @@ export class ReportsService {
           audit_unit.audit_unit_code,
           audit_unit.name AS audit_unit_name,
           COALESCE(deposit.account_no, advance.account_no) AS account_no,
-          COALESCE(deposit.account_holder_name, advance.account_holder_name) AS account_holder_name
+          COALESCE(deposit.account_holder_name, advance.account_holder_name) AS account_holder_name,
+          account_unit.name AS account_branch_name,
+          account_unit.audit_unit_code AS account_branch_code,
+          scheme.name AS scheme_name,
+          scheme.scheme_code,
+          COALESCE(deposit.ucic, advance.ucic) AS ucic,
+          COALESCE(deposit.customer_type, advance.customer_type) AS customer_type,
+          COALESCE(deposit.account_opening_date, advance.account_opening_date) AS account_opening_date,
+          advance.renewal_date,
+          COALESCE(deposit.principal_amount, advance.sanction_amount) AS account_amount,
+          COALESCE(deposit.intrest_rate, advance.intrest_rate) AS interest_rate,
+          COALESCE(deposit.balance, advance.outstanding_balance) AS outstanding_balance,
+          COALESCE(deposit.balance_date, advance.balance_date) AS balance_date,
+          advance.due_date,
+          advance.npa_status,
+          COALESCE(deposit.account_status, advance.account_status) AS account_status
       FROM carry_forward_points points
       INNER JOIN audit_assesment_master source_assessment
           ON source_assessment.id = points.source_assessment_id
@@ -7592,6 +7762,12 @@ export class ReportsService {
           ON points.linked_table_id = 2
           AND advance.id = points.dump_id
           AND advance.deleted_at IS NULL
+      LEFT JOIN audit_unit_master account_unit
+          ON account_unit.id = COALESCE(deposit.branch_id, advance.branch_id)
+          AND account_unit.deleted_at IS NULL
+      LEFT JOIN scheme_master scheme
+          ON scheme.id = COALESCE(deposit.scheme_id, advance.scheme_id)
+          AND scheme.deleted_at IS NULL
       WHERE ${where.join(' AND ')}
       ORDER BY
           audit_unit.audit_unit_code,
@@ -7605,61 +7781,280 @@ export class ReportsService {
       params,
     );
 
-    const rows = result.rows.map((row: any, index: number) => {
-      const sourcePeriod = `${this.dateOnly(row.source_period_from)} to ${this.dateOnly(row.source_period_to)}`;
-      const targetPeriod = row.target_assessment_id
-        ? `${this.dateOnly(row.target_period_from)} to ${this.dateOnly(row.target_period_to)}`
-        : '-';
-      const auditPath = [row.menu_name, row.category_name, row.header_name]
-        .filter(Boolean)
-        .join(' / ');
-      const account = row.account_no
-        ? `${row.account_no}${row.account_holder_name ? ` - ${row.account_holder_name}` : ''}`
-        : '';
-      const questionAccount = [row.question || '-', account]
-        .filter(Boolean)
-        .join(' | ');
-      const previousObservation = row.previous_audit_comment
-        || row.manager_response
-        || row.previous_answer
-        || '-';
-      const transferred = Number(row.target_assessment_id || 0) > 0;
-
-      return {
-        sr_no: index + 1,
-        audit_unit_name: this.auditUnitName(row),
-        source_assessment_period: `${sourcePeriod} (${row.source_frequency || '-'} Months)`,
-        target_assessment_period: transferred
-          ? `${targetPeriod} (${row.target_frequency || '-'} Months)`
-          : '-',
-        audit_path: auditPath || '-',
-        question_account: questionAccount,
-        previous_observation: previousObservation,
-        transfer_date: row.transfer_date,
-        carry_forward_status: transferred ? 'Transferred' : 'Pending Transfer',
-        point_type: row.point_type,
+    const questionRows = this.buildPointReportQuestionRows(
+      result.rows,
+      (row) => ({
+        carry_forward_status: Number(row.target_assessment_id || 0) > 0
+          ? 'Transferred'
+          : 'Pending Transfer',
         source_assessment_id: Number(row.source_assessment_id),
         target_assessment_id: Number(row.target_assessment_id || 0),
-      };
-    });
+      }),
+    );
+    const rows = this.buildAuditCompleteGroupedRows(questionRows);
 
     return {
       filters: {
         audit_unit_id: auditUnitId,
         financial_year: financialYear,
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         transfer_status: transferStatus,
         target_assessment_id: targetAssessmentId || '',
         source_assessment_id: sourceAssessmentId || '',
       },
-      total: rows.length,
+      total: questionRows.length,
       generatedAt: new Date().toISOString(),
       rows,
       summary: {
-        total: rows.length,
-        transferred: rows.filter((row: any) => row.target_assessment_id > 0).length,
-        pending: rows.filter((row: any) => row.target_assessment_id === 0).length,
-        accountPoints: rows.filter((row: any) => row.question_account.includes(' | ')).length,
-        annexurePoints: rows.filter((row: any) => row.point_type === 'annexure').length,
+        total: questionRows.length,
+        transferred: questionRows.filter((row: any) => row.target_assessment_id > 0).length,
+        pending: questionRows.filter((row: any) => row.target_assessment_id === 0).length,
+        accountPoints: questionRows.filter((row: any) => Boolean(row.__account_key)).length,
+        annexurePoints: result.rows.filter((row: any) => row.point_type === 'annexure').length,
+      },
+    };
+  }
+
+  async getPartiallyPassReport(query: any) {
+    const auditUnitId = String(query.audit_unit_id || '').trim();
+    const financialYear = String(query.financial_year || 'all').trim();
+    const partialStatus = String(query.partial_status || 'all').trim();
+    const sourceAssessmentId = Number(query.source_assessment_id || 0);
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    const where: string[] = [
+      'assessment.deleted_at IS NULL',
+      'audit_unit.deleted_at IS NULL',
+    ];
+    const params: any[] = [];
+
+    if (auditUnitId === 'all_branches') {
+      where.push('audit_unit.section_type_id = 1');
+    } else if (auditUnitId === 'all_head_of_dept') {
+      where.push('audit_unit.section_type_id > 1');
+    } else {
+      params.push(Number(auditUnitId));
+      where.push(`assessment.audit_unit_id = $${params.length}`);
+    }
+
+    if (financialYear !== 'all') {
+      params.push(Number(financialYear));
+      where.push(`assessment.year_id = $${params.length}`);
+    }
+
+    this.applyAssessmentAuditTypeFilter(
+      where,
+      params,
+      query,
+      'assessment.audit_type_id',
+    );
+
+    if (sourceAssessmentId > 0) {
+      params.push(sourceAssessmentId);
+      where.push(`points.assesment_id = $${params.length}`);
+    }
+
+    const statusByFilter: Record<string, number> = {
+      manager_pending: 7,
+      reviewer_pending: 8,
+      settled: 9,
+    };
+    if (statusByFilter[partialStatus]) {
+      params.push(statusByFilter[partialStatus]);
+      where.push(`points.compliance_status_id = $${params.length}`);
+    }
+
+    const authorityIds = String(query.audit_unit_authority || '')
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const userTypeId = Number(query.user_type_id || 0);
+
+    if ([2, 3, 4, 6].includes(userTypeId) && authorityIds.length) {
+      params.push(authorityIds);
+      where.push(`assessment.audit_unit_id = ANY($${params.length}::int[])`);
+    }
+
+    const result = await this.db.query(
+      `
+      WITH partial_points AS (
+          SELECT
+              ad.id AS answer_id,
+              0::bigint AS annexure_id,
+              ad.assesment_id,
+              'question'::text AS point_type,
+              ad.dump_id,
+              ad.answer_given AS previous_answer,
+              ad.audit_comment AS previous_audit_comment,
+              ad.business_risk,
+              ad.control_risk,
+              ad.compliance_status_id,
+              ad.compliance_reviewer_comment AS reviewer_comment,
+              ad.audit_commpliance AS manager_response,
+              mm.name AS menu_name,
+              cm.name AS category_name,
+              cm.linked_table_id,
+              qhm.name AS header_name,
+              qm.question,
+              qm.option_id,
+              qm.annexure_id AS question_annexure_id,
+              ac.columns_json AS annexure_columns,
+              rc.risk_category
+          FROM answers_data ad
+          LEFT JOIN menu_master mm ON mm.id = ad.menu_id
+          LEFT JOIN category_master cm ON cm.id = ad.category_id
+          LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
+          LEFT JOIN question_master qm ON qm.id = ad.question_id
+          LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
+          LEFT JOIN (
+              SELECT columns_source.annexure_id,
+                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
+              FROM annexure_columns columns_source
+              WHERE columns_source.deleted_at IS NULL
+              GROUP BY columns_source.annexure_id
+          ) ac ON ac.annexure_id = qm.annexure_id
+          WHERE ad.is_compliance = 1
+              AND ad.compliance_status_id IN (7, 8, 9)
+              AND ad.deleted_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM answers_data_annexure aa
+                  WHERE aa.answer_id = ad.id
+                      AND aa.assesment_id = ad.assesment_id
+                      AND aa.compliance_status_id IN (7, 8, 9)
+                      AND aa.deleted_at IS NULL
+              )
+
+          UNION ALL
+
+          SELECT
+              ad.id AS answer_id,
+              aa.id AS annexure_id,
+              aa.assesment_id,
+              'annexure'::text AS point_type,
+              ad.dump_id,
+              aa.answer_given AS previous_answer,
+              aa.audit_comment AS previous_audit_comment,
+              aa.business_risk,
+              aa.control_risk,
+              aa.compliance_status_id,
+              aa.compliance_reviewer_comment AS reviewer_comment,
+              aa.audit_commpliance AS manager_response,
+              mm.name AS menu_name,
+              cm.name AS category_name,
+              cm.linked_table_id,
+              qhm.name AS header_name,
+              qm.question,
+              qm.option_id,
+              qm.annexure_id AS question_annexure_id,
+              ac.columns_json AS annexure_columns,
+              rc.risk_category
+          FROM answers_data_annexure aa
+          INNER JOIN answers_data ad
+              ON ad.id = aa.answer_id
+              AND ad.assesment_id = aa.assesment_id
+              AND ad.is_compliance = 1
+              AND ad.deleted_at IS NULL
+          LEFT JOIN menu_master mm ON mm.id = ad.menu_id
+          LEFT JOIN category_master cm ON cm.id = ad.category_id
+          LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
+          LEFT JOIN question_master qm ON qm.id = ad.question_id
+          LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
+          LEFT JOIN (
+              SELECT columns_source.annexure_id,
+                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
+              FROM annexure_columns columns_source
+              WHERE columns_source.deleted_at IS NULL
+              GROUP BY columns_source.annexure_id
+          ) ac ON ac.annexure_id = qm.annexure_id
+          WHERE aa.compliance_status_id IN (7, 8, 9)
+              AND aa.deleted_at IS NULL
+      )
+      SELECT
+          points.*,
+          assessment.audit_unit_id,
+          assessment.assesment_period_from,
+          assessment.assesment_period_to,
+          assessment.frequency,
+          audit_unit.audit_unit_code,
+          audit_unit.name AS audit_unit_name,
+          COALESCE(deposit.account_no, advance.account_no) AS account_no,
+          COALESCE(deposit.account_holder_name, advance.account_holder_name) AS account_holder_name,
+          account_unit.name AS account_branch_name,
+          account_unit.audit_unit_code AS account_branch_code,
+          scheme.name AS scheme_name,
+          scheme.scheme_code,
+          COALESCE(deposit.ucic, advance.ucic) AS ucic,
+          COALESCE(deposit.customer_type, advance.customer_type) AS customer_type,
+          COALESCE(deposit.account_opening_date, advance.account_opening_date) AS account_opening_date,
+          advance.renewal_date,
+          COALESCE(deposit.principal_amount, advance.sanction_amount) AS account_amount,
+          COALESCE(deposit.intrest_rate, advance.intrest_rate) AS interest_rate,
+          COALESCE(deposit.balance, advance.outstanding_balance) AS outstanding_balance,
+          COALESCE(deposit.balance_date, advance.balance_date) AS balance_date,
+          advance.due_date,
+          advance.npa_status,
+          COALESCE(deposit.account_status, advance.account_status) AS account_status
+      FROM partial_points points
+      INNER JOIN audit_assesment_master assessment ON assessment.id = points.assesment_id
+      INNER JOIN audit_unit_master audit_unit ON audit_unit.id = assessment.audit_unit_id
+      LEFT JOIN dump_deposits deposit
+          ON points.linked_table_id = 1
+          AND deposit.id = points.dump_id
+          AND deposit.deleted_at IS NULL
+      LEFT JOIN dump_advances advance
+          ON points.linked_table_id = 2
+          AND advance.id = points.dump_id
+          AND advance.deleted_at IS NULL
+      LEFT JOIN audit_unit_master account_unit
+          ON account_unit.id = COALESCE(deposit.branch_id, advance.branch_id)
+          AND account_unit.deleted_at IS NULL
+      LEFT JOIN scheme_master scheme
+          ON scheme.id = COALESCE(deposit.scheme_id, advance.scheme_id)
+          AND scheme.deleted_at IS NULL
+      WHERE ${where.join(' AND ')}
+      ORDER BY audit_unit.audit_unit_code, assessment.assesment_period_from,
+          points.menu_name, points.category_name, points.header_name,
+          points.answer_id, points.annexure_id;
+      `,
+      params,
+    );
+
+    const questionRows = this.buildPointReportQuestionRows(
+      result.rows,
+      (row) => {
+        const status = Number(row.compliance_status_id || 0);
+        return {
+          partial_pass_status: status === 7
+            ? 'Pending with Manager'
+            : status === 8
+              ? 'Pending with Reviewer'
+              : 'Settled',
+          compliance_status_id: status,
+        };
+      },
+    );
+    const rows = this.buildAuditCompleteGroupedRows(questionRows);
+
+    return {
+      filters: {
+        audit_unit_id: auditUnitId,
+        financial_year: financialYear,
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
+        partial_status: partialStatus,
+        source_assessment_id: sourceAssessmentId || '',
+      },
+      total: questionRows.length,
+      generatedAt: new Date().toISOString(),
+      rows,
+      summary: {
+        total: questionRows.length,
+        managerPending: questionRows.filter((row: any) => row.compliance_status_id === 7).length,
+        reviewerPending: questionRows.filter((row: any) => row.compliance_status_id === 8).length,
+        settled: questionRows.filter((row: any) => row.compliance_status_id === 9).length,
       },
     };
   }
@@ -7693,6 +8088,8 @@ export class ReportsService {
       params.push(Number(financialYear));
       where.push(`asm.year_id = $${params.length}`);
     }
+
+    this.applyAssessmentAuditTypeFilter(where, params, query, 'asm.audit_type_id');
 
     this.applyAuditStatusFilter(where, auditStatus);
     this.applyComplianceStatusFilter(where, complianceStatus);
@@ -7743,6 +8140,7 @@ export class ReportsService {
       filters: {
         audit_unit_id: auditUnitId,
         financial_year: financialYear,
+        audit_type_id: String(query.audit_type_id || 'all').trim(),
         audit_status: auditStatus,
         comp_status: complianceStatus,
       },
@@ -7849,10 +8247,10 @@ export class ReportsService {
       compliance_due_date: row.compliance_due_date,
       compliance_status_label: auditCompleted
         ? this.complianceStatusLabel(
-            auditStatusId,
-            isBlocked,
-            complianceExpired,
-          )
+          auditStatusId,
+          isBlocked,
+          complianceExpired,
+        )
         : '-',
       compliance_expired: complianceExpired,
       is_limit_blocked: isBlocked ? 1 : 0,
@@ -8165,6 +8563,18 @@ export class ReportsService {
         sr_no: headerSerial,
       });
 
+      if (
+        (row.__annexure_rows || []).length
+        && !(row.__vouching_rows || []).length
+      ) {
+        rows.push({
+          __report_annexure: true,
+          __annexure_title:
+            row.__annexure_rows[0]?.title || 'Annexure Details',
+          __annexure_rows: row.__annexure_rows,
+        });
+      }
+
       if ((row.__vouching_rows || []).length) {
         rows.push({
           __report_vouching: true,
@@ -8175,6 +8585,56 @@ export class ReportsService {
     });
 
     return rows;
+  }
+
+  private buildPointReportQuestionRows(
+    rawRows: any[],
+    extraFields: (row: any) => Record<string, any>,
+  ) {
+    const grouped = new Map<number, any[]>();
+
+    rawRows.forEach((row) => {
+      const answerId = Number(row.answer_id || 0);
+      grouped.set(answerId, [...(grouped.get(answerId) || []), row]);
+    });
+
+    return Array.from(grouped.values()).map((points) => {
+      const base = points.find((point) => Number(point.annexure_id || 0) === 0)
+        || points[0];
+      const annexureRows = points
+        .filter((point) => Number(point.annexure_id || 0) > 0)
+        .map((point) => ({
+          ...point,
+          answer_given: point.previous_answer,
+          audit_commpliance: point.manager_response,
+        }));
+
+      return {
+        ...base,
+        ...extraFields(base),
+        sr_no: 0,
+        question: base.question || 'Assessment observation',
+        answer_given: annexureRows.length
+          ? 'As per annexure'
+          : base.previous_answer || '-',
+        audit_comment: base.previous_audit_comment || '-',
+        manager_response: base.manager_response || '-',
+        reviewer_comment: base.reviewer_comment || '-',
+        __account_key: this.accountDetailKey(base),
+        __account_details: this.accountDetailRows(base),
+        __is_vouching: this.isVouchingTransactionRow(base),
+        __annexure_rows: this.formatAnnexureRows(
+          annexureRows,
+          base.annexure_columns || [],
+        ),
+        __vouching_rows: this.isVouchingTransactionRow(base)
+          ? this.formatVouchingRows(
+            annexureRows,
+            base.annexure_columns || [],
+          )
+          : [],
+      };
+    });
   }
 
   private buildAuditCompleteGroupedRowsWithAssessments(questionRows: any[]) {
@@ -8904,7 +9364,7 @@ export class ReportsService {
         `SELECT audit_unit_ids FROM region_master WHERE LOWER(TRIM(region_name)) = LOWER(TRIM($1)) AND deleted_at IS NULL`,
         [regionName]
       );
-      const assignedIds = assignedUnitsResult.rows.flatMap((row: any) => 
+      const assignedIds = assignedUnitsResult.rows.flatMap((row: any) =>
         String(row.audit_unit_ids || '')
           .split(',')
           .map((s) => Number(s.trim()))
@@ -8958,7 +9418,7 @@ export class ReportsService {
       const unitIds = auditUnits.map((u: any) => u.id);
       const assessmentsResult = isAllYears
         ? await this.db.query(
-            `
+          `
             SELECT
               id,
               year_id,
@@ -8974,10 +9434,10 @@ export class ReportsService {
             WHERE deleted_at IS NULL
               AND audit_unit_id = ANY($1::int[])
             `,
-            [unitIds],
-          )
+          [unitIds],
+        )
         : await this.db.query(
-            `
+          `
             SELECT
               id,
               year_id,
@@ -8994,8 +9454,8 @@ export class ReportsService {
               AND year_id = $1
               AND audit_unit_id = ANY($2::int[])
             `,
-            [Number(financialYear), unitIds],
-          );
+          [Number(financialYear), unitIds],
+        );
 
       const assessments = assessmentsResult.rows;
       for (const assessment of assessments) {
