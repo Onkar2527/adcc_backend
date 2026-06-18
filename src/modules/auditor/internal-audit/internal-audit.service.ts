@@ -726,7 +726,7 @@ export class InternalAuditService {
         audit_unit_id: auditUnitId,
         frequency: freeFlow
           ? ((new Date(assessmentEndDate).getFullYear() - new Date(assessmentStartDate).getFullYear()) * 12 +
-             (new Date(assessmentEndDate).getMonth() - new Date(assessmentStartDate).getMonth()) + 1)
+            (new Date(assessmentEndDate).getMonth() - new Date(assessmentStartDate).getMonth()) + 1)
           : Number(unit.frequency || 1),
         audit_head_id: employeeId,
         branch_head_id: unit.branch_head_id,
@@ -1370,14 +1370,14 @@ export class InternalAuditService {
     const recipientIds = isReviewer
       ? [1, 3, 5]
       : isCompliance
-      ? [1, 2, 6]
-      : AUDITOR_REMARK_RECIPIENT_IDS;
+        ? [1, 2, 6]
+        : AUDITOR_REMARK_RECIPIENT_IDS;
 
     const incomingIds = isReviewer
       ? [2, 4, 6]
       : isCompliance
-      ? [3, 4, 5]
-      : AUDITOR_INCOMING_REMARK_IDS;
+        ? [3, 4, 5]
+        : AUDITOR_INCOMING_REMARK_IDS;
 
     const result =
       await this.db.query(
@@ -1486,8 +1486,8 @@ export class InternalAuditService {
     const recipientIds = isReviewer
       ? [1, 3, 5]
       : isCompliance
-      ? [1, 2, 6]
-      : AUDITOR_REMARK_RECIPIENT_IDS;
+        ? [1, 2, 6]
+        : AUDITOR_REMARK_RECIPIENT_IDS;
 
     const notiType =
       Number(payload?.noti_type || 0);
@@ -1572,8 +1572,8 @@ export class InternalAuditService {
     const incomingIds = isReviewer
       ? [2, 4, 6]
       : isCompliance
-      ? [3, 4, 5]
-      : AUDITOR_INCOMING_REMARK_IDS;
+        ? [3, 4, 5]
+        : AUDITOR_INCOMING_REMARK_IDS;
 
     const remark =
       await this.db.query(
@@ -2692,9 +2692,9 @@ export class InternalAuditService {
         liveManagerCompliance
           ? 'Audit assessment completed successfully.'
           :
-        Number(preview.overview.audit_status_id) === 3
-          ? 'Corrected audit points submitted back to Reviewer successfully.'
-          : 'Audit submitted to reviewer successfully.',
+          Number(preview.overview.audit_status_id) === 3
+            ? 'Corrected audit points submitted back to Reviewer successfully.'
+            : 'Audit submitted to reviewer successfully.',
       status_id:
         liveManagerCompliance ? 7 : 2,
       status:
@@ -3217,11 +3217,11 @@ export class InternalAuditService {
 
     return {
       overview:
-        {
-          ...overview,
-          live_manager_compliance:
-            liveManagerCompliance,
-        },
+      {
+        ...overview,
+        live_manager_compliance:
+          liveManagerCompliance,
+      },
       answers,
       counts:
         this.getReviewerComplianceCounts(
@@ -3520,16 +3520,16 @@ export class InternalAuditService {
               ) > 0
                 ? 3
                 : Number(
-                    remainingRejections.rows[0]?.partial_count || 0,
-                  ) > 0
+                  remainingRejections.rows[0]?.partial_count || 0,
+                ) > 0
                   ? 7
                   : Number(
-                      remainingRejections.rows[0]?.partial_response_count || 0,
-                    ) > 0
+                    remainingRejections.rows[0]?.partial_response_count || 0,
+                  ) > 0
                     ? 8
                     : Number(
-                        remainingRejections.rows[0]?.partial_settled_count || 0,
-                      ) > 0
+                      remainingRejections.rows[0]?.partial_settled_count || 0,
+                    ) > 0
                       ? 9
                       : 2;
 
@@ -5991,7 +5991,7 @@ ORDER BY id DESC;
           ? 'Corrected compliance response saved.'
           : liveManagerCompliance
             ? 'Compliance response saved for reviewer.'
-          : 'Compliance response saved.',
+            : 'Compliance response saved.',
     };
   }
 
@@ -6030,9 +6030,9 @@ ORDER BY id DESC;
             ? `${counts.pending} compliance response(s) are pending.`
             : liveManagerCompliance
               ? 'All live compliance responses are saved. Reviewer can review them now.'
-            : isReCompliance
-              ? 'All corrected compliance responses are saved. Assessment is ready to return to Reviewer.'
-              : 'All compliance responses are saved. Assessment is ready for reviewer compliance review.',
+              : isReCompliance
+                ? 'All corrected compliance responses are saved. Assessment is ready to return to Reviewer.'
+                : 'All compliance responses are saved. Assessment is ready for reviewer compliance review.',
     };
   }
 
@@ -9602,13 +9602,13 @@ ORDER BY id DESC;
       if (!timelineMap.has(key)) {
         timelineMap.set(key, []);
       }
-      
+
       const timelineItem = {
         ...row,
         evidences: [],
         compliance_evidences: [],
       };
-      
+
       timelineMap.get(key)?.push(timelineItem);
     }
 
@@ -12700,6 +12700,44 @@ SELECT (
       for (
         const row
         of sorted
+      ) {
+
+        const valid =
+          this.validControl(
+            row,
+            unit.section_type_id,
+          );
+
+        if (
+          valid
+        ) {
+
+          selectedControl = valid;
+          break;
+        }
+      }
+    }
+
+    if (
+      !selectedControl
+      &&
+      result.rows.length > 0
+    ) {
+
+      const multiAuditorRows =
+        result.rows
+          .filter(
+            (row) =>
+              Boolean(row?.is_multiple_auditors),
+          )
+          .sort(
+            (a, b) =>
+              a.start_month_year.localeCompare(b.start_month_year),
+          );
+
+      for (
+        const row
+        of multiAuditorRows
       ) {
 
         const valid =
