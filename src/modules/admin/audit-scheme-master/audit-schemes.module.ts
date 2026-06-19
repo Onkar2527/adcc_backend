@@ -5,5 +5,6 @@ import { AuditSchemeMasterService } from './audit-schemes.service';
 @Module({
   controllers: [AuditSchemeMasterController],
   providers: [AuditSchemeMasterService],
+  exports: [AuditSchemeMasterService],
 })
 export class AuditSchemesModule { }

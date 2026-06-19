@@ -33,6 +33,7 @@ import { AuditCalendarModule } from './modules/admin/audit-calendar/audit-calend
 import { RegionMasterModule } from './modules/admin/region-master/region-master.module';
 import { SpecialAuditModule } from './modules/admin/special-audit/special-audit.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
+import { MasterBulkUploadModule } from './modules/admin/master-bulk-upload/master-bulk-upload.module';
 
 
 @Module({
@@ -69,9 +70,11 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
     AuditCalendarModule,
     RegionMasterModule,
     SpecialAuditModule,
-    AuditLogsModule
+    AuditLogsModule,
+    MasterBulkUploadModule
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule { }
+

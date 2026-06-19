@@ -5822,7 +5822,7 @@ ORDER BY id DESC;
     );
 
     try {
-      await this.db.query(
+      const result = await this.db.query(
         `
         INSERT INTO evidence_master (
             answer_id,
@@ -5839,7 +5839,8 @@ ORDER BY id DESC;
             created_at,
             updated_at
         )
-        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
+        VALUES ($1, $2, $3, 2, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW())
+        RETURNING id, answer_id, annex_id, evi_type, file_name, file_type, description, created_at;
         `,
         [
           target.answerId,
@@ -5851,6 +5852,15 @@ ORDER BY id DESC;
           employeeId,
         ],
       );
+
+      return {
+        success:
+          true,
+        message:
+          'Compliance evidence uploaded successfully.',
+        evidence:
+          result.rows[0],
+      };
     } catch (
     error
     ) {
@@ -5862,13 +5872,6 @@ ORDER BY id DESC;
 
       throw error;
     }
-
-    return {
-      success:
-        true,
-      message:
-        'Compliance evidence uploaded successfully.',
-    };
   }
 
   async saveComplianceResponse(
@@ -7884,7 +7887,7 @@ ORDER BY id DESC;
     );
 
     try {
-      await this.db.query(
+      const result = await this.db.query(
         `
         INSERT INTO evidence_master (
             answer_id,
@@ -7901,7 +7904,8 @@ ORDER BY id DESC;
             created_at,
             updated_at
         )
-        VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW());
+        VALUES ($1, $2, $3, 1, $4, $5, $6, $7, 0, 0, 0, NOW(), NOW())
+        RETURNING id, answer_id, annex_id, evi_type, file_name, file_type, description, created_at;
         `,
         [
           target.answerId,
@@ -7913,6 +7917,15 @@ ORDER BY id DESC;
           employeeId,
         ],
       );
+
+      return {
+        success:
+          true,
+        message:
+          'Evidence uploaded successfully.',
+        evidence:
+          result.rows[0],
+      };
     } catch (
     error
     ) {
@@ -7924,13 +7937,6 @@ ORDER BY id DESC;
 
       throw error;
     }
-
-    return {
-      success:
-        true,
-      message:
-        'Evidence uploaded successfully.',
-    };
   }
 
   async getEvidenceFile(
@@ -11683,63 +11689,61 @@ ORDER BY id DESC;
     employeeId: number,
   ) {
 
-    const detail =
-      await this.getCategory(
-        assessmentId,
-        categoryId,
-        employeeId,
-        dumpId,
-      );
-
-    this.assertAccountSelection(
-      detail,
+    const overview = await this.getOverview(
+      assessmentId,
+      employeeId,
     );
+
+    if (!overview.can_continue) {
+      throw new BadRequestException(
+        overview.block_reason || 'Assessment is locked',
+      );
+    }
+
+    const category = await this.db.findOne(
+      `
+      SELECT id, name, linked_table_id
+      FROM category_master
+      WHERE id = $1 AND is_active = 1 AND deleted_at IS NULL
+      LIMIT 1;
+      `,
+      [categoryId],
+    );
+
+    if (!category) {
+      throw new NotFoundException(
+        'Category not found for this assessment',
+      );
+    }
 
     if (
       ![1, 2].includes(
-        Number(detail.category.linked_table_id),
+        Number(category.linked_table_id),
       )
-      ||
-      !detail.selected_account
     ) {
       throw new BadRequestException(
         'Account assessment not found.',
       );
     }
 
-    const issues: any[] = [];
-    const compliancePoints: any[] = [];
-
-    this.validateSubmissionSets(
-      detail.sets || [],
-      {
-        id:
-          categoryId,
-        name:
-          `${detail.category.name} - ${detail.selected_account.account_no}`,
-        menu_name:
-          detail.category.menu_name,
-        dump_id:
-          dumpId,
-      },
-      issues,
-      compliancePoints,
+    const accounts = await this.getSampledAccounts(
+      category,
+      overview,
     );
 
-    if (
-      issues.length
-    ) {
-      return {
-        success:
-          false,
-        message:
-          'Complete all required account questions before marking it complete.',
-        issues,
-      };
+    const selectedAccount = accounts.find(
+      (account: any) =>
+        Number(account.id) === dumpId,
+    );
+
+    if (!selectedAccount) {
+      throw new BadRequestException(
+        'Account assessment not found.',
+      );
     }
 
     const table =
-      Number(detail.category.linked_table_id) === 1
+      Number(category.linked_table_id) === 1
         ? 'dump_deposits'
         : 'dump_advances';
 
@@ -11771,17 +11775,36 @@ ORDER BY id DESC;
     employeeId: number,
   ) {
 
-    const detail =
-      await this.getCategory(
-        assessmentId,
-        categoryId,
-        employeeId,
-        0,
+    const overview = await this.getOverview(
+      assessmentId,
+      employeeId,
+    );
+
+    if (!overview.can_continue) {
+      throw new BadRequestException(
+        overview.block_reason || 'Assessment is locked',
       );
+    }
+
+    const category = await this.db.findOne(
+      `
+      SELECT id, name, linked_table_id
+      FROM category_master
+      WHERE id = $1 AND is_active = 1 AND deleted_at IS NULL
+      LIMIT 1;
+      `,
+      [categoryId],
+    );
+
+    if (!category) {
+      throw new NotFoundException(
+        'Category not found for this assessment',
+      );
+    }
 
     if (
       ![1, 2].includes(
-        Number(detail.category.linked_table_id),
+        Number(category.linked_table_id),
       )
     ) {
       throw new BadRequestException(
@@ -11789,12 +11812,15 @@ ORDER BY id DESC;
       );
     }
 
-    const remainingAccounts =
-      (detail.accounts || [])
-        .filter(
-          (account: any) =>
-            !account.is_completed,
-        );
+    const accounts = await this.getSampledAccounts(
+      category,
+      overview,
+    );
+
+    const remainingAccounts = accounts.filter(
+      (account: any) =>
+        !account.is_completed,
+    );
 
     if (
       !remainingAccounts.length
@@ -11810,7 +11836,7 @@ ORDER BY id DESC;
     }
 
     const table =
-      Number(detail.category.linked_table_id) === 1
+      Number(category.linked_table_id) === 1
         ? 'dump_deposits'
         : 'dump_advances';
 
