@@ -8938,11 +8938,11 @@ export class ReportsService {
       slug,
       title,
       category: 'Audit Reports',
-      page: 'A4L',
+      page: 'A4',
       fileName,
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        logoUrl: '/assets/images/logos/kredpool_logo.png',
+        bankName: 'The Kurla Nagrik Sahakari Bank Ltd',
       },
       defaultFilters: {
         reportAuditUnit: '',
