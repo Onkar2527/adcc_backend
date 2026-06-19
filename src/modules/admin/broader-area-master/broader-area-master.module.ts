@@ -5,6 +5,6 @@ import { BroaderAreaMastersController } from "./broader-area-master.controller";
 @Module({
     controllers: [BroaderAreaMastersController],
     providers: [BroaderAreaMasterService],
+    exports: [BroaderAreaMasterService],
 })
-
 export class BroaderAreaMasterModule { }
