@@ -32,6 +32,7 @@ import { PolicyDocumentsModule } from './modules/admin/policy-documents/policy-d
 import { AuditCalendarModule } from './modules/admin/audit-calendar/audit-calendar.module';
 import { RegionMasterModule } from './modules/admin/region-master/region-master.module';
 import { SpecialAuditModule } from './modules/admin/special-audit/special-audit.module';
+import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 
 
 @Module({
@@ -67,7 +68,8 @@ import { SpecialAuditModule } from './modules/admin/special-audit/special-audit.
     PolicyDocumentsModule,
     AuditCalendarModule,
     RegionMasterModule,
-    SpecialAuditModule
+    SpecialAuditModule,
+    AuditLogsModule
   ],
   controllers: [AppController],
   providers: [AppService],
