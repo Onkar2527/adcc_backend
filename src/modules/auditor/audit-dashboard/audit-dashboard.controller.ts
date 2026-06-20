@@ -144,4 +144,40 @@ export class AuditDashboardController {
     );
 
   }
+
+  @Get('admin')
+  getAdminDashboardData() {
+    return this.service.getAdminDashboardData();
+  }
+
+  @Get('unit-details/:auditUnitId')
+  getUnitDashboardDetails(
+    @Param('auditUnitId', ParseIntPipe) auditUnitId: number,
+    @Query('employeeId', ParseIntPipe) employeeId: number,
+    @Query('userTypeId', ParseIntPipe) userTypeId: number,
+  ) {
+    return this.service.getUnitDashboardDetails(auditUnitId, employeeId, userTypeId);
+  }
+
+  @Get('unit-charts/:auditUnitId')
+  getUnitChartsData(
+    @Param('auditUnitId', ParseIntPipe) auditUnitId: number,
+    @Query('assessmentId') assessmentId: string,
+  ) {
+    return this.service.getUnitChartsData(auditUnitId, assessmentId);
+  }
+
+  @Get('management')
+  getManagementDashboardData(
+    @Query('employeeId', ParseIntPipe) employeeId: number,
+  ) {
+    return this.service.getManagementDashboardData(employeeId);
+  }
+
+  @Get('days-taken/:auditUnitId')
+  getBranchDaysTakenData(
+    @Param('auditUnitId', ParseIntPipe) auditUnitId: number,
+  ) {
+    return this.service.getBranchDaysTakenData(auditUnitId);
+  }
 }

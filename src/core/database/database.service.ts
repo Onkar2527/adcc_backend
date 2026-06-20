@@ -1,6 +1,10 @@
 import { Injectable, OnModuleDestroy, OnModuleInit, Logger, RequestTimeoutException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { Pool, PoolClient, QueryResult, QueryResultRow, types } from 'pg';
+
+// Force node-pg to parse DATE columns (type OID 1082) as UTC Date objects
+// to prevent JavaScript timezone conversion and day shifting.
+types.setTypeParser(1082, (val) => new Date(val + 'T00:00:00Z'));
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {

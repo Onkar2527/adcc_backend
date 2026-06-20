@@ -73,10 +73,11 @@ export class InternalAuditService {
     freeFlow = false,
   ) {
 
-    await this.assertAuthority(
+    const emp = await this.assertAuthority(
       auditUnitId,
       employeeId,
     );
+    const userTypeId = Number(emp?.user_type_id || 0);
 
     const unitResult =
       await this.db.query(
@@ -226,6 +227,7 @@ export class InternalAuditService {
       yearRows.push(
         this.decorateAssessmentAction(
           assessment,
+          userTypeId,
         ),
       );
 
@@ -12384,6 +12386,8 @@ SELECT (
         );
       }
     }
+
+    return emp;
   }
 
   private getBlockReason(
@@ -12420,6 +12424,7 @@ SELECT (
 
   private decorateAssessmentAction(
     assessment: any,
+    userTypeId: number,
   ) {
 
     const auditStatusId =
@@ -12458,6 +12463,7 @@ SELECT (
 
     let actionLabel = '';
     let actionType = 'none';
+    let canContinue = false;
 
     if (
       isBlocked
@@ -12468,6 +12474,7 @@ SELECT (
           ? 'Audit Blocked'
           : 'Compliance Blocked';
       actionType = 'blocked';
+      canContinue = false;
 
     } else if (
       auditStatusId === 7
@@ -12475,6 +12482,7 @@ SELECT (
 
       actionLabel = 'Completed';
       actionType = 'completed';
+      canContinue = false;
 
     } else if (
       auditExpired
@@ -12482,6 +12490,7 @@ SELECT (
 
       actionLabel = 'Audit Period Expired';
       actionType = 'expired';
+      canContinue = false;
 
     } else if (
       complianceExpired
@@ -12489,43 +12498,77 @@ SELECT (
 
       actionLabel = 'Compliance Period Expired';
       actionType = 'expired';
+      canContinue = false;
 
-    } else if (
-      auditStatusId === 1
-    ) {
-
-      actionLabel = 'DO ASSESMENT';
-      actionType = 'continue';
-
-    } else if (
-      auditStatusId === 3
-    ) {
-
-      actionLabel = 'DO RE-ASSESMENT';
-      actionType = 'continue';
-
-    } else if (
-      auditStatusId === 2
-    ) {
-
-      actionLabel = 'Review Pending';
-      actionType = 'review';
-
-    } else if (
-      [4, 6].includes(
-        auditStatusId,
-      )
-    ) {
-
-      actionLabel = 'Compliance Pending';
-      actionType = 'compliance';
-
-    } else if (
-      auditStatusId === 5
-    ) {
-
-      actionLabel = 'Compliance Review Pending';
-      actionType = 'review';
+    } else {
+      // Role-based action mapping matching PHP code
+      if (userTypeId === 2) {
+        // Auditor
+        if ([1, 3].includes(auditStatusId)) {
+          actionLabel = auditStatusId === 3 ? 'DO RE-ASSESMENT' : 'DO ASSESMENT';
+          actionType = 'continue';
+          canContinue = true;
+        } else {
+          actionType = 'none';
+          canContinue = false;
+          if (auditStatusId === 2) {
+            actionLabel = 'Review Pending';
+          } else if ([4, 6].includes(auditStatusId)) {
+            actionLabel = 'Compliance Pending';
+          } else if (auditStatusId === 5) {
+            actionLabel = 'Compliance Review Pending';
+          }
+        }
+      } else if (userTypeId === 3) {
+        // Compliance/Receiver
+        if ([4, 6].includes(auditStatusId)) {
+          actionLabel = auditStatusId === 6 ? 'DO RE-COMPLIANCE' : 'DO COMPLIANCE';
+          actionType = 'continue';
+          canContinue = true;
+        } else {
+          actionType = 'none';
+          canContinue = false;
+          if ([1, 3].includes(auditStatusId)) {
+            actionLabel = auditStatusId === 3 ? 'Re-Audit Pending' : 'Audit Pending';
+          } else if (auditStatusId === 2) {
+            actionLabel = 'Review Pending';
+          } else if (auditStatusId === 5) {
+            actionLabel = 'Compliance Review Pending';
+          }
+        }
+      } else if (userTypeId === 4) {
+        // Reviewer
+        if (auditStatusId === 2) {
+          actionLabel = 'REVIEW AUDIT';
+          actionType = 'continue';
+          canContinue = true;
+        } else if (auditStatusId === 5) {
+          actionLabel = 'REVIEW COMPLIANCE';
+          actionType = 'continue';
+          canContinue = true;
+        } else {
+          actionType = 'none';
+          canContinue = false;
+          if ([1, 3].includes(auditStatusId)) {
+            actionLabel = auditStatusId === 3 ? 'Re-Audit Pending' : 'Audit Pending';
+          } else if ([4, 6].includes(auditStatusId)) {
+            actionLabel = 'Compliance Pending';
+          }
+        }
+      } else {
+        // Other roles (Admin, Management) - Read-only view of status
+        actionType = 'none';
+        canContinue = false;
+        if ([1, 3].includes(auditStatusId)) {
+          actionLabel = auditStatusId === 3 ? 'Re-Audit Pending' : 'Audit Pending';
+        } else if (auditStatusId === 2) {
+          actionLabel = 'Review Pending';
+        } else if ([4, 6].includes(auditStatusId)) {
+          actionLabel = 'Compliance Pending';
+        } else if (auditStatusId === 5) {
+          actionLabel = 'Compliance Review Pending';
+        }
+      }
     }
 
     return {
@@ -12542,12 +12585,16 @@ SELECT (
         this.getReviewerStatusLabel(
           auditStatusId,
         ),
+      compliance_reviewer_status_label:
+        this.getComplianceReviewerStatusLabel(
+          auditStatusId,
+        ),
       action_label:
         actionLabel,
       action_type:
         actionType,
       can_continue:
-        actionType === 'continue',
+        canContinue,
     };
   }
 
@@ -12936,6 +12983,27 @@ SELECT (
 
     if (
       auditStatusId > 1
+    ) {
+
+      return 'COMPLETED';
+    }
+
+    return '';
+  }
+
+  private getComplianceReviewerStatusLabel(
+    auditStatusId: number,
+  ) {
+
+    if (
+      auditStatusId === 5
+    ) {
+
+      return STATUS_LABELS[auditStatusId];
+    }
+
+    if (
+      auditStatusId > 4
     ) {
 
       return 'COMPLETED';

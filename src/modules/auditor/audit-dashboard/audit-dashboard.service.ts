@@ -217,47 +217,34 @@ export class AuditDashboardService {
         }
 
         const query = `
-
-    WITH employee_units AS (
-
-        SELECT
-
-            string_to_array(
-                audit_unit_authority,
-                ','
-            )::int[] AS unit_ids
-
-        FROM employee_master
-
-        WHERE id = $1
-
-    )
-
-    SELECT DISTINCT
-
-        au.id,
-        au.audit_unit_code,
-        au.name,
-        au.frequency,
-        au.last_audit_date
-
-    FROM audit_unit_master au
-
-    CROSS JOIN employee_units eu
-
-    WHERE
-
-        au.is_active = 1
-
-        AND au.deleted_at IS NULL
-
-        AND au.id = ANY(eu.unit_ids)
-
-    ORDER BY
-
-        au.audit_unit_code;
-
-    `;
+        WITH employee_units AS (
+            SELECT
+                string_to_array(
+                    COALESCE(audit_unit_authority, ''),
+                    ','
+                )::int[] AS unit_ids
+            FROM employee_master
+            WHERE id = $1
+        )
+        SELECT DISTINCT
+            au.id,
+            au.audit_unit_code,
+            au.name,
+            au.frequency,
+            au.last_audit_date
+        FROM audit_unit_master au
+        LEFT JOIN employee_units eu ON TRUE
+        WHERE
+            au.is_active = 1
+            AND au.deleted_at IS NULL
+            AND (
+                au.id = ANY(eu.unit_ids)
+                OR au.branch_head_id = $1
+                OR au.branch_subhead_id = $1
+            )
+        ORDER BY
+            au.audit_unit_code;
+        `;
 
         const result =
             await this.db.query(
@@ -2628,4 +2615,735 @@ ORDER BY
         };
     }
 
+    async getAdminDashboardData() {
+        const [
+            totalEmpRes,
+            totalBranchRes,
+            totalHoRes,
+            totalSchemesRes,
+            auditSummaryRes,
+            branchesRes,
+            hoRes,
+        ] = await Promise.all([
+            this.db.query(`SELECT COUNT(*)::int AS count FROM employee_master WHERE deleted_at IS NULL`),
+            this.db.query(`SELECT COUNT(*)::int AS count FROM audit_unit_master WHERE section_type_id = 1 AND deleted_at IS NULL`),
+            this.db.query(`SELECT COUNT(*)::int AS count FROM audit_unit_master WHERE section_type_id != 1 AND deleted_at IS NULL`),
+            this.db.query(`SELECT COUNT(*)::int AS count FROM scheme_master WHERE deleted_at IS NULL`),
+            this.db.query(`
+                SELECT 
+                    COUNT(CASE WHEN audit_status_id = 1 AND deleted_at IS NULL THEN 1 END)::int AS total_pending_audit,
+                    COUNT(CASE WHEN audit_status_id > 3 AND deleted_at IS NULL THEN 1 END)::int AS total_completed_audit,
+                    COUNT(CASE WHEN audit_status_id > 6 AND deleted_at IS NULL THEN 1 END)::int AS total_completed_compliance,
+                    COUNT(CASE WHEN is_limit_blocked = 1 AND deleted_at IS NULL THEN 1 END)::int AS total_blocked_assesment,
+                    COUNT(CASE WHEN year_id != 0 AND audit_unit_id != 0 AND audit_status_id IN (1, 3) AND audit_due_date < CURRENT_DATE AND deleted_at IS NULL THEN 1 END)::int AS total_expired_audit,
+                    COUNT(CASE WHEN year_id != 0 AND audit_unit_id != 0 AND audit_status_id IN (4, 6) AND compliance_due_date < CURRENT_DATE AND deleted_at IS NULL THEN 1 END)::int AS total_expired_compliance
+                FROM audit_assesment_master
+            `),
+            this.db.query(`SELECT id, audit_unit_code, name, frequency, last_audit_date FROM audit_unit_master WHERE section_type_id = 1 AND frequency != 0 AND is_active = 1 AND deleted_at IS NULL`),
+            this.db.query(`SELECT id, audit_unit_code, name, frequency, last_audit_date FROM audit_unit_master WHERE section_type_id != 1 AND frequency != 0 AND is_active = 1 AND deleted_at IS NULL`),
+        ]);
+
+        const notStartedBranches = await this.getNotStartedAudits(branchesRes.rows);
+        const notStartedHo = await this.getNotStartedAudits(hoRes.rows);
+
+        const totalNotStartedBranchesCount = Number(Object.values(notStartedBranches).reduce((sum: number, arr: any) => sum + arr.length, 0));
+        const totalNotStartedHoCount = Number(Object.values(notStartedHo).reduce((sum: number, arr: any) => sum + arr.length, 0));
+
+        const summary = auditSummaryRes.rows[0];
+        const total_pending_audit = Number(summary.total_pending_audit || 0);
+        const total_completed_audit = Number(summary.total_completed_audit || 0);
+        const total_completed_compliance = Number(summary.total_completed_compliance || 0);
+        const total_blocked_assesment = Number(summary.total_blocked_assesment || 0);
+        const total_expired_audit = Number(summary.total_expired_audit || 0);
+        const total_expired_compliance = Number(summary.total_expired_compliance || 0);
+
+        const total_audit_count = total_pending_audit + 
+            total_completed_audit + 
+            total_completed_compliance + 
+            total_blocked_assesment + 
+            total_expired_audit + 
+            total_expired_compliance + 
+            totalNotStartedBranchesCount + 
+            totalNotStartedHoCount;
+
+        const data_array_chart = [
+            { y: total_pending_audit, name: 'Total Audit Pending' },
+            { y: total_completed_audit, name: 'Total Audit Completed' },
+            { y: total_completed_compliance, name: 'Total Compliance Completed' },
+            { y: total_blocked_assesment, name: 'Total Blocked Audit' },
+            { y: total_expired_audit, name: 'Total Expired Audit' },
+            { y: total_expired_compliance, name: 'Total Expired Compliance' },
+            { y: totalNotStartedBranchesCount, name: 'Total Not Started Branches' },
+            { y: totalNotStartedHoCount, name: 'Total Not Started Head Office' },
+        ];
+
+        return {
+            total_employees: Number(totalEmpRes.rows[0]?.count || 0),
+            total_branch: Number(totalBranchRes.rows[0]?.count || 0),
+            total_head_office: Number(totalHoRes.rows[0]?.count || 0),
+            total_schemes: Number(totalSchemesRes.rows[0]?.count || 0),
+            total_pending_audit,
+            total_completed_audit,
+            total_completed_compliance,
+            total_blocked_assesment,
+            total_expired_audit,
+            total_expired_compliance,
+            total_not_yet_startd_audit_branch: notStartedBranches,
+            total_not_yet_startd_audit_branch_count: totalNotStartedBranchesCount,
+            total_not_yet_startd_audit_ho: notStartedHo,
+            total_not_yet_startd_audit_ho_count: totalNotStartedHoCount,
+            total_audit_count,
+            data_array_chart,
+        };
+    }
+
+    async getUnitDashboardDetails(auditUnitId: number, employeeId: number, userTypeId: number) {
+        const currentFyText = this.getFinancialYear();
+
+        const unitRes = await this.db.query(
+            `SELECT id, name, audit_unit_code, frequency, last_audit_date FROM audit_unit_master WHERE id = $1 AND deleted_at IS NULL`,
+            [auditUnitId]
+        );
+        if (!unitRes.rows.length) {
+            throw new NotFoundException('Audit unit not found');
+        }
+        const unit = unitRes.rows[0];
+
+        const riskScoreRes = await this.db.query(
+            `SELECT SUM(COALESCE(weighted_score::float, 0)) AS total_weighted_risk_score
+             FROM report_scoring_master
+             WHERE audit_unit_id = $1
+               AND audit_status_id > 3
+               AND year = $2
+               AND deleted_at IS NULL`,
+            [auditUnitId, currentFyText]
+        );
+        const totalWeightedRiskScore = Number(riskScoreRes.rows[0]?.total_weighted_risk_score || 0).toFixed(2);
+
+        const notStartedList = await this.getNotStartedByUnit(auditUnitId);
+        const assessmentNotStartedCount = notStartedList.length;
+
+        const yearsRes = await this.db.query(
+            `SELECT id, year FROM year_master WHERE deleted_at IS NULL ORDER BY id DESC`
+        );
+        const allAssessmentsRes = await this.db.query(
+            `SELECT id, year_id, assesment_period_from, assesment_period_to, frequency, audit_status_id, audit_due_date, compliance_due_date, is_limit_blocked
+             FROM audit_assesment_master
+             WHERE audit_unit_id = $1
+               AND deleted_at IS NULL
+             ORDER BY assesment_period_from ASC`,
+            [auditUnitId]
+        );
+        const assessments = allAssessmentsRes.rows;
+
+        const assessmentsByYear = new Map<number, any[]>();
+        allAssessmentsRes.rows.forEach((ass: any) => {
+            const yId = Number(ass.year_id);
+            if (!assessmentsByYear.has(yId)) {
+                assessmentsByYear.set(yId, []);
+            }
+            const fromStr = ass.assesment_period_from instanceof Date 
+                ? ass.assesment_period_from.toISOString().split('T')[0] 
+                : String(ass.assesment_period_from).split('T')[0];
+            const toStr = ass.assesment_period_to instanceof Date 
+                ? ass.assesment_period_to.toISOString().split('T')[0] 
+                : String(ass.assesment_period_to).split('T')[0];
+
+            assessmentsByYear.get(yId)!.push({
+                id: ass.id,
+                assesment_period_from: fromStr,
+                assesment_period_to: toStr,
+                frequency: ass.frequency,
+                audit_status_id: Number(ass.audit_status_id),
+                audit_due_date: ass.audit_due_date 
+                    ? (ass.audit_due_date instanceof Date ? ass.audit_due_date.toISOString().split('T')[0] : String(ass.audit_due_date).split('T')[0])
+                    : null,
+                compliance_due_date: ass.compliance_due_date 
+                    ? (ass.compliance_due_date instanceof Date ? ass.compliance_due_date.toISOString().split('T')[0] : String(ass.compliance_due_date).split('T')[0])
+                    : null,
+                is_limit_blocked: Number(ass.is_limit_blocked || 0),
+            });
+        });
+
+        const yearWiseAssessments = yearsRes.rows.map((y: any) => {
+            const list = assessmentsByYear.get(Number(y.id)) || [];
+            const hasPending = list.some((ass: any) => Number(ass.audit_status_id) <= 3);
+            const yearEndStr = `${Number(y.year) + 1}-03-31`;
+            const reachesEnd = list.some((ass: any) => ass.assesment_period_to === yearEndStr);
+            const showStartBtn = !hasPending && !reachesEnd;
+
+            return {
+                year_id: y.id,
+                year_label: `${y.year} - ${Number(y.year) + 1}`,
+                year_value: y.year,
+                showStartBtn,
+                assessments: list
+            };
+        }).filter((yw: any) => yw.assessments.length > 0 || yw.year_value === currentFyText.split('-')[0]);
+
+        let complianceExpCount = 0;
+        let auditExpCount = 0;
+        let assessmentPendingCount = 0;
+
+        const currentDate = new Date();
+
+        for (const ass of assessments) {
+            const statusId = Number(ass.audit_status_id || 0);
+            
+            if ([4, 6].includes(statusId)) {
+                if (ass.compliance_due_date && new Date(ass.compliance_due_date) < currentDate) {
+                    complianceExpCount++;
+                }
+            } else if ([1, 3].includes(statusId)) {
+                if (ass.audit_due_date && new Date(ass.audit_due_date) < currentDate) {
+                    auditExpCount++;
+                }
+            }
+
+            if (userTypeId === 2) {
+                if (statusId === 1 || statusId === 3) {
+                    assessmentPendingCount++;
+                }
+            } else if (userTypeId === 3) {
+                if (statusId === 4 || statusId === 6) {
+                    assessmentPendingCount++;
+                }
+            } else if (userTypeId === 4) {
+                if (statusId === 2 || statusId === 5) {
+                    assessmentPendingCount++;
+                }
+            } else {
+                if (statusId !== 7) {
+                    assessmentPendingCount++;
+                }
+            }
+        }
+
+        let assessmentExpiredCount = 0;
+        if (userTypeId === 2) {
+            assessmentExpiredCount = auditExpCount;
+        } else if (userTypeId === 3) {
+            assessmentExpiredCount = complianceExpCount;
+        } else {
+            assessmentExpiredCount = auditExpCount + complianceExpCount;
+        }
+
+        const completedRes = await this.db.query(
+            `SELECT id, assesment_id, assesment_period_from, assesment_period_to, weighted_score, risk_data
+             FROM report_scoring_master
+             WHERE audit_unit_id = $1
+               AND audit_status_id > 3
+               AND deleted_at IS NULL
+             ORDER BY assesment_period_from ASC`,
+            [auditUnitId]
+        );
+        const completedAssessments = completedRes.rows;
+
+        const assessmentList: any[] = [];
+        const highRiskTrend: any[] = [];
+        const mediumRiskTrend: any[] = [];
+        const lowRiskTrend: any[] = [];
+        const assessmentPeriods: any[] = [];
+
+        let prevScore: number | null = null;
+
+        for (const item of completedAssessments) {
+            const score = Number(item.weighted_score || 0);
+            let trend = '-';
+            if (prevScore !== null) {
+                if (score > prevScore) trend = 'Increasing';
+                else if (score < prevScore) trend = 'Decreasing';
+            }
+            prevScore = score;
+
+            const fromDate = new Date(item.assesment_period_from);
+            const toDate = new Date(item.assesment_period_to);
+            const monthFrom = String(fromDate.getMonth() + 1).padStart(2, '0');
+            const monthTo = String(toDate.getMonth() + 1).padStart(2, '0');
+            const yearFrom = fromDate.getFullYear();
+            const monthDiffVal = (toDate.getFullYear() - fromDate.getFullYear()) * 12 + (toDate.getMonth() - fromDate.getMonth()) + 1;
+
+            const label = monthDiffVal > 1
+                ? `(${yearFrom}) ${monthFrom} - ${monthTo}`
+                : `${yearFrom}-${monthFrom}`;
+
+            assessmentList.push({
+                assesment_period: `${item.assesment_period_from.toISOString().split('T')[0]} to ${item.assesment_period_to.toISOString().split('T')[0]}`,
+                frequency: monthDiffVal,
+                weighted_score: score.toFixed(2),
+                trend,
+            });
+
+            assessmentPeriods.push({
+                label: `${item.assesment_period_from.toISOString().split('T')[0]} to ${item.assesment_period_to.toISOString().split('T')[0]}`,
+                value: item.assesment_id,
+            });
+
+            let highCount = 0;
+            let mediumCount = 0;
+            let lowCount = 0;
+            let totalQuesCount = 0;
+
+            try {
+                const riskDataObj = typeof item.risk_data === 'string' ? JSON.parse(item.risk_data) : item.risk_data;
+                if (riskDataObj) {
+                    for (const catId of Object.keys(riskDataObj)) {
+                        const catData = riskDataObj[catId];
+                        if (Number(catData.avg_sc || 0) > 0) {
+                            highCount += Number(catData['1'] || 0);
+                            mediumCount += Number(catData['2'] || 0);
+                            lowCount += Number(catData['3'] || 0);
+                            totalQuesCount += Number(catData['1'] || 0) + Number(catData['2'] || 0) + Number(catData['3'] || 0);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error parsing risk_data:', e);
+            }
+
+            let perHighRisk = 0;
+            let perMediumRisk = 0;
+            let perLowRisk = 0;
+
+            if (totalQuesCount > 0) {
+                perHighRisk = (highCount / totalQuesCount) * 100 * (score / 100);
+                perMediumRisk = (mediumCount / totalQuesCount) * 100 * (score / 100);
+                perLowRisk = (lowCount / totalQuesCount) * 100 * (score / 100);
+            }
+
+            highRiskTrend.push({ label, y: Number(perHighRisk.toFixed(2)) });
+            mediumRiskTrend.push({ label, y: Number(perMediumRisk.toFixed(2)) });
+            lowRiskTrend.push({ label, y: Number(perLowRisk.toFixed(2)) });
+        }
+
+        return {
+            audit_unit: unit,
+            totalWeightedRiskScore,
+            assessmentNotStartedCount,
+            assessmentExpiredCount,
+            assessmentPendingCount,
+            assessmentList,
+            assessmentPeriods,
+            highRiskTrend,
+            mediumRiskTrend,
+            lowRiskTrend,
+            yearWiseAssessments,
+        };
+    }
+
+    async getUnitChartsData(auditUnitId: number, assessmentId: string) {
+        const riskCategoryRes = await this.db.query(
+            `SELECT id, risk_category FROM risk_category_master WHERE deleted_at IS NULL`
+        );
+        const categoryMap = new Map<number, string>(
+            riskCategoryRes.rows.map((r: any) => [Number(r.id), r.risk_category])
+        );
+
+        let riskDataRows: any[] = [];
+        let heatmapRows: any[] = [];
+
+        if (assessmentId === 'all') {
+            const res = await this.db.query(
+                `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = $1 AND audit_status_id > 3 AND deleted_at IS NULL`,
+                [auditUnitId]
+            );
+            riskDataRows = res.rows;
+
+            const heatRes = await this.db.query(
+                `SELECT business_risk, control_risk, COUNT(*)::int AS count
+                 FROM (
+                   -- 1. Regular questions
+                   SELECT 
+                     NULLIF(ans.business_risk::text, '')::int AS business_risk, 
+                     NULLIF(ans.control_risk::text, '')::int AS control_risk
+                   FROM answers_data ans
+                   INNER JOIN question_master qm ON qm.id = ans.question_id
+                   INNER JOIN audit_assesment_master am ON am.id = ans.assesment_id
+                   WHERE am.audit_unit_id = $1
+                     AND am.audit_status_id > 3
+                     AND qm.option_id != 4
+                     AND NULLIF(ans.business_risk::text, '')::int IN (1, 2, 3)
+                     AND NULLIF(ans.control_risk::text, '')::int IN (1, 2, 3)
+                     AND ans.is_compliance = 1
+                     AND ans.deleted_at IS NULL
+                     AND qm.deleted_at IS NULL
+                     AND am.deleted_at IS NULL
+
+                   UNION ALL
+
+                   -- 2. Annexure questions (all existing annexure rows are deviations)
+                   SELECT 
+                     NULLIF(ax.business_risk::text, '')::int AS business_risk, 
+                     NULLIF(ax.control_risk::text, '')::int AS control_risk
+                   FROM answers_data_annexure ax
+                   INNER JOIN answers_data ans ON ans.id = ax.answer_id
+                   INNER JOIN question_master qm ON qm.id = ans.question_id
+                   INNER JOIN audit_assesment_master am ON am.id = ax.assesment_id
+                   WHERE am.audit_unit_id = $1
+                     AND am.audit_status_id > 3
+                     AND qm.option_id = 4
+                     AND NULLIF(ax.business_risk::text, '')::int IN (1, 2, 3)
+                     AND NULLIF(ax.control_risk::text, '')::int IN (1, 2, 3)
+                     AND ax.deleted_at IS NULL
+                     AND ans.deleted_at IS NULL
+                     AND qm.deleted_at IS NULL
+                     AND am.deleted_at IS NULL
+                 ) combined
+                 GROUP BY business_risk, control_risk`,
+                [auditUnitId]
+            );
+            heatmapRows = heatRes.rows;
+        } else {
+            const res = await this.db.query(
+                `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = $1 AND assesment_id = $2 AND audit_status_id > 3 AND deleted_at IS NULL`,
+                [auditUnitId, Number(assessmentId)]
+            );
+            riskDataRows = res.rows;
+
+            const heatRes = await this.db.query(
+                `SELECT business_risk, control_risk, COUNT(*)::int AS count
+                 FROM (
+                   -- 1. Regular questions
+                   SELECT 
+                     NULLIF(ans.business_risk::text, '')::int AS business_risk, 
+                     NULLIF(ans.control_risk::text, '')::int AS control_risk
+                   FROM answers_data ans
+                   INNER JOIN question_master qm ON qm.id = ans.question_id
+                   WHERE ans.assesment_id = $1
+                     AND qm.option_id != 4
+                     AND NULLIF(ans.business_risk::text, '')::int IN (1, 2, 3)
+                     AND NULLIF(ans.control_risk::text, '')::int IN (1, 2, 3)
+                     AND ans.is_compliance = 1
+                     AND ans.deleted_at IS NULL
+                     AND qm.deleted_at IS NULL
+
+                   UNION ALL
+
+                   -- 2. Annexure questions (all existing annexure rows are deviations)
+                   SELECT 
+                     NULLIF(ax.business_risk::text, '')::int AS business_risk, 
+                     NULLIF(ax.control_risk::text, '')::int AS control_risk
+                   FROM answers_data_annexure ax
+                   INNER JOIN answers_data ans ON ans.id = ax.answer_id
+                   INNER JOIN question_master qm ON qm.id = ans.question_id
+                   WHERE ax.assesment_id = $1
+                     AND qm.option_id = 4
+                     AND NULLIF(ax.business_risk::text, '')::int IN (1, 2, 3)
+                     AND NULLIF(ax.control_risk::text, '')::int IN (1, 2, 3)
+                     AND ax.deleted_at IS NULL
+                     AND ans.deleted_at IS NULL
+                     AND qm.deleted_at IS NULL
+                 ) combined
+                 GROUP BY business_risk, control_risk`,
+                [Number(assessmentId)]
+            );
+            heatmapRows = heatRes.rows;
+        }
+
+        const riskTypeWiseScoreMap = new Map<number, number>();
+        let totalHighRisk = 0;
+        let totalMediumRisk = 0;
+        let totalLowRisk = 0;
+
+        for (const row of riskDataRows) {
+            try {
+                const riskDataObj = typeof row.risk_data === 'string' ? JSON.parse(row.risk_data) : row.risk_data;
+                if (riskDataObj) {
+                    for (const catIdStr of Object.keys(riskDataObj)) {
+                        const catId = Number(catIdStr);
+                        const catData = riskDataObj[catIdStr];
+                        
+                        const wgSc = Number(catData.wg_sc || 0);
+                        riskTypeWiseScoreMap.set(catId, (riskTypeWiseScoreMap.get(catId) || 0) + wgSc);
+
+                        if (Number(catData.avg_sc || 0) > 0) {
+                            totalHighRisk += Number(catData['1'] || 0);
+                            totalMediumRisk += Number(catData['2'] || 0);
+                            totalLowRisk += Number(catData['3'] || 0);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error parsing risk_data in unit-charts:', e);
+            }
+        }
+
+        const riskTypeWiseScore: any[] = [];
+        riskTypeWiseScoreMap.forEach((val, key) => {
+            riskTypeWiseScore.push({
+                label: categoryMap.get(key) || `Category ${key}`,
+                y: Number(val.toFixed(2)),
+            });
+        });
+
+        const riskCategoryScore = [
+            { label: 'High Risk', y: totalHighRisk },
+            { label: 'Medium Risk', y: totalMediumRisk },
+            { label: 'Low Risk', y: totalLowRisk },
+        ];
+
+        return {
+            riskTypeWiseScore,
+            riskCategoryScore,
+            heatmap: heatmapRows
+        };
+    }
+
+    async getManagementDashboardData(employeeId: number) {
+        const units = await this.getAuthorizedAuditUnits(employeeId);
+        if (!units.length) {
+            return {
+                totalWeightedRiskScore: '0.00',
+                auditPendingCount: 0,
+                auditExpiredCount: 0,
+                complianceExpiredCount: 0,
+                branchesRiskBarData: [],
+                branchesTable: [],
+                authorizedUnits: [],
+            };
+        }
+
+        const unitIds = units.map((u: any) => u.id);
+
+        const [
+            weightedRes,
+            pendingRes,
+            expiredAuditRes,
+            expiredComplianceRes,
+            branchesRiskRes,
+            ratingsRes,
+        ] = await Promise.all([
+            this.db.query(
+                `SELECT SUM(COALESCE(weighted_score::float, 0)) AS total_weighted_risk_score
+                 FROM report_scoring_master
+                 WHERE audit_unit_id = ANY($1)
+                   AND audit_status_id > 3
+                   AND deleted_at IS NULL`,
+                [unitIds]
+            ),
+            this.db.query(
+                `SELECT COUNT(*)::int AS count 
+                 FROM audit_assesment_master 
+                 WHERE audit_unit_id = ANY($1) 
+                   AND audit_status_id != 7 
+                   AND deleted_at IS NULL`,
+                [unitIds]
+            ),
+            this.db.query(
+                `SELECT COUNT(*)::int AS count 
+                 FROM audit_assesment_master 
+                 WHERE audit_unit_id = ANY($1) 
+                   AND audit_status_id IN (1, 3) 
+                   AND audit_due_date < CURRENT_DATE 
+                   AND deleted_at IS NULL`,
+                [unitIds]
+            ),
+            this.db.query(
+                `SELECT COUNT(*)::int AS count 
+                 FROM audit_assesment_master 
+                 WHERE audit_unit_id = ANY($1) 
+                   AND audit_status_id IN (4, 6) 
+                   AND compliance_due_date < CURRENT_DATE 
+                   AND deleted_at IS NULL`,
+                [unitIds]
+            ),
+            this.db.query(
+                `SELECT 
+                   rsm.audit_unit_id,
+                   aum.name AS branch_name,
+                   SUM(rsm.weighted_score)::float AS weighted_score
+                 FROM report_scoring_master rsm
+                 LEFT JOIN audit_unit_master aum ON aum.id = rsm.audit_unit_id
+                 WHERE rsm.audit_unit_id = ANY($1)
+                   AND rsm.audit_status_id > 3
+                   AND rsm.deleted_at IS NULL
+                 GROUP BY rsm.audit_unit_id, aum.name`,
+                [unitIds]
+            ),
+            this.db.query(
+                `SELECT audit_unit_id, risk_type_id, range_from, range_to
+                 FROM risk_branch_rating
+                 WHERE deleted_at IS NULL`
+            ),
+        ]);
+
+        const totalWeightedRiskScore = Number(weightedRes.rows[0]?.total_weighted_risk_score || 0).toFixed(2);
+        const auditPendingCount = Number(pendingRes.rows[0]?.count || 0);
+        const auditExpiredCount = Number(expiredAuditRes.rows[0]?.count || 0);
+        const complianceExpiredCount = Number(expiredComplianceRes.rows[0]?.count || 0);
+
+        const ratingsMap = new Map<number, any[]>();
+        ratingsRes.rows.forEach((r: any) => {
+            const uId = Number(r.audit_unit_id);
+            if (!ratingsMap.has(uId)) ratingsMap.set(uId, []);
+            ratingsMap.get(uId)!.push(r);
+        });
+
+        const branchesRiskBarData = branchesRiskRes.rows.map((row: any) => {
+            const score = Number(row.weighted_score || 0);
+            const uId = Number(row.audit_unit_id);
+            
+            let color = 'rgba(34,139,34)'; // Green (low)
+            const unitRatings = ratingsMap.get(uId) || [];
+            if (unitRatings.length > 0) {
+                const high = unitRatings.find(r => Number(r.risk_type_id) === 1);
+                const med = unitRatings.find(r => Number(r.risk_type_id) === 2);
+                if (high && score > Number(high.range_to)) {
+                    color = 'rgba(220,20,60)'; // Red (high)
+                } else if (med && score > Number(med.range_to)) {
+                    color = 'rgba(255,165,0)'; // Orange (medium)
+                }
+            } else {
+                if (score >= 3.0) {
+                    color = 'rgba(220,20,60)';
+                } else if (score >= 2.0) {
+                    color = 'rgba(255,165,0)';
+                }
+            }
+
+            return {
+                label: row.branch_name,
+                y: Number(score.toFixed(2)),
+                color,
+            };
+        });
+
+        const historyRes = await this.db.query(
+            `SELECT audit_unit_id, weighted_score, assesment_period_from
+             FROM report_scoring_master
+             WHERE audit_unit_id = ANY($1)
+               AND audit_status_id > 3
+               AND deleted_at IS NULL
+             ORDER BY audit_unit_id, assesment_period_from ASC`,
+            [unitIds]
+        );
+        const historyMap = new Map<number, number[]>();
+        historyRes.rows.forEach((h: any) => {
+            const uId = Number(h.audit_unit_id);
+            if (!historyMap.has(uId)) historyMap.set(uId, []);
+            historyMap.get(uId)!.push(Number(h.weighted_score || 0));
+        });
+
+        const branchesTable = units.map((u: any) => {
+            const scores = historyMap.get(Number(u.id)) || [];
+            const finalScore = scores.length > 0 ? scores[scores.length - 1] : 0;
+            let trend = '-';
+            if (scores.length > 1) {
+                const prev = scores[scores.length - 2];
+                if (finalScore > prev) trend = 'Increasing';
+                else if (finalScore < prev) trend = 'Decreasing';
+            }
+            return {
+                id: u.id,
+                name: u.name,
+                weighted_score: finalScore.toFixed(2),
+                trend,
+            };
+        });
+
+        return {
+            totalWeightedRiskScore,
+            auditPendingCount,
+            auditExpiredCount,
+            complianceExpiredCount,
+            branchesRiskBarData,
+            branchesTable,
+            authorizedUnits: units.map((u: any) => ({ label: u.name, value: u.id })),
+        };
+    }
+
+    async getBranchDaysTakenData(auditUnitId: number) {
+        const res = await this.db.query(
+            `SELECT 
+               rsm.assesment_period_from,
+               rsm.assesment_period_to,
+               rsm.weighted_score,
+               rsm.risk_data,
+               aam.audit_start_date,
+               aam.audit_end_date,
+               aam.audit_review_date,
+               aam.compliance_start_date,
+               aam.compliance_end_date,
+               aam.compliance_review_date
+             FROM report_scoring_master rsm
+             LEFT JOIN audit_assesment_master aam ON aam.id = rsm.assesment_id
+             WHERE rsm.audit_unit_id = $1
+               AND rsm.audit_status_id > 3
+               AND rsm.deleted_at IS NULL
+             ORDER BY rsm.assesment_period_from ASC`,
+            [auditUnitId]
+        );
+        const dataRows = res.rows;
+
+        const auditDays: any[] = [];
+        const auditReviewDays: any[] = [];
+        const complianceDays: any[] = [];
+        const complianceReviewDays: any[] = [];
+
+        let totalHighRisk = 0;
+        let totalMediumRisk = 0;
+        let totalLowRisk = 0;
+        let weightedScoreSum = 0;
+
+        const dateDiffDays = (d1: any, d2: any): number => {
+            if (!d1 || !d2) return 0;
+            const diffTime = Math.abs(new Date(d2).getTime() - new Date(d1).getTime());
+            return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        };
+
+        for (const row of dataRows) {
+            const fromDate = new Date(row.assesment_period_from);
+            const toDate = new Date(row.assesment_period_to);
+            const monthFrom = String(fromDate.getMonth() + 1).padStart(2, '0');
+            const monthTo = String(toDate.getMonth() + 1).padStart(2, '0');
+            const yearFrom = fromDate.getFullYear();
+            const monthDiffVal = (toDate.getFullYear() - fromDate.getFullYear()) * 12 + (toDate.getMonth() - fromDate.getMonth()) + 1;
+
+            const label = monthDiffVal > 1
+                ? `(${yearFrom}) ${monthFrom} - ${monthTo}`
+                : `${yearFrom}-${monthFrom}`;
+
+            auditDays.push({ label, y: dateDiffDays(row.audit_start_date, row.audit_end_date) });
+            auditReviewDays.push({ label, y: dateDiffDays(row.audit_end_date, row.audit_review_date) });
+            complianceDays.push({ label, y: dateDiffDays(row.compliance_start_date, row.compliance_end_date) });
+            complianceReviewDays.push({ label, y: dateDiffDays(row.compliance_end_date, row.compliance_review_date) });
+
+            weightedScoreSum += Number(row.weighted_score || 0);
+
+            try {
+                const riskDataObj = typeof row.risk_data === 'string' ? JSON.parse(row.risk_data) : row.risk_data;
+                if (riskDataObj) {
+                    for (const catId of Object.keys(riskDataObj)) {
+                        const catData = riskDataObj[catId];
+                        if (Number(catData.avg_sc || 0) > 0) {
+                            totalHighRisk += Number(catData['1'] || 0);
+                            totalMediumRisk += Number(catData['2'] || 0);
+                            totalLowRisk += Number(catData['3'] || 0);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error parsing risk_data in days-taken:', e);
+            }
+        }
+
+        const branchWisetotalWeightedScore = weightedScoreSum.toFixed(2);
+        const branchWiseAvgWeightedScore = dataRows.length > 0 ? (weightedScoreSum / dataRows.length).toFixed(2) : '0.00';
+
+        const allRiskData = [
+            { label: 'High Risk', y: totalHighRisk },
+            { label: 'Medium Risk', y: totalMediumRisk },
+            { label: 'Low Risk', y: totalLowRisk },
+        ];
+
+        return {
+            auditDays,
+            auditReviewDays,
+            complianceDays,
+            complianceReviewDays,
+            allRiskData,
+            branchWisetotalWeightedScore,
+            branchWiseAvgWeightedScore,
+        };
+    }
 }

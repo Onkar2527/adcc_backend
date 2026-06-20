@@ -16,7 +16,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/jest/bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "check-db": "node C:\\Users\\sonal\\.gemini\\antigravity-ide\\brain\\a88bb92a-0812-4c9d-b5ea-92d845f621ed\\scratch\\query_db.js"
   },
   "engines": {
     "npm": ">=10.0.0",

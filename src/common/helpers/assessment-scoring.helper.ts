@@ -186,6 +186,12 @@ export async function syncAssessmentScoring(db: DatabaseService, assessmentId: n
     return 'general';
   };
 
+  // Calculate scores per Risk Category
+  const riskDataMap: Record<number, { wg_sc: number; avg_sc: number; '1': number; '2': number; '3': number; '4': number }> = {};
+  riskCategories.forEach(rc => {
+    riskDataMap[Number(rc.id)] = { wg_sc: 0, avg_sc: 0, '1': 0, '2': 0, '3': 0, '4': 0 };
+  });
+
   for (const ans of answers) {
     const catKey = getCategoryKey(ans);
     const broaderAreaId = Number(ans.audit_area_id);
@@ -202,6 +208,14 @@ export async function syncAssessmentScoring(db: DatabaseService, assessmentId: n
     } else {
       stats.quanScoreSum += score;
     }
+
+    if (Number(ans.option_id) !== 4) {
+      const br = Number(ans.business_risk || 0);
+      if (br >= 1 && br <= 4 && riskDataMap[riskCatId]) {
+        const key = String(br) as '1' | '2' | '3' | '4';
+        riskDataMap[riskCatId][key]++;
+      }
+    }
   }
 
   for (const ann of annexures) {
@@ -215,13 +229,13 @@ export async function syncAssessmentScoring(db: DatabaseService, assessmentId: n
 
     stats.quanScoreSum += score;
     stats.totalAnnexRows++;
-  }
 
-  // Calculate scores per Risk Category
-  const riskDataMap: Record<number, { wg_sc: number; avg_sc: number }> = {};
-  riskCategories.forEach(rc => {
-    riskDataMap[Number(rc.id)] = { wg_sc: 0, avg_sc: 0 };
-  });
+    const br = Number(ann.business_risk || 0);
+    if (br >= 1 && br <= 4 && riskDataMap[riskCatId]) {
+      const key = String(br) as '1' | '2' | '3' | '4';
+      riskDataMap[riskCatId][key]++;
+    }
+  }
 
   const categoriesList = ['general', 'deposits', 'advances'];
   const broaderAreaIds = new Set<number>();
