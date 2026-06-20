@@ -342,7 +342,11 @@ export class AuditCalendarService {
       `;
       const queryParams: any[] = [];
 
-      if (userId && userTypeId && userTypeId !== 1) {
+      if (
+        userId
+        && userTypeId
+        && ![1, 5].includes(userTypeId)
+      ) {
         if (auditUnitAuthority && auditUnitAuthority.trim() !== '') {
           const unitIds = auditUnitAuthority.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
           if (unitIds.length > 0) {
