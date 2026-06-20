@@ -1873,7 +1873,12 @@ export class InternalAuditService {
               AS question_count,
 
           COUNT(DISTINCT ans.id)
-              AS answered_count
+              AS answered_count,
+
+          COUNT(DISTINCT ans.id) FILTER (
+              WHERE ans.is_compliance = 1
+                  AND COALESCE(ans.compliance_status_id, 0) = 10
+          ) AS live_pending_count
 
       FROM menu_master mm
 
@@ -2052,6 +2057,11 @@ export class InternalAuditService {
               : Number(
                 row.answered_count || 0,
               ),
+
+          live_pending_count:
+            Number(
+              row.live_pending_count || 0,
+            ),
 
           question_sets:
             [],
