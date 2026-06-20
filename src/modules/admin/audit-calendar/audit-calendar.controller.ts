@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { AuditCalendarService } from './audit-calendar.service';
 import { CreateAuditCalendarDto, UpdateAuditCalendarDto } from './dto/audit-calendar.dto';
@@ -21,8 +22,16 @@ export class AuditCalendarController {
   }
 
   @Get('scheduling')
-  getSchedulingData() {
-    return this.service.getSchedulingData();
+  getSchedulingData(
+    @Query('userId') userId?: string,
+    @Query('userTypeId') userTypeId?: string,
+    @Query('auditUnitAuthority') auditUnitAuthority?: string,
+  ) {
+    return this.service.getSchedulingData(
+      userId ? Number(userId) : undefined,
+      userTypeId ? Number(userTypeId) : undefined,
+      auditUnitAuthority,
+    );
   }
 
   @Post('set-frequencies')

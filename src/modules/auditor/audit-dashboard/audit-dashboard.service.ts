@@ -1112,47 +1112,83 @@ LIMIT 1;
             );
         }
 
+        let hasLegacy = false;
+        if (data.esb_id) {
+            const legacyCheck = await this.db.findOne(
+                `
+                SELECT id 
+                FROM executive_summary_branch_position 
+                WHERE assesment_id = $1 
+                  AND LENGTH(TRIM(type_id)) <= 2
+                  AND deleted_at IS NULL
+                LIMIT 1;
+                `,
+                [assessment_id]
+            );
+            if (legacyCheck) {
+                hasLegacy = true;
+            }
+        }
+
+        if (hasLegacy) {
+            await this.db.transaction(async (client) => {
+                await client.query(
+                    `DELETE FROM executive_summary_branch_position WHERE assesment_id = $1`,
+                    [assessment_id]
+                );
+                await client.query(
+                    `DELETE FROM executive_summary_fresh_accounts WHERE assesment_id = $1`,
+                    [assessment_id]
+                );
+                await client.query(
+                    `DELETE FROM executive_summary_basic_details WHERE assesment_id = $1`,
+                    [assessment_id]
+                );
+            });
+            const assessmentRefresh = await this.db.query(assessmentQuery, [assessment_id]);
+            data = assessmentRefresh.rows[0];
+        }
+
         if (!data.esb_id) {
             const [bpDeposits, bpAdvances, faDeposits, faAdvances] = await Promise.all([
-                // Deposits for Branch Position (Balances of all accounts)
+                // Deposits for Branch Position (Principal sum of accounts opened in period)
                 this.db.query(
                     `
 SELECT 
   sm.scheme_code,
-  SUM(COALESCE(dd.balance::numeric, 0)) AS total_balance
+  SUM(CASE WHEN dd.account_opening_date BETWEEN $2 AND $3 THEN COALESCE(dd.principal_amount::numeric, 0) ELSE 0 END) AS total_balance
 FROM dump_deposits dd
 LEFT JOIN scheme_master sm ON sm.id = dd.scheme_id
 WHERE dd.branch_id = $1 
   AND dd.deleted_at IS NULL
 GROUP BY sm.scheme_code;
                     `,
-                    [data.audit_unit_id]
+                    [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
                 ),
-                // Advances for Branch Position (Balances of all accounts)
+                // Advances for Branch Position (Sanction sum of accounts opened in period)
                 this.db.query(
                     `
 SELECT 
   sm.scheme_code,
   da.npa_status,
-  SUM(COALESCE(da.outstanding_balance::numeric, 0)) AS total_balance
+  SUM(CASE WHEN da.account_opening_date BETWEEN $2 AND $3 THEN COALESCE(da.sanction_amount::numeric, 0) ELSE 0 END) AS total_balance
 FROM dump_advances da
 LEFT JOIN scheme_master sm ON sm.id = da.scheme_id
 WHERE da.branch_id = $1 
   AND da.deleted_at IS NULL
 GROUP BY sm.scheme_code, da.npa_status;
                     `,
-                    [data.audit_unit_id]
+                    [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
                 ),
                 // Deposits for Fresh Accounts (New accounts count)
                 this.db.query(
                     `
 SELECT 
   sm.scheme_code,
-  COUNT(dd.account_no) AS total_accounts
+  COUNT(CASE WHEN dd.account_opening_date BETWEEN $2 AND $3 THEN dd.account_no END) AS total_accounts
 FROM dump_deposits dd
 LEFT JOIN scheme_master sm ON sm.id = dd.scheme_id
 WHERE dd.branch_id = $1 
-  AND dd.account_opening_date BETWEEN $2 AND $3
   AND dd.deleted_at IS NULL
 GROUP BY sm.scheme_code;
                     `,
@@ -1164,11 +1200,10 @@ GROUP BY sm.scheme_code;
 SELECT 
   sm.scheme_code,
   da.npa_status,
-  COUNT(da.account_no) AS total_accounts
+  COUNT(CASE WHEN da.account_opening_date BETWEEN $2 AND $3 THEN da.account_no END) AS total_accounts
 FROM dump_advances da
 LEFT JOIN scheme_master sm ON sm.id = da.scheme_id
 WHERE da.branch_id = $1 
-  AND da.account_opening_date BETWEEN $2 AND $3
   AND da.deleted_at IS NULL
 GROUP BY sm.scheme_code, da.npa_status;
                     `,
@@ -2362,25 +2397,39 @@ LIMIT 1;
 
     async getBranchFinancialPosition(
         branch_id: number,
+        assessment_id?: number,
     ) {
-        const latestAssessment = await this.db.findOne(
-            `
-            SELECT id, year_id, assesment_period_from, assesment_period_to
-            FROM audit_assesment_master
-            WHERE audit_unit_id = $1
-              AND deleted_at IS NULL
-            ORDER BY id DESC
-            LIMIT 1
-            `,
-            [branch_id]
-        );
+        let assessment;
+        if (assessment_id) {
+            assessment = await this.db.findOne(
+                `
+                SELECT id, year_id, assesment_period_from, assesment_period_to
+                FROM audit_assesment_master
+                WHERE id = $1
+                  AND deleted_at IS NULL
+                `,
+                [assessment_id]
+            );
+        } else {
+            assessment = await this.db.findOne(
+                `
+                SELECT id, year_id, assesment_period_from, assesment_period_to
+                FROM audit_assesment_master
+                WHERE audit_unit_id = $1
+                  AND deleted_at IS NULL
+                ORDER BY id DESC
+                LIMIT 1
+                `,
+                [branch_id]
+            );
+        }
 
-        if (!latestAssessment) {
+        if (!assessment) {
             return [];
         }
 
-        const assessmentId = Number(latestAssessment.id);
-        const prevYearId = Number(latestAssessment.year_id) - 1;
+        const currentAssessmentId = Number(assessment.id);
+        const prevYearId = Number(assessment.year_id) - 1;
 
         const result = await this.db.query(
             `
@@ -2399,8 +2448,8 @@ FROM (
         sm.name AS scheme_name,
         CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END AS category_id,
         es.march_position,
-        COUNT(dd.account_no) AS total_accounts,
-        SUM(COALESCE(dd.balance::numeric, 0)) AS total_amount
+        COUNT(CASE WHEN dd.account_opening_date BETWEEN $4 AND $5 THEN dd.account_no END) AS total_accounts,
+        SUM(CASE WHEN dd.account_opening_date BETWEEN $4 AND $5 THEN COALESCE(dd.principal_amount::numeric, 0) ELSE 0 END) AS total_amount
     FROM dump_deposits dd
     LEFT JOIN scheme_master sm
         ON sm.id = dd.scheme_id
@@ -2423,8 +2472,8 @@ FROM (
         sm.name AS scheme_name,
         CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END AS category_id,
         es.march_position,
-        COUNT(da.account_no) AS total_accounts,
-        SUM(COALESCE(da.outstanding_balance::numeric, 0)) AS total_amount
+        COUNT(CASE WHEN da.account_opening_date BETWEEN $4 AND $5 THEN da.account_no END) AS total_accounts,
+        SUM(CASE WHEN da.account_opening_date BETWEEN $4 AND $5 THEN COALESCE(da.sanction_amount::numeric, 0) ELSE 0 END) AS total_amount
     FROM dump_advances da
     LEFT JOIN scheme_master sm
         ON sm.id = da.scheme_id
@@ -2511,7 +2560,9 @@ ORDER BY
             [
                 branch_id,
                 prevYearId,
-                assessmentId,
+                currentAssessmentId,
+                assessment.assesment_period_from,
+                assessment.assesment_period_to,
             ],
         );
 

@@ -8,6 +8,7 @@ import { syncAssessmentScoring } from '../../../common/helpers/assessment-scorin
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import { AuditLogService } from '../../audit-logs/audit-log.service';
 
 const AUDITOR_STATUS_IDS = [1, 3];
 const REMARK_TYPES: Record<number, string> = {
@@ -108,6 +109,8 @@ export class InternalAuditService {
   constructor(
     private readonly db:
       DatabaseService,
+    private readonly auditLogService:
+      AuditLogService,
   ) { }
 
   private isLiveComplianceSettledStatus(
@@ -1090,6 +1093,17 @@ export class InternalAuditService {
             employeeId,
             batchKey,
           ],
+        );
+
+        await this.auditLogService.createLog(
+          'AUDIT_START',
+          {
+            employeeId,
+            auditAssessmentId: assessmentId,
+            newStatus: 'AUDIT (PENDING / ACTIVE)',
+            description: `Audit assessment started for unit.`,
+          },
+          client,
         );
 
         return {
@@ -2852,6 +2866,18 @@ export class InternalAuditService {
               preview.overview.audit_unit_id,
             ],
           );
+
+          await this.auditLogService.createLog(
+            'AUDIT_END',
+            {
+              employeeId,
+              auditAssessmentId: assessmentId,
+              oldStatus: STATUS_LABELS[currentStatus],
+              newStatus: STATUS_LABELS[liveManagerCompliance ? 7 : 2],
+              description: 'Audit assessment submitted by auditor.',
+            },
+            client,
+          );
         },
       );
 
@@ -3163,6 +3189,22 @@ export class InternalAuditService {
       throw new BadRequestException(
         'Assessment is not pending for compliance review.',
       );
+    }
+
+    const existingLog = await this.db.findOne(
+      `SELECT id FROM audit_logs 
+       WHERE audit_assesment_id = $1 
+         AND event_type = 'REVIEW_START' 
+         AND employee_id = $2 
+         AND event_datetime >= COALESCE((SELECT compliance_end_date FROM audit_assesment_master WHERE id = $1), '1970-01-01'::date)`,
+      [assessmentId, employeeId],
+    );
+    if (!existingLog) {
+      await this.auditLogService.createLog('REVIEW_START', {
+        employeeId,
+        auditAssessmentId: assessmentId,
+        description: `Reviewer started compliance review for assessment.`,
+      });
     }
 
     const answerResult =
@@ -4690,6 +4732,18 @@ export class InternalAuditService {
             ],
           );
 
+          await this.auditLogService.createLog(
+            'REVIEW_END',
+            {
+              employeeId,
+              auditAssessmentId: assessmentId,
+              oldStatus: STATUS_LABELS[5],
+              newStatus: STATUS_LABELS[nextStatus],
+              description: `Reviewer completed compliance review. Rejected points: ${rejectedCount}. Partially passed points: ${partialCount}. Carry-forward points: ${carryForwardCount}.`,
+            },
+            client,
+          );
+
           return {
             rejectedCount,
             partialCount,
@@ -4746,6 +4800,22 @@ export class InternalAuditService {
       throw new BadRequestException(
         'Assessment is not pending for audit review.',
       );
+    }
+
+    const existingLog = await this.db.findOne(
+      `SELECT id FROM audit_logs 
+       WHERE audit_assesment_id = $1 
+         AND event_type = 'REVIEW_START' 
+         AND employee_id = $2 
+         AND event_datetime >= COALESCE((SELECT audit_end_date FROM audit_assesment_master WHERE id = $1), '1970-01-01'::date)`,
+      [assessmentId, employeeId],
+    );
+    if (!existingLog) {
+      await this.auditLogService.createLog('REVIEW_START', {
+        employeeId,
+        auditAssessmentId: assessmentId,
+        description: `Reviewer started review for assessment.`,
+      });
     }
 
     const answerResult =
@@ -5330,6 +5400,18 @@ export class InternalAuditService {
             ],
           );
 
+          await this.auditLogService.createLog(
+            'REVIEW_END',
+            {
+              employeeId,
+              auditAssessmentId: assessmentId,
+              oldStatus: STATUS_LABELS[2],
+              newStatus: STATUS_LABELS[nextStatus],
+              description: `Reviewer completed audit review. Rejected points: ${rejectedCount}. Compliance points: ${complianceCount}.`,
+            },
+            client,
+          );
+
           return {
             rejectedCount,
             complianceCount,
@@ -5651,6 +5733,22 @@ export class InternalAuditService {
       throw new BadRequestException(
         'Assessment is not pending for compliance.',
       );
+    }
+
+    const existingLog = await this.db.findOne(
+      `SELECT id FROM audit_logs 
+       WHERE audit_assesment_id = $1 
+         AND event_type = 'COMPLIANCE_START' 
+         AND employee_id = $2 
+         AND event_datetime >= COALESCE((SELECT audit_review_date FROM audit_assesment_master WHERE id = $1), '1970-01-01'::date)`,
+      [assessmentId, employeeId],
+    );
+    if (!existingLog) {
+      await this.auditLogService.createLog('COMPLIANCE_START', {
+        employeeId,
+        auditAssessmentId: assessmentId,
+        description: `Branch started compliance responses for assessment.`,
+      });
     }
 
     const answerResult =
@@ -6760,6 +6858,18 @@ ORDER BY id DESC;
             employeeId,
             updated.rows[0].batch_key,
           ],
+        );
+
+        await this.auditLogService.createLog(
+          'COMPLIANCE_END',
+          {
+            employeeId,
+            auditAssessmentId: assessmentId,
+            oldStatus: STATUS_LABELS[currentStatus],
+            newStatus: STATUS_LABELS[5],
+            description: `Branch submitted compliance responses.`,
+          },
+          client,
         );
       },
     );
