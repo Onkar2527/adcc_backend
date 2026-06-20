@@ -119,6 +119,10 @@ export class ReportsService {
       return this.getRiskWiseAuditUnitsDefinition(isFreeFlow);
     }
 
+    if (reportSlug === 'risk-npa-wise-audit-units-report') {
+      return this.getRiskNpaWiseAuditUnitsDefinition(isFreeFlow);
+    }
+
     if (reportSlug === 'rbia-performance-risk-weightage-report-all-units') {
       return this.getRBIAPerformanceRiskWeightageReportAllUnitsDefinition(isFreeFlow);
     }
@@ -141,6 +145,10 @@ export class ReportsService {
 
     if (reportSlug === 'questionwsie-broader-areawise-report') {
       return this.getQuestionWiseBroaderAreaDefinition(isFreeFlow);
+    }
+
+    if (reportSlug === 'question-wise-scoring-report') {
+      return this.getQuestionWiseScoringDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'audit-observation-count-report') {
@@ -1135,18 +1143,7 @@ export class ReportsService {
           required: true,
           options: lookups.years,
         },
-        {
-          key: 'startDate',
-          label: 'Start Date',
-          type: 'date',
-          required: true,
-        },
-        {
-          key: 'endDate',
-          label: 'End Date',
-          type: 'date',
-          required: true,
-        },
+
         {
           key: 'rmv_pending_assesments',
           label: 'Remove Pending Assessments',
@@ -1185,6 +1182,138 @@ export class ReportsService {
       summaryCards: [
         { key: 'totalAuditUnits', label: 'Audit Units' },
         { key: 'totalScore', label: 'Total Score' },
+      ],
+    };
+  }
+
+  private async getRiskNpaWiseAuditUnitsDefinition(isFreeFlow = false) {
+    const lookups = await this.getComplianceLookups(isFreeFlow);
+    const riskColumns = lookups.riskCategories.flatMap((riskCategory: any) => [
+      {
+        key: `risk_${riskCategory.value}_score`,
+        label: `${riskCategory.label} - Total Risk Score`,
+        width: '10%',
+        align: 'right',
+      },
+      {
+        key: `risk_${riskCategory.value}_branch_percent`,
+        label: `${riskCategory.label} (%) To Total Branch Risk`,
+        width: '10%',
+        align: 'right',
+      },
+      {
+        key: `risk_${riskCategory.value}_all_percent`,
+        label: `${riskCategory.label} (%) To All Branch Risk`,
+        width: '10%',
+        align: 'right',
+      },
+    ]);
+
+    return {
+      slug: 'risk-npa-wise-audit-units-report',
+      title: 'Risk & NPA Wise Audit Units Report',
+      category: 'Advanced Reports',
+      page: 'A5L',
+      fileName: 'risk-npa-wise-audit-units-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        selectSearchTypeFilter: '1',
+        financial_year: 'all',
+        startDate: '',
+        endDate: '',
+        rmv_pending_assesments: ['1'],
+      },
+      filters: [
+        {
+          key: 'selectSearchTypeFilter',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '1', label: 'All Branches' },
+            { value: '2', label: 'All Head Of Departments' },
+          ],
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
+        },
+
+        {
+          key: 'rmv_pending_assesments',
+          label: 'Remove Pending Assessments',
+          type: 'checkbox',
+          options: [{ value: '1', label: 'Remove Pending Assessments' }],
+        },
+      ],
+      columns: [
+        {
+          key: 'audit_unit_code',
+          label: 'BR Code',
+          width: '8%',
+          align: 'center',
+        },
+        { key: 'audit_unit_name', label: 'Branch / HO', width: '16%' },
+        ...riskColumns,
+        {
+          key: 'total_score',
+          label: 'Total Score',
+          width: '9%',
+          align: 'right',
+        },
+        {
+          key: 'total_score_all_percent',
+          label: 'Total Score % to All Branches / HO Departments',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'branch_rating',
+          label: 'Branch Rating',
+          width: '10%',
+          align: 'center',
+        },
+        {
+          key: 'npa_total',
+          label: 'NPA (IN Lakhs)',
+          width: '10%',
+          align: 'right',
+        },
+        {
+          key: 'weighted_score',
+          label: 'Weighted Score % (NPA 60% + Risk 40%)',
+          width: '12%',
+          align: 'right',
+        },
+        {
+          key: 'weighted_npa_rating',
+          label: 'Weighted NPA Risk Rating',
+          width: '12%',
+          align: 'center',
+        },
+        {
+          key: 'total_score_all_percent_with_npa',
+          label: 'Total Score % to All Branches / HO Departments With NPA',
+          width: '14%',
+          align: 'right',
+        },
+        {
+          key: 'actual_npa_rating',
+          label: 'Actual NPA Rating',
+          width: '12%',
+          align: 'center',
+        },
+      ],
+      summaryCards: [
+        { key: 'totalAuditUnits', label: 'Audit Units' },
+        { key: 'totalScore', label: 'Total Score' },
+        { key: 'totalNpa', label: 'Total NPA' },
       ],
     };
   }
@@ -1935,6 +2064,79 @@ export class ReportsService {
     };
   }
 
+  private async getQuestionWiseScoringDefinition(isFreeFlow = false) {
+    const lookups = await this.getAuditCompleteLookups(isFreeFlow);
+
+    return {
+      slug: 'question-wise-scoring-report',
+      title: 'Question Wise Scoring Report',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'question-wise-scoring-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+      },
+      defaultFilters: {
+        selectSearchTypeFilter: '3',
+        reportAuditUnit: '',
+        financial_year: 'all',
+        reportAuditAssesment: '',
+        startDate: '',
+        endDate: '',
+        rmv_pending_assesments: [],
+      },
+      filters: [
+        {
+          key: 'selectSearchTypeFilter',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '3', label: 'Single Branch (Assessment Wise)' },
+            { value: '4', label: 'Single Department (Assessment Wise)' },
+          ],
+        },
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Branch / Department',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Select Assessment',
+          type: 'select',
+          required: true,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+      ],
+      columns: [
+        { key: 'menu_name', label: 'Menu Name' },
+        { key: 'risk_category', label: 'Risk Category' },
+        { key: 'category_name', label: 'Category Name' },
+        { key: 'account_no', label: 'Account No' },
+        { key: 'account_holder_name', label: 'Account Holder' },
+        { key: 'question', label: 'Question' },
+        { key: 'answer_given', label: 'Answer' },
+        { key: 'audit_comment', label: 'Comment' },
+        { key: 'risk_score', label: 'Risk Score' },
+        { key: 'weighted_risk_score', label: 'Weighted Score' },
+        { key: 'highest_weightage_risk', label: 'Max Score' },
+      ],
+    };
+  }
+
   private async getAuditObservationCountDefinition() {
     const lookups = await this.getAuditStatusLookups();
 
@@ -2130,6 +2332,10 @@ export class ReportsService {
       return this.getRiskWiseAuditUnitsReport(query);
     }
 
+    if (reportSlug === 'risk-npa-wise-audit-units-report') {
+      return this.getRiskNpaWiseAuditUnitsReport(query);
+    }
+
     if (reportSlug === 'rbia-performance-risk-weightage-report-all-units') {
       return this.getRBIAPerformanceRiskWeightageReportAllUnitsReport(query);
     }
@@ -2152,6 +2358,10 @@ export class ReportsService {
 
     if (reportSlug === 'questionwsie-broader-areawise-report') {
       return this.getBroaderAreaWiseScoringReport(query);
+    }
+
+    if (reportSlug === 'question-wise-scoring-report') {
+      return this.getQuestionWiseScoringReport(query);
     }
 
     if (reportSlug === 'audit-observation-count-report') {
@@ -4066,8 +4276,8 @@ export class ReportsService {
 
   async getRiskWiseAuditUnitsReport(query: any) {
     const searchType = String(query.selectSearchTypeFilter || '1').trim();
-    const startDate = query.startDate ? String(query.startDate).trim() : '';
-    const endDate = query.endDate ? String(query.endDate).trim() : '';
+    let startDate = query.startDate ? String(query.startDate).trim() : '';
+    let endDate = query.endDate ? String(query.endDate).trim() : '';
     const removePending = Array.isArray(query.rmv_pending_assesments)
       ? query.rmv_pending_assesments.includes('1')
       : String(query.rmv_pending_assesments) === '1';
@@ -4078,10 +4288,33 @@ export class ReportsService {
     }
 
     if (!startDate || !endDate) {
+      if (query.financial_year && query.financial_year !== 'all') {
+        let yearLabel = '';
+        if (/^\d+$/.test(String(query.financial_year).trim())) {
+          const yearResult = await this.db.query(
+            `SELECT year FROM year_master WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+            [Number(query.financial_year)],
+          );
+          if (yearResult.rows.length > 0) {
+            yearLabel = yearResult.rows[0].year;
+          }
+        } else {
+          yearLabel = String(query.financial_year);
+        }
+        const dates = this.financialYearDateRange(yearLabel);
+        if (dates) {
+          startDate = dates.startDate;
+          endDate = dates.endDate;
+        }
+      }
+    }
+
+    if (!startDate || !endDate) {
       throw new BadRequestException(
-        'Date range (Start Date & End Date) is required',
+        'Please select a specific Financial Year',
       );
     }
+
 
     const riskCategoriesResult = await this.db.query(
       `
@@ -4739,17 +4972,823 @@ export class ReportsService {
     };
   }
 
-  private financialYearDateRange(year: any) {
-    const match = String(year || '').match(/(\d{4})\D+(\d{4})/);
+  async getRiskNpaWiseAuditUnitsReport(query: any) {
+    const searchType = String(query.selectSearchTypeFilter || '1').trim();
+    let startDate = query.startDate ? String(query.startDate).trim() : '';
+    let endDate = query.endDate ? String(query.endDate).trim() : '';
+    const removePending = Array.isArray(query.rmv_pending_assesments)
+      ? query.rmv_pending_assesments.includes('1')
+      : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
-    if (!match) {
-      return null;
+    if (!['1', '2'].includes(searchType)) {
+      throw new BadRequestException('Search type is required');
     }
 
-    return {
-      startDate: `${match[1]}-04-01`,
-      endDate: `${match[2]}-03-31`,
+    if (!startDate || !endDate) {
+      if (query.financial_year && query.financial_year !== 'all') {
+        let yearLabel = '';
+        if (/^\d+$/.test(String(query.financial_year).trim())) {
+          const yearResult = await this.db.query(
+            `SELECT year FROM year_master WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+            [Number(query.financial_year)],
+          );
+          if (yearResult.rows.length > 0) {
+            yearLabel = yearResult.rows[0].year;
+          }
+        } else {
+          yearLabel = String(query.financial_year);
+        }
+        const dates = this.financialYearDateRange(yearLabel);
+        if (dates) {
+          startDate = dates.startDate;
+          endDate = dates.endDate;
+        }
+      }
+    }
+
+    if (!startDate || !endDate) {
+      throw new BadRequestException(
+        'Please select a specific Financial Year',
+      );
+    }
+
+    const riskCategoriesResult = await this.db.query(
+      `
+      SELECT id, risk_category
+      FROM risk_category_master
+      WHERE is_active = 1
+        AND deleted_at IS NULL
+      ORDER BY id ASC
+      `,
+      [],
+    );
+
+    const unitTypeId = searchType === '2' ? 2 : 1;
+
+    const unitsResult = await this.db.query(
+      `
+      SELECT id, audit_unit_code, name, section_type_id
+      FROM audit_unit_master
+      WHERE section_type_id = $1
+        AND is_active = 1
+        AND deleted_at IS NULL
+      ORDER BY audit_unit_code ASC, name ASC
+      `,
+      [unitTypeId],
+    );
+
+    if (!unitsResult.rows.length) {
+      throw new BadRequestException(
+        'No audit units found for selected search type.',
+      );
+    }
+
+    const statusCondition = removePending
+      ? (isFreeFlow ? 'AND asm.audit_status_id >= 4' : 'AND asm.audit_status_id > 4')
+      : (isFreeFlow ? 'AND asm.audit_status_id >= 1' : 'AND asm.audit_status_id > 1');
+
+    const assessmentsResult = await this.db.query(
+      `
+      SELECT
+        asm.id,
+        asm.year_id,
+        asm.audit_unit_id
+      FROM audit_assesment_master asm
+      INNER JOIN audit_unit_master aum
+        ON aum.id = asm.audit_unit_id
+      WHERE aum.section_type_id = $3
+        AND asm.assesment_period_from >= $1
+        AND asm.assesment_period_to <= $2
+        ${statusCondition}
+        AND asm.deleted_at IS NULL
+        AND aum.deleted_at IS NULL
+      `,
+      [startDate, endDate, unitTypeId],
+    );
+
+    if (!assessmentsResult.rows.length) {
+      throw new BadRequestException('No data found for selected filters.');
+    }
+
+    const assessmentIds = assessmentsResult.rows.map((row: any) =>
+      Number(row.id),
+    );
+    const firstYearId = Number(assessmentsResult.rows[0].year_id || 0);
+
+    const assessmentById = new Map<number, any>();
+    const assessmentCountByUnit = new Map<number, number>();
+
+    assessmentsResult.rows.forEach((row: any) => {
+      const assessmentId = Number(row.id);
+      const auditUnitId = Number(row.audit_unit_id);
+
+      assessmentById.set(assessmentId, row);
+      assessmentCountByUnit.set(
+        auditUnitId,
+        Number(assessmentCountByUnit.get(auditUnitId) || 0) + 1,
+      );
+    });
+
+    const [
+      riskMatrixResult,
+      riskWeightsResult,
+      depositsSamplingResult,
+      advancesSamplingResult,
+      answersResult,
+      positionDataResult,
+      npaRatingsResult,
+      ratingsResult,
+    ] = await Promise.all([
+      this.db.query(
+        `SELECT risk_parameter, business_risk_score, control_risk_score FROM risk_matrix WHERE year_id = $1 AND deleted_at IS NULL`,
+        [firstYearId],
+      ),
+      this.db.query(
+        `
+          SELECT risk_category_id, risk_weight
+          FROM risk_category_weights
+          WHERE year_id = $1
+            AND is_active = 1
+            AND deleted_at IS NULL
+          `,
+        [firstYearId],
+      ),
+      this.db.query(
+        `
+          SELECT assesment_period_id, COUNT(*)::int AS count
+          FROM dump_deposits
+          WHERE sampling_filter = 1
+            AND assesment_period_id = ANY($1::int[])
+            AND deleted_at IS NULL
+          GROUP BY assesment_period_id
+          `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+          SELECT assesment_period_id, COUNT(*)::int AS count
+          FROM dump_advances
+          WHERE sampling_filter = 1
+            AND assesment_period_id = ANY($1::int[])
+            AND deleted_at IS NULL
+          GROUP BY assesment_period_id
+          `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+          SELECT
+            ans.id,
+            ans.category_id,
+            ans.dump_id,
+            ans.business_risk,
+            ans.control_risk,
+            ans.question_id,
+            ans.assesment_id,
+            qm.risk_category_id,
+            qm.option_id,
+            qm.area_of_audit_id AS audit_area_id,
+            cm.linked_table_id
+          FROM answers_data ans
+          INNER JOIN question_master qm
+            ON ans.question_id = qm.id
+          LEFT JOIN category_master cm
+            ON cm.id = ans.category_id
+          WHERE ans.assesment_id = ANY($1::int[])
+            AND (
+              ans.business_risk IN ('1', '2', '3')
+              OR ans.control_risk IN ('1', '2', '3')
+              OR qm.option_id = 4
+            )
+            AND ans.deleted_at IS NULL
+            AND qm.deleted_at IS NULL
+          `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+        SELECT assesment_id, type_id, amount
+        FROM executive_summary_branch_position
+        WHERE year_id = $1
+          AND deleted_at IS NULL
+        `,
+        [firstYearId],
+      ),
+      firstYearId
+        ? this.db.query(
+          `
+          SELECT audit_unit_id, risk_type_id, range_from, range_to
+          FROM risk_branch_rating
+          WHERE year_id = $1
+            AND audit_type_id = 1
+            AND deleted_at IS NULL
+          `,
+          [firstYearId],
+        )
+        : Promise.resolve({ rows: [] }),
+      firstYearId
+        ? this.db.query(
+          `
+          SELECT audit_unit_id, risk_type_id, range_from, range_to
+          FROM risk_branch_rating
+          WHERE year_id = $1
+            AND audit_type_id = 1
+            AND deleted_at IS NULL
+          `,
+          [firstYearId],
+        )
+        : Promise.resolve({ rows: [] }),
+    ]);
+
+    const businessRiskScores = new Map<number, number>();
+    const controlRiskScores = new Map<number, number>();
+
+    riskMatrixResult.rows.forEach((row: any) => {
+      const parameter = Number(row.risk_parameter);
+
+      businessRiskScores.set(parameter, Number(row.business_risk_score || 0));
+      controlRiskScores.set(parameter, Number(row.control_risk_score || 0));
+    });
+
+    const riskWeightMap = new Map<number, number>();
+
+    riskWeightsResult.rows.forEach((row: any) => {
+      riskWeightMap.set(
+        Number(row.risk_category_id),
+        Number(row.risk_weight || 0),
+      );
+    });
+
+    const matrixScore = (businessRisk: any, controlRisk: any) => {
+      const businessRiskId = Number(businessRisk);
+      const controlRiskId = Number(controlRisk);
+
+      if (
+        !businessRiskId ||
+        !controlRiskId ||
+        businessRiskId < 1 ||
+        businessRiskId > 4 ||
+        controlRiskId < 1 ||
+        controlRiskId > 4
+      ) {
+        return 0;
+      }
+
+      return (
+        Number(businessRiskScores.get(businessRiskId) || 0) +
+        Number(controlRiskScores.get(controlRiskId) || 0)
+      );
     };
+
+    const depositsSamplingByAssessment = new Map<number, number>();
+    depositsSamplingResult.rows.forEach((row: any) => {
+      depositsSamplingByAssessment.set(
+        Number(row.assesment_period_id),
+        Number(row.count || 0),
+      );
+    });
+
+    const advancesSamplingByAssessment = new Map<number, number>();
+    advancesSamplingResult.rows.forEach((row: any) => {
+      advancesSamplingByAssessment.set(
+        Number(row.assesment_period_id),
+        Number(row.count || 0),
+      );
+    });
+
+    const annexureAnswerIds = answersResult.rows
+      .filter((row: any) => Number(row.option_id) === 4)
+      .map((row: any) => Number(row.id));
+
+    const annexuresResult = annexureAnswerIds.length
+      ? await this.db.query(
+        `
+        SELECT
+          ax.answer_id,
+          ax.business_risk,
+          ax.control_risk,
+          ax.risk_cat_id AS risk_category_id,
+          ax.assesment_id,
+          ans.category_id,
+          qm.area_of_audit_id AS audit_area_id,
+          cm.linked_table_id
+        FROM answers_data_annexure ax
+        INNER JOIN answers_data ans
+          ON ax.answer_id = ans.id
+        INNER JOIN question_master qm
+          ON ans.question_id = qm.id
+        LEFT JOIN category_master cm
+          ON cm.id = ans.category_id
+        WHERE ax.answer_id = ANY($1::int[])
+          AND ax.assesment_id = ANY($2::int[])
+          AND (
+            ax.business_risk IN ('1', '2', '3')
+            OR ax.control_risk IN ('1', '2', '3')
+          )
+          AND ax.deleted_at IS NULL
+        `,
+        [annexureAnswerIds, assessmentIds],
+      )
+      : { rows: [] };
+
+    const assessmentStats = new Map<
+      number,
+      Map<
+        number,
+        Map<
+          string,
+          Map<
+            number,
+            Map<
+              number,
+              {
+                qualScoreSum: number;
+                quanScoreSum: number;
+                totalAnnexRows: number;
+              }
+            >
+          >
+        >
+      >
+    >();
+
+    const categoryKey = (row: any) => {
+      const linkedTableId = Number(row.linked_table_id || 0);
+
+      if (linkedTableId === 1) {
+        return 'deposits';
+      }
+
+      if (linkedTableId === 2) {
+        return 'advances';
+      }
+
+      return 'general';
+    };
+
+    const statsFor = (
+      auditUnitId: number,
+      assessmentId: number,
+      catKey: string,
+      broaderAreaId: number,
+      riskCategoryId: number,
+    ) => {
+      if (!assessmentStats.has(auditUnitId)) {
+        assessmentStats.set(auditUnitId, new Map());
+      }
+
+      const unitMap = assessmentStats.get(auditUnitId)!;
+
+      if (!unitMap.has(assessmentId)) {
+        unitMap.set(assessmentId, new Map());
+      }
+
+      const assessmentMap = unitMap.get(assessmentId)!;
+
+      if (!assessmentMap.has(catKey)) {
+        assessmentMap.set(catKey, new Map());
+      }
+
+      const categoryMap = assessmentMap.get(catKey)!;
+
+      if (!categoryMap.has(broaderAreaId)) {
+        categoryMap.set(broaderAreaId, new Map());
+      }
+
+      const areaMap = categoryMap.get(broaderAreaId)!;
+
+      if (!areaMap.has(riskCategoryId)) {
+        areaMap.set(riskCategoryId, {
+          qualScoreSum: 0,
+          quanScoreSum: 0,
+          totalAnnexRows: 0,
+        });
+      }
+
+      return areaMap.get(riskCategoryId)!;
+    };
+
+    answersResult.rows.forEach((answer: any) => {
+      const assessment = assessmentById.get(Number(answer.assesment_id));
+
+      if (!assessment) {
+        return;
+      }
+
+      const broaderAreaId = Number(answer.audit_area_id);
+      const riskCategoryId = Number(answer.risk_category_id);
+
+      if (!broaderAreaId || !riskCategoryId) {
+        return;
+      }
+
+      const catKey = categoryKey(answer);
+      const stats = statsFor(
+        Number(assessment.audit_unit_id),
+        Number(answer.assesment_id),
+        catKey,
+        broaderAreaId,
+        riskCategoryId,
+      );
+      const score = matrixScore(answer.business_risk, answer.control_risk);
+
+      if (catKey === 'general' && Number(answer.option_id) !== 4) {
+        stats.qualScoreSum += score;
+      } else {
+        stats.quanScoreSum += score;
+      }
+    });
+
+    annexuresResult.rows.forEach((annexure: any) => {
+      const assessment = assessmentById.get(Number(annexure.assesment_id));
+
+      if (!assessment) {
+        return;
+      }
+
+      const broaderAreaId = Number(annexure.audit_area_id);
+      const riskCategoryId = Number(annexure.risk_category_id);
+
+      if (!broaderAreaId || !riskCategoryId) {
+        return;
+      }
+
+      const stats = statsFor(
+        Number(assessment.audit_unit_id),
+        Number(annexure.assesment_id),
+        categoryKey(annexure),
+        broaderAreaId,
+        riskCategoryId,
+      );
+
+      stats.quanScoreSum += matrixScore(
+        annexure.business_risk,
+        annexure.control_risk,
+      );
+      stats.totalAnnexRows++;
+    });
+
+    const ratingMap = new Map<number, any[]>();
+    ratingsResult.rows.forEach((rating: any) => {
+      const auditUnitId = Number(rating.audit_unit_id);
+      if (!ratingMap.has(auditUnitId)) {
+        ratingMap.set(auditUnitId, []);
+      }
+      ratingMap.get(auditUnitId)!.push(rating);
+    });
+
+    const npaRatingMap = new Map<number, any[]>();
+    npaRatingsResult.rows.forEach((rating: any) => {
+      const auditUnitId = Number(rating.audit_unit_id);
+      if (!npaRatingMap.has(auditUnitId)) {
+        npaRatingMap.set(auditUnitId, []);
+      }
+      npaRatingMap.get(auditUnitId)!.push(rating);
+    });
+
+    // Map NPA positions
+    const positionDataByBranch = new Map<number, any[]>();
+    let totalAllBranchPosition = 0;
+
+    positionDataResult.rows.forEach((row: any) => {
+      const assessment = assessmentById.get(Number(row.assesment_id));
+      if (assessment) {
+        const auditUnitId = Number(assessment.audit_unit_id);
+        if (!positionDataByBranch.has(auditUnitId)) {
+          positionDataByBranch.set(auditUnitId, []);
+        }
+        positionDataByBranch.get(auditUnitId)!.push(row);
+        
+        if (String(row.type_id).toUpperCase().endsWith('_NPA')) {
+          totalAllBranchPosition += Number(row.amount || 0);
+        }
+      }
+    });
+
+    const rows: any[] = [];
+    const allBranchRiskTotals = new Map<number, number>();
+    let totalAllScore = 0;
+
+    riskCategoriesResult.rows.forEach((riskCategory: any) => {
+      allBranchRiskTotals.set(Number(riskCategory.id), 0);
+    });
+
+    const categoryKeys = ['general', 'deposits', 'advances'];
+
+    unitsResult.rows.forEach((unit: any) => {
+      const auditUnitId = Number(unit.id);
+      const unitAssessmentStats = assessmentStats.get(auditUnitId);
+
+      if (!unitAssessmentStats) {
+        return;
+      }
+
+      const noOfAssessments = Number(
+        assessmentCountByUnit.get(auditUnitId) || 0,
+      );
+
+      if (!noOfAssessments) {
+        return;
+      }
+
+      const unitScores = new Map<number, number>();
+
+      riskCategoriesResult.rows.forEach((riskCategory: any) => {
+        unitScores.set(Number(riskCategory.id), 0);
+      });
+
+      let totalDepositsSampling = 0;
+      let totalAdvancesSampling = 0;
+
+      unitAssessmentStats.forEach(
+        (_assessmentMap: any, assessmentId: number) => {
+          totalDepositsSampling += Number(
+            depositsSamplingByAssessment.get(Number(assessmentId)) || 0,
+          );
+          totalAdvancesSampling += Number(
+            advancesSamplingByAssessment.get(Number(assessmentId)) || 0,
+          );
+        },
+      );
+
+      categoryKeys.forEach((catKey) => {
+        const broaderAreaIds = new Set<number>();
+
+        unitAssessmentStats.forEach((assessmentMap: any) => {
+          const catMap = assessmentMap.get(catKey);
+
+          if (!catMap) {
+            return;
+          }
+
+          catMap.forEach((_riskMap: any, broaderAreaId: number) => {
+            broaderAreaIds.add(Number(broaderAreaId));
+          });
+        });
+
+        broaderAreaIds.forEach((broaderAreaId) => {
+          riskCategoriesResult.rows.forEach((riskCategory: any) => {
+            const riskCategoryId = Number(riskCategory.id);
+            let qualScoreSumAll = 0;
+            let quanScoreSumAll = 0;
+            let totalAnnexRowsAll = 0;
+
+            unitAssessmentStats.forEach((assessmentMap: any) => {
+              const stats = assessmentMap
+                .get(catKey)
+                ?.get(broaderAreaId)
+                ?.get(riskCategoryId);
+
+              if (!stats) {
+                return;
+              }
+
+              qualScoreSumAll += Number(stats.qualScoreSum || 0);
+              quanScoreSumAll += Number(stats.quanScoreSum || 0);
+              totalAnnexRowsAll += Number(stats.totalAnnexRows || 0);
+            });
+
+            if (qualScoreSumAll === 0 && quanScoreSumAll === 0) {
+              return;
+            }
+
+            let noOfAccountsChecked = 0;
+
+            if (catKey === 'advances') {
+              noOfAccountsChecked = totalAdvancesSampling + totalAnnexRowsAll;
+            } else if (catKey === 'deposits') {
+              noOfAccountsChecked = totalDepositsSampling + totalAnnexRowsAll;
+            } else {
+              noOfAccountsChecked = totalAnnexRowsAll;
+            }
+
+            const avgQuanScore =
+              quanScoreSumAll > 0
+                ? quanScoreSumAll / (noOfAccountsChecked || 1)
+                : 0;
+            const totalAvgScore = qualScoreSumAll + avgQuanScore;
+            const avgTotalScorePerAudit = totalAvgScore / noOfAssessments;
+            const riskWeight = Number(riskWeightMap.get(riskCategoryId) || 0);
+            const weightedScore = riskWeight * avgTotalScorePerAudit;
+
+            unitScores.set(
+              riskCategoryId,
+              Number(unitScores.get(riskCategoryId) || 0) + weightedScore,
+            );
+          });
+        });
+      });
+
+      const totalScore = Array.from(unitScores.values()).reduce(
+        (sum, value) => sum + Number(value || 0),
+        0,
+      );
+
+      if (totalScore <= 0) {
+        return;
+      }
+
+      totalAllScore += totalScore;
+
+      // Calculate NPA total for this branch
+      let positionTotal = 0;
+      const branchPositions = positionDataByBranch.get(auditUnitId) || [];
+      branchPositions.forEach((posRow: any) => {
+        if (String(posRow.type_id).toUpperCase().endsWith('_NPA')) {
+          positionTotal += Number(posRow.amount || 0);
+        }
+      });
+
+      const row: any = {
+        audit_unit_id: auditUnitId,
+        audit_unit_code: unit.audit_unit_code || '-',
+        audit_unit_name: this.auditUnitName(unit),
+        __risk_scores: Object.fromEntries(unitScores),
+        __total_score_value: totalScore,
+        __rating_rows: ratingMap.get(auditUnitId) || [],
+        __npa_rating_rows: npaRatingMap.get(auditUnitId) || [],
+        __npa_total_value: positionTotal,
+      };
+
+      riskCategoriesResult.rows.forEach((riskCategory: any) => {
+        const riskCategoryId = Number(riskCategory.id);
+        const score = Number(unitScores.get(riskCategoryId) || 0);
+
+        row[`risk_${riskCategoryId}_score`] = this.formatDecimal(score, 2);
+        row[`risk_${riskCategoryId}_branch_percent`] =
+          totalScore > 0
+            ? this.formatDecimal((score * 100) / totalScore, 2)
+            : '0.00';
+
+        allBranchRiskTotals.set(
+          riskCategoryId,
+          Number(allBranchRiskTotals.get(riskCategoryId) || 0) + score,
+        );
+      });
+
+      rows.push(row);
+    });
+
+    let totalWeightedScoreForBottom = 0;
+
+    for (const row of rows) {
+      const totalScore = Number(row.__total_score_value || 0);
+      const positionTotal = Number(row.__npa_total_value || 0);
+
+      riskCategoriesResult.rows.forEach((riskCategory: any) => {
+        const riskCategoryId = Number(riskCategory.id);
+        const score = Number(row.__risk_scores?.[riskCategoryId] || 0);
+        const allRiskTotal = Number(
+          allBranchRiskTotals.get(riskCategoryId) || 0,
+        );
+
+        row[`risk_${riskCategoryId}_all_percent`] =
+          allRiskTotal > 0
+            ? this.formatDecimal((score * 100) / allRiskTotal, 2)
+            : '0.00';
+      });
+
+      row.total_score = this.formatDecimal(totalScore, 2);
+      
+      const totalScoreAllBranch = Math.min(
+        totalAllScore > 0 ? (totalScore * 100) / totalAllScore : 0,
+        100,
+      );
+      
+      row.total_score_all_percent = this.formatDecimal(totalScoreAllBranch, 2);
+
+      row.branch_rating = this.matchBranchRiskRatingByPercent(
+        totalScoreAllBranch,
+        row.__rating_rows || [],
+      );
+
+      // NPA Column Values
+      row.npa_total = this.formatDecimal(positionTotal / 100000, 2);
+
+      const totalScoreAllBranchWithNPA = Math.min(
+        totalAllBranchPosition > 0 ? (positionTotal * 100) / totalAllBranchPosition : 0,
+        100,
+      );
+
+      row.total_score_all_percent_with_npa = this.formatDecimal(totalScoreAllBranchWithNPA, 2);
+
+      const weightedScore = Math.min(
+        ((totalScoreAllBranchWithNPA * 60) + (totalScoreAllBranch * 40)) / 100,
+        100,
+      );
+
+      row.weighted_score = this.formatDecimal(weightedScore, 2);
+
+      row.weighted_npa_rating = this.matchBranchRiskRatingByPercent(
+        weightedScore,
+        row.__npa_rating_rows || [],
+      );
+
+      row.actual_npa_rating = this.matchBranchRiskRatingByPercent(
+        totalScoreAllBranchWithNPA,
+        row.__rating_rows || [],
+      );
+
+      totalWeightedScoreForBottom += weightedScore;
+
+      delete row.__risk_scores;
+      delete row.__total_score_value;
+      delete row.__rating_rows;
+      delete row.__npa_rating_rows;
+      delete row.__npa_total_value;
+    }
+
+    if (!rows.length) {
+      throw new BadRequestException('No data found for selected filters.');
+    }
+
+    // Bottom Total Row percentages
+    let totalScoreAllBranchesWithNPAPercentage = 0;
+    rows.forEach((row: any) => {
+      const positionVal = Number(row.npa_total || 0);
+      const branchNPAPercent = totalAllBranchPosition > 0 ? (positionVal * 100) / totalAllBranchPosition : 0;
+      totalScoreAllBranchesWithNPAPercentage += branchNPAPercent;
+    });
+    totalScoreAllBranchesWithNPAPercentage = Math.min(totalScoreAllBranchesWithNPAPercentage, 100);
+
+    const totalRow: any = {
+      audit_unit_code: 'Total',
+      audit_unit_name: '',
+      total_score: this.formatDecimal(totalAllScore, 2),
+      total_score_all_percent: '100.00',
+      branch_rating: '',
+      npa_total: this.formatDecimal(totalAllBranchPosition / 100000, 2),
+      weighted_score: this.formatDecimal(Math.min(totalWeightedScoreForBottom, 100), 2),
+      weighted_npa_rating: '',
+      total_score_all_percent_with_npa: this.formatDecimal(totalScoreAllBranchesWithNPAPercentage, 2),
+      actual_npa_rating: '',
+    };
+
+    riskCategoriesResult.rows.forEach((riskCategory: any) => {
+      const riskCategoryId = Number(riskCategory.id);
+
+      totalRow[`risk_${riskCategoryId}_score`] = this.formatDecimal(
+        Number(allBranchRiskTotals.get(riskCategoryId) || 0),
+        2,
+      );
+      totalRow[`risk_${riskCategoryId}_branch_percent`] = '';
+      totalRow[`risk_${riskCategoryId}_all_percent`] = '';
+    });
+
+    const outputRows = [...rows, totalRow];
+    const summaryRows = rows;
+
+    return {
+      filters: {
+        selectSearchTypeFilter: searchType,
+        startDate,
+        endDate,
+        rmv_pending_assesments: removePending ? ['1'] : [],
+      },
+      total: summaryRows.length,
+      generatedAt: new Date().toISOString(),
+      header: {
+        assessmentPeriod: `${startDate} to ${endDate}`,
+      },
+      rows: outputRows,
+      summary: {
+        totalAuditUnits: summaryRows.length,
+        totalScore: this.formatDecimal(totalAllScore, 2),
+        totalNpa: this.formatDecimal(totalAllBranchPosition / 100000, 2),
+      },
+    };
+  }
+
+  private financialYearDateRange(year: any) {
+    const yearStr = String(year || '').trim();
+    
+    // Check for dual-year like 2024-2025 or 2024-25
+    const dualMatch = yearStr.match(/(\d{4})\D+(\d{2,4})/);
+    if (dualMatch) {
+      const startYear = dualMatch[1];
+      let endYear = dualMatch[2];
+      if (endYear.length === 2) {
+        endYear = startYear.slice(0, 2) + endYear;
+      }
+      return {
+        startDate: `${startYear}-04-01`,
+        endDate: `${endYear}-03-31`,
+      };
+    }
+
+    // Check for single-year like 2024
+    const singleMatch = yearStr.match(/^(\d{4})$/);
+    if (singleMatch) {
+      const startYear = singleMatch[1];
+      const endYear = String(Number(startYear) + 1);
+      return {
+        startDate: `${startYear}-04-01`,
+        endDate: `${endYear}-03-31`,
+      };
+    }
+
+    return null;
   }
 
   private async getRiskWiseRatingYearId(
@@ -6915,6 +7954,498 @@ export class ReportsService {
       },
     };
   }
+  async getQuestionWiseScoringReport(query: any) {
+    const searchType = String(query.selectSearchTypeFilter || '3').trim();
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if (!assessmentId) {
+      throw new BadRequestException('Audit assessment is required');
+    }
+
+    // Step 1: Fetch assessment master row
+    const assessmentResult = await this.db.query(
+      `
+      SELECT id, year_id, audit_unit_id, assesment_period_from, assesment_period_to, frequency, menu_ids, cat_ids, question_ids
+      FROM audit_assesment_master
+      WHERE id = $1
+        AND audit_unit_id = $2
+        AND deleted_at IS NULL
+      `,
+      [assessmentId, auditUnitId],
+    );
+
+    if (!assessmentResult.rows.length) {
+      throw new BadRequestException('No assessment data found for selected filters.');
+    }
+
+    const assessment = assessmentResult.rows[0];
+    const firstYearId = Number(assessment.year_id || 0);
+
+    // Fetch branch info
+    const branchResult = await this.db.query(
+      `
+      SELECT name, audit_unit_code
+      FROM audit_unit_master
+      WHERE id = $1
+        AND deleted_at IS NULL
+      `,
+      [auditUnitId],
+    );
+    const branchInfo = branchResult.rows[0] || {
+      name: 'Selected Audit Unit',
+      audit_unit_code: '',
+    };
+
+    const branchCode = branchInfo.audit_unit_code
+      ? ` - ( BR. ${branchInfo.audit_unit_code} )`
+      : '';
+    const combinedName = `${branchInfo.name || 'Selected Audit Unit'}${branchCode}`;
+
+    // Step 2: Fetch all deposits/advances for this assessment to map dump_ids to account numbers
+    const [depositsAll, advancesAll] = await Promise.all([
+      this.db.query(
+        `SELECT id, account_no, account_holder_name FROM dump_deposits WHERE assesment_period_id = $1 AND deleted_at IS NULL`,
+        [assessment.id],
+      ),
+      this.db.query(
+        `SELECT id, account_no, account_holder_name FROM dump_advances WHERE assesment_period_id = $1 AND deleted_at IS NULL`,
+        [assessment.id],
+      ),
+    ]);
+
+    const depositsMap = new Map<number, { account_no: string; account_holder_name: string }>();
+    depositsAll.rows.forEach((row: any) => {
+      depositsMap.set(Number(row.id), {
+        account_no: String(row.account_no || '').trim(),
+        account_holder_name: String(row.account_holder_name || '').trim(),
+      });
+    });
+
+    const advancesMap = new Map<number, { account_no: string; account_holder_name: string }>();
+    advancesAll.rows.forEach((row: any) => {
+      advancesMap.set(Number(row.id), {
+        account_no: String(row.account_no || '').trim(),
+        account_holder_name: String(row.account_holder_name || '').trim(),
+      });
+    });
+
+    // Step 3: Fetch deposits/advances sampling accounts mapped to scheme categories
+    const [depositsSampling, advancesSampling] = await Promise.all([
+      this.db.query(
+        `
+        SELECT 
+          dt.id, 
+          dt.account_no, 
+          dt.account_holder_name, 
+          COALESCE(sm.category_id, 0)::int AS cat_id
+        FROM dump_deposits dt
+        LEFT JOIN scheme_master sm ON dt.scheme_id = sm.id
+        WHERE dt.assesment_period_id = $1
+          AND dt.sampling_filter = 1
+          AND dt.deleted_at IS NULL
+          AND sm.deleted_at IS NULL
+        `,
+        [assessment.id],
+      ),
+      this.db.query(
+        `
+        SELECT 
+          dt.id, 
+          dt.account_no, 
+          dt.account_holder_name, 
+          COALESCE(sm.category_id, 0)::int AS cat_id
+        FROM dump_advances dt
+        LEFT JOIN scheme_master sm ON dt.scheme_id = sm.id
+        WHERE dt.assesment_period_id = $1
+          AND dt.sampling_filter = 1
+          AND dt.deleted_at IS NULL
+          AND sm.deleted_at IS NULL
+        `,
+        [assessment.id],
+      ),
+    ]);
+
+    const categoryAccountsMap = new Map<number, any[]>();
+    depositsSampling.rows.forEach((row: any) => {
+      const catId = Number(row.cat_id);
+      if (catId) {
+        if (!categoryAccountsMap.has(catId)) {
+          categoryAccountsMap.set(catId, []);
+        }
+        categoryAccountsMap.get(catId)!.push(row);
+      }
+    });
+    advancesSampling.rows.forEach((row: any) => {
+      const catId = Number(row.cat_id);
+      if (catId) {
+        if (!categoryAccountsMap.has(catId)) {
+          categoryAccountsMap.set(catId, []);
+        }
+        categoryAccountsMap.get(catId)!.push(row);
+      }
+    });
+
+    // Step 4: Fetch Menus
+    const menuIds = String(assessment.menu_ids || '').split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
+    const menusResult = menuIds.length ? await this.db.query(
+      `
+      SELECT id, name
+      FROM menu_master
+      WHERE id = ANY($1::int[])
+        AND is_active = 1
+        AND deleted_at IS NULL
+      `,
+      [menuIds],
+    ) : { rows: [] };
+
+    const menusMap = new Map<number, string>();
+    menusResult.rows.forEach((row: any) => {
+      menusMap.set(Number(row.id), String(row.name || '').trim());
+    });
+
+    // Step 5: Fetch Risk Category Weights
+    const riskCategoriesResult = await this.db.query(
+      `
+      SELECT
+        rcm.id,
+        rcm.risk_category AS title,
+        COALESCE(rcw.risk_weight, 0) AS risk_weight
+      FROM risk_category_master rcm
+      LEFT JOIN risk_category_weights rcw
+        ON rcw.risk_category_id = rcm.id
+        AND rcw.year_id = $1
+        AND rcw.is_active = 1
+        AND rcw.deleted_at IS NULL
+      WHERE rcm.is_active = 1
+        AND rcm.deleted_at IS NULL
+      ORDER BY rcm.id ASC
+      `,
+      [firstYearId],
+    );
+
+    const riskCategoriesMap = new Map<number, { title: string; weight: number }>();
+    riskCategoriesResult.rows.forEach((row: any) => {
+      riskCategoriesMap.set(Number(row.id), {
+        title: String(row.title || '').trim(),
+        weight: Number(row.risk_weight || 0),
+      });
+    });
+
+    // Step 6: Fetch Risk Matrix for score calculation
+    const riskMatrixResult = await this.db.query(
+      `
+      SELECT risk_parameter, business_risk_score, control_risk_score
+      FROM risk_matrix
+      WHERE year_id = $1
+        AND deleted_at IS NULL
+      `,
+      [firstYearId],
+    );
+
+    const businessRiskScores = new Map<number, number>();
+    const controlRiskScores = new Map<number, number>();
+    riskMatrixResult.rows.forEach((row: any) => {
+      const parameter = Number(row.risk_parameter);
+      businessRiskScores.set(parameter, Number(row.business_risk_score || 0));
+      controlRiskScores.set(parameter, Number(row.control_risk_score || 0));
+    });
+
+    const matrixScore = (businessRisk: any, controlRisk: any) => {
+      const businessRiskId = Number(businessRisk);
+      const controlRiskId = Number(controlRisk);
+      if (
+        !businessRiskId ||
+        !controlRiskId ||
+        businessRiskId < 1 ||
+        businessRiskId > 4 ||
+        controlRiskId < 1 ||
+        controlRiskId > 4
+      ) {
+        return 0;
+      }
+      return (
+        Number(businessRiskScores.get(businessRiskId) || 0) +
+        Number(controlRiskScores.get(controlRiskId) || 0)
+      );
+    };
+
+    // Step 7: Fetch Category Master records
+    const catIds = String(assessment.cat_ids || '').split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
+    const categoriesResult = catIds.length ? await this.db.query(
+      `
+      SELECT id, menu_id, name, linked_table_id, question_set_ids
+      FROM category_master
+      WHERE id = ANY($1::int[])
+        AND is_active = 1
+        AND deleted_at IS NULL
+      `,
+      [catIds],
+    ) : { rows: [] };
+
+    // Step 8: Fetch Question Master records
+    const questionIds = String(assessment.question_ids || '').split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
+    const questionsResult = questionIds.length ? await this.db.query(
+      `
+      SELECT id, set_id, parameters, risk_category_id, question, option_id, annexure_id, subset_multi_id
+      FROM question_master
+      WHERE id = ANY($1::int[])
+        AND is_active = 1
+        AND deleted_at IS NULL
+      `,
+      [questionIds],
+    ) : { rows: [] };
+
+    const questionHighestRiskMap = new Map<number, number>();
+    questionsResult.rows.forEach((qRow: any) => {
+      const qId = Number(qRow.id);
+      const optionId = Number(qRow.option_id);
+      let highestRisk = 0;
+
+      if (optionId !== 3 && qRow.parameters) {
+        try {
+          const params = JSON.parse(qRow.parameters);
+          if (Array.isArray(params)) {
+            params.forEach((param: any) => {
+              const score = matrixScore(param.br, param.cr);
+              if (score > highestRisk) {
+                highestRisk = score;
+              }
+            });
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      questionHighestRiskMap.set(qId, highestRisk);
+    });
+
+    // Step 9: Fetch Answers and Annexures
+    const answersResult = await this.db.query(
+      `
+      SELECT
+        id,
+        menu_id,
+        category_id,
+        dump_id,
+        question_id,
+        answer_given,
+        audit_comment,
+        business_risk,
+        control_risk
+      FROM answers_data
+      WHERE assesment_id = $1
+        AND deleted_at IS NULL
+      `,
+      [assessment.id],
+    );
+
+    const answersMap = new Map<string, any>();
+    answersResult.rows.forEach((row: any) => {
+      const key = `${row.menu_id}_${row.category_id}_${row.dump_id}_${row.question_id}`;
+      answersMap.set(key, row);
+    });
+
+    const answerIds = answersResult.rows.map((row: any) => Number(row.id));
+    const annexuresResult = answerIds.length ? await this.db.query(
+      `
+      SELECT
+        answer_id,
+        business_risk,
+        control_risk,
+        risk_cat_id AS risk_category_id
+      FROM answers_data_annexure
+      WHERE answer_id = ANY($1::int[])
+        AND assesment_id = $2
+        AND deleted_at IS NULL
+      `,
+      [answerIds, assessment.id],
+    ) : { rows: [] };
+
+    const annexuresMap = new Map<number, any[]>();
+    annexuresResult.rows.forEach((annRow: any) => {
+      const answerId = Number(annRow.answer_id);
+      if (!annexuresMap.has(answerId)) {
+        annexuresMap.set(answerId, []);
+      }
+      annexuresMap.get(answerId)!.push(annRow);
+    });
+
+    // Step 10: Build nested report tree
+    const menuWiseMap = new Map<number, any>();
+
+    categoriesResult.rows.forEach((catRow: any) => {
+      const menuId = Number(catRow.menu_id);
+      const catId = Number(catRow.id);
+      const linkedTableId = Number(catRow.linked_table_id);
+
+      if (!menuWiseMap.has(menuId)) {
+        menuWiseMap.set(menuId, {
+          menu_name: menusMap.get(menuId) || 'UNKNOWN MENU',
+          risk_category_wise: new Map<number, any>(),
+        });
+      }
+
+      const menuNode = menuWiseMap.get(menuId)!;
+
+      let dumpIds: number[] = [0];
+      if (linkedTableId === 1 || linkedTableId === 2) {
+        const accountIds = (categoryAccountsMap.get(catId) || []).map((acc: any) => Number(acc.id));
+        const answerDumpIds = answersResult.rows
+          .filter((row: any) => Number(row.category_id) === catId && Number(row.dump_id) !== 0)
+          .map((row: any) => Number(row.dump_id));
+        dumpIds = Array.from(new Set([...accountIds, ...answerDumpIds]));
+        if (dumpIds.length === 0) {
+          dumpIds.push(0);
+        }
+      }
+
+      const catSetIds = String(catRow.question_set_ids || '').split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
+
+      const catQuestions = questionsResult.rows.filter((qRow: any) => {
+        const qSetId = Number(qRow.set_id);
+        return catSetIds.includes(qSetId);
+      });
+
+      catQuestions.forEach((qRow: any) => {
+        const questionId = Number(qRow.id);
+        const riskCatId = Number(qRow.risk_category_id || 0);
+
+        if (!riskCategoriesMap.has(riskCatId)) {
+          return;
+        }
+
+        const riskCategoryMaster = riskCategoriesMap.get(riskCatId)!;
+
+        if (!menuNode.risk_category_wise.has(riskCatId)) {
+          menuNode.risk_category_wise.set(riskCatId, {
+            risk_category_master: {
+              risk_category: riskCategoryMaster.title,
+              risk_weightage: riskCategoryMaster.weight,
+            },
+            questions: [],
+          });
+        }
+
+        const riskNode = menuNode.risk_category_wise.get(riskCatId)!;
+
+        // For linked categories: find the ONE dump_id that has an actual answer for this question.
+        // Do NOT repeat per sampled account — that causes 200x row explosion.
+        let resolvedDumpId = 0;
+        if (linkedTableId === 1 || linkedTableId === 2) {
+          // Check if any of the dumpIds have an answer for this specific question
+          const answeredDump = dumpIds.find((dId) => {
+            const k = `${menuId}_${catId}_${dId}_${questionId}`;
+            return answersMap.has(k);
+          });
+          resolvedDumpId = answeredDump !== undefined ? answeredDump : 0;
+        }
+
+        const genKey = `${menuId}_${catId}_${resolvedDumpId}_${questionId}`;
+        const ansRow = answersMap.get(genKey);
+
+        let answerGiven = ansRow ? String(ansRow.answer_given || '').trim() : '';
+        let auditComment = ansRow ? String(ansRow.audit_comment || '').trim() : '';
+        let riskScore = 0;
+
+        if (ansRow) {
+          riskScore = matrixScore(ansRow.business_risk, ansRow.control_risk);
+        }
+
+        const annexData = ansRow ? (annexuresMap.get(Number(ansRow.id)) || []) : [];
+        if (annexData.length > 0) {
+          answerGiven = 'AS PER ANNEXURE';
+        }
+
+        if (answerGiven.toUpperCase() === 'NOT APPLICABLE') {
+          riskScore = 0;
+        }
+
+        let annexWeighted = 0;
+        const annexDetails: any[] = [];
+        annexData.forEach((aRow: any) => {
+          const annexRiskId = Number(aRow.risk_category_id || 0);
+          const annexRiskWeight = riskCategoriesMap.get(annexRiskId)?.weight || 0;
+          const aRiskScore = matrixScore(aRow.business_risk, aRow.control_risk);
+          const weighted = aRiskScore * annexRiskWeight;
+          annexWeighted += weighted;
+          annexDetails.push({ risk_score_weighted: weighted });
+        });
+
+        const highestWeightageQuestionRisk = questionHighestRiskMap.get(questionId) || 0;
+        const rowMaxScore = (highestWeightageQuestionRisk * riskCategoryMaster.weight) + annexWeighted;
+
+        let accountNo = '';
+        let accountHolderName = '';
+        if (linkedTableId === 1 && depositsMap.has(resolvedDumpId)) {
+          accountNo = depositsMap.get(resolvedDumpId)!.account_no;
+          accountHolderName = depositsMap.get(resolvedDumpId)!.account_holder_name;
+        } else if (linkedTableId === 2 && advancesMap.has(resolvedDumpId)) {
+          accountNo = advancesMap.get(resolvedDumpId)!.account_no;
+          accountHolderName = advancesMap.get(resolvedDumpId)!.account_holder_name;
+        }
+
+        riskNode.questions.push({
+          category_name: String(catRow.name || '').trim(),
+          linked_table_id: linkedTableId,
+          account_id: resolvedDumpId,
+          account_no: accountNo,
+          account_holder_name: accountHolderName,
+          question: String(qRow.question || '').trim(),
+          answer_given: answerGiven,
+          audit_comment: auditComment,
+          risk_score: riskScore,
+          weighted_risk_score: riskScore * riskCategoryMaster.weight,
+          highest_weightage_risk: rowMaxScore,
+          annex_details: annexDetails,
+        });
+      });
+    });
+
+    const menuWiseList: any[] = [];
+    Array.from(menuWiseMap.keys()).sort((a: any, b: any) => Number(a) - Number(b)).forEach((mId) => {
+      const menuNode = menuWiseMap.get(mId)!;
+      const riskCategoryWiseList: any[] = [];
+      Array.from(menuNode.risk_category_wise.keys()).sort((a: any, b: any) => Number(a) - Number(b)).forEach((rcId) => {
+        const riskNode = menuNode.risk_category_wise.get(rcId)!;
+        if (riskNode.questions.length > 0) {
+          riskCategoryWiseList.push({
+            risk_category_id: rcId,
+            ...riskNode,
+          });
+        }
+      });
+      if (riskCategoryWiseList.length > 0) {
+        menuWiseList.push({
+          menu_id: mId,
+          menu_name: menuNode.menu_name,
+          risk_category_wise: riskCategoryWiseList,
+        });
+      }
+    });
+
+    const periodText = `${this.dateOnly(assessment.assesment_period_from)} to ${this.dateOnly(assessment.assesment_period_to)}`;
+
+    return {
+      filters: {
+        selectSearchTypeFilter: searchType,
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: String(assessmentId),
+      },
+      total: menuWiseList.length,
+      generatedAt: new Date().toISOString(),
+      header: {
+        assessmentPeriod: periodText,
+        auditUnit: combinedName,
+      },
+      rows: menuWiseList,
+    };
+  }
+
   async getBroaderAreaWiseScoringReport(query: any) {
     const searchType = String(query.selectSearchTypeFilter || '3').trim();
     const auditUnitId = Number(query.reportAuditUnit || 0);
