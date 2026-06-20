@@ -8090,17 +8090,18 @@ export class ReportsService {
       }
     });
 
-    // Step 4: Fetch Menus
-    const menuIds = String(assessment.menu_ids || '').split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
-    const menusResult = menuIds.length ? await this.db.query(
+    // Step 4: Fetch Menus — use ALL menu_ids that actually appear in the categories
+    // (assessment.menu_ids can be incomplete; category.menu_id is the source of truth)
+    const menusResult = catIds.length ? await this.db.query(
       `
-      SELECT id, name
-      FROM menu_master
-      WHERE id = ANY($1::int[])
-        AND is_active = 1
-        AND deleted_at IS NULL
+      SELECT DISTINCT mm.id, mm.name
+      FROM menu_master mm
+      INNER JOIN category_master cm ON cm.menu_id = mm.id
+      WHERE cm.id = ANY($1::int[])
+        AND mm.is_active = 1
+        AND mm.deleted_at IS NULL
       `,
-      [menuIds],
+      [catIds],
     ) : { rows: [] };
 
     const menusMap = new Map<number, string>();
