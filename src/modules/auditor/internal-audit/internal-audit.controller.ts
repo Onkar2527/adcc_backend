@@ -444,6 +444,30 @@ export class InternalAuditController {
     );
   }
 
+  @Post(':assessmentId/live-compliance/observation/:targetType/:observationId/action')
+  saveAuditorLiveComplianceAction(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('targetType')
+    targetType: string,
+
+    @Param('observationId', ParseIntPipe)
+    observationId: number,
+
+    @Body()
+    body: any,
+  ) {
+
+    return this.service.saveAuditorLiveComplianceAction(
+      assessmentId,
+      targetType,
+      observationId,
+      Number(body?.employee_id || 0),
+      Number(body?.action || 0),
+    );
+  }
+
   @Get(':assessmentId/overview')
   getOverview(
     @Param('assessmentId', ParseIntPipe)

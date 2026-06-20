@@ -32,6 +32,7 @@ import { PolicyDocumentsModule } from './modules/admin/policy-documents/policy-d
 import { AuditCalendarModule } from './modules/admin/audit-calendar/audit-calendar.module';
 import { RegionMasterModule } from './modules/admin/region-master/region-master.module';
 import { SpecialAuditModule } from './modules/admin/special-audit/special-audit.module';
+import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { MasterBulkUploadModule } from './modules/admin/master-bulk-upload/master-bulk-upload.module';
 
 
@@ -69,6 +70,7 @@ import { MasterBulkUploadModule } from './modules/admin/master-bulk-upload/maste
     AuditCalendarModule,
     RegionMasterModule,
     SpecialAuditModule,
+    AuditLogsModule,
     MasterBulkUploadModule
   ],
   controllers: [AppController],

@@ -124,10 +124,13 @@ export class AuditDashboardController {
   async getBranchFinancialPosition(
     @Param('branch_id')
     branch_id: number,
+    @Query('assessment_id')
+    assessment_id?: string,
   ) {
 
     return this.service.getBranchFinancialPosition(
       Number(branch_id),
+      assessment_id ? Number(assessment_id) : undefined,
     );
 
   }
