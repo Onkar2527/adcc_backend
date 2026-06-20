@@ -196,6 +196,18 @@ export class AuditDashboardService {
         }
         const emp = empResult.rows[0];
 
+        if (Number(emp.user_type_id) === 1 || Number(emp.user_type_id) === 9 || Number(emp.user_type_id) === 5) {
+            const query = `
+                SELECT DISTINCT au.id, au.audit_unit_code, au.name, au.frequency, au.last_audit_date
+                FROM audit_unit_master au
+                WHERE au.is_active = 1
+                  AND au.deleted_at IS NULL
+                ORDER BY au.audit_unit_code;
+            `;
+            const result = await this.db.query(query);
+            return result.rows;
+        }
+
         if (Number(emp.user_type_id) === 6) {
             const query = `
                 WITH region_units AS (
@@ -443,6 +455,10 @@ export class AuditDashboardService {
                 Number(
                     branchDetails.frequency,
                 );
+
+            if (!frequency || frequency <= 0 || isNaN(frequency)) {
+                continue;
+            }
 
             const lastAuditDate =
                 new Date(
@@ -2750,45 +2766,107 @@ ORDER BY
 
     async getUnitDashboardDetails(auditUnitId: number, employeeId: number, userTypeId: number) {
         const currentFyText = this.getFinancialYear();
+        const isAllBranches = Number(auditUnitId) === 0;
 
-        const unitRes = await this.db.query(
-            `SELECT id, name, audit_unit_code, frequency, last_audit_date FROM audit_unit_master WHERE id = $1 AND deleted_at IS NULL`,
-            [auditUnitId]
-        );
-        if (!unitRes.rows.length) {
-            throw new NotFoundException('Audit unit not found');
+        let unit: any;
+        if (isAllBranches) {
+            unit = {
+                id: 0,
+                name: 'All Branches',
+                audit_unit_code: 'ALL',
+                frequency: 0,
+                last_audit_date: null
+            };
+        } else {
+            const unitRes = await this.db.query(
+                `SELECT id, name, audit_unit_code, frequency, last_audit_date FROM audit_unit_master WHERE id = $1 AND deleted_at IS NULL`,
+                [auditUnitId]
+            );
+            if (!unitRes.rows.length) {
+                throw new NotFoundException('Audit unit not found');
+            }
+            unit = unitRes.rows[0];
         }
-        const unit = unitRes.rows[0];
 
-        const riskScoreRes = await this.db.query(
-            `SELECT SUM(COALESCE(weighted_score::float, 0)) AS total_weighted_risk_score
-             FROM report_scoring_master
-             WHERE audit_unit_id = $1
-               AND audit_status_id > 3
-               AND year = $2
-               AND deleted_at IS NULL`,
-            [auditUnitId, currentFyText]
-        );
-        const totalWeightedRiskScore = Number(riskScoreRes.rows[0]?.total_weighted_risk_score || 0).toFixed(2);
+        let totalWeightedRiskScore = '0.00';
+        if (isAllBranches) {
+            const riskScoreRes = await this.db.query(
+                `SELECT SUM(COALESCE(weighted_score::float, 0)) AS total_weighted_risk_score
+                 FROM report_scoring_master
+                 WHERE audit_status_id > 3
+                   AND year = $1
+                   AND deleted_at IS NULL`,
+                [currentFyText]
+            );
+            totalWeightedRiskScore = Number(riskScoreRes.rows[0]?.total_weighted_risk_score || 0).toFixed(2);
+        } else {
+            const riskScoreRes = await this.db.query(
+                `SELECT SUM(COALESCE(weighted_score::float, 0)) AS total_weighted_risk_score
+                 FROM report_scoring_master
+                 WHERE audit_unit_id = $1
+                   AND audit_status_id > 3
+                   AND year = $2
+                   AND deleted_at IS NULL`,
+                [auditUnitId, currentFyText]
+            );
+            totalWeightedRiskScore = Number(riskScoreRes.rows[0]?.total_weighted_risk_score || 0).toFixed(2);
+        }
 
-        const notStartedList = await this.getNotStartedByUnit(auditUnitId);
-        const assessmentNotStartedCount = notStartedList.length;
-
+        let assessmentNotStartedCount = 0;
+        let assessments: any[] = [];
+        let yearWiseAssessments: any[] = [];
         const yearsRes = await this.db.query(
             `SELECT id, year FROM year_master WHERE deleted_at IS NULL ORDER BY id DESC`
         );
-        const allAssessmentsRes = await this.db.query(
-            `SELECT id, year_id, assesment_period_from, assesment_period_to, frequency, audit_status_id, audit_due_date, compliance_due_date, is_limit_blocked
-             FROM audit_assesment_master
-             WHERE audit_unit_id = $1
-               AND deleted_at IS NULL
-             ORDER BY assesment_period_from ASC`,
-            [auditUnitId]
-        );
-        const assessments = allAssessmentsRes.rows;
+
+        let authorizedUnits: any[] = [];
+        if (Number(userTypeId) === 1 || Number(userTypeId) === 9 || Number(userTypeId) === 5) {
+            const query = `
+                SELECT DISTINCT au.id, au.audit_unit_code, au.name, au.frequency, au.last_audit_date
+                FROM audit_unit_master au
+                WHERE au.is_active = 1
+                  AND au.deleted_at IS NULL
+                ORDER BY au.audit_unit_code;
+            `;
+            const result = await this.db.query(query);
+            authorizedUnits = result.rows;
+        } else {
+            authorizedUnits = await this.getAuthorizedAuditUnits(employeeId);
+        }
+        const authUnitIds = authorizedUnits.map((u: any) => u.id);
+
+        if (isAllBranches) {
+            const notStartedList = await this.getNotStartedAudits(authorizedUnits);
+            assessmentNotStartedCount = Object.values(notStartedList).reduce((sum: number, arr: any) => sum + arr.length, 0) as number;
+
+            if (authUnitIds.length > 0) {
+                const allAssessmentsRes = await this.db.query(
+                    `SELECT id, year_id, assesment_period_from, assesment_period_to, frequency, audit_status_id, audit_due_date, compliance_due_date, is_limit_blocked
+                     FROM audit_assesment_master
+                     WHERE audit_unit_id = ANY($1)
+                       AND deleted_at IS NULL
+                     ORDER BY assesment_period_from ASC`,
+                    [authUnitIds]
+                );
+                assessments = allAssessmentsRes.rows;
+            }
+        } else {
+            const notStartedList = await this.getNotStartedByUnit(auditUnitId);
+            assessmentNotStartedCount = notStartedList.length;
+
+            const allAssessmentsRes = await this.db.query(
+                `SELECT id, year_id, assesment_period_from, assesment_period_to, frequency, audit_status_id, audit_due_date, compliance_due_date, is_limit_blocked
+                 FROM audit_assesment_master
+                 WHERE audit_unit_id = $1
+                   AND deleted_at IS NULL
+                 ORDER BY assesment_period_from ASC`,
+                [auditUnitId]
+            );
+            assessments = allAssessmentsRes.rows;
+        }
 
         const assessmentsByYear = new Map<number, any[]>();
-        allAssessmentsRes.rows.forEach((ass: any) => {
+        assessments.forEach((ass: any) => {
             const yId = Number(ass.year_id);
             if (!assessmentsByYear.has(yId)) {
                 assessmentsByYear.set(yId, []);
@@ -2816,12 +2894,12 @@ ORDER BY
             });
         });
 
-        const yearWiseAssessments = yearsRes.rows.map((y: any) => {
+        yearWiseAssessments = yearsRes.rows.map((y: any) => {
             const list = assessmentsByYear.get(Number(y.id)) || [];
             const hasPending = list.some((ass: any) => Number(ass.audit_status_id) <= 3);
             const yearEndStr = `${Number(y.year) + 1}-03-31`;
             const reachesEnd = list.some((ass: any) => ass.assesment_period_to === yearEndStr);
-            const showStartBtn = !hasPending && !reachesEnd;
+            const showStartBtn = isAllBranches ? false : (!hasPending && !reachesEnd);
 
             return {
                 year_id: y.id,
@@ -2879,16 +2957,81 @@ ORDER BY
             assessmentExpiredCount = auditExpCount + complianceExpCount;
         }
 
-        const completedRes = await this.db.query(
-            `SELECT id, assesment_id, assesment_period_from, assesment_period_to, weighted_score, risk_data
-             FROM report_scoring_master
-             WHERE audit_unit_id = $1
-               AND audit_status_id > 3
-               AND deleted_at IS NULL
-             ORDER BY assesment_period_from ASC`,
-            [auditUnitId]
-        );
-        const completedAssessments = completedRes.rows;
+        const completedRes = isAllBranches
+            ? (authUnitIds.length > 0
+                ? await this.db.query(
+                    `SELECT id, assesment_id, assesment_period_from, assesment_period_to, weighted_score, risk_data
+                     FROM report_scoring_master
+                     WHERE audit_unit_id = ANY($1)
+                       AND audit_status_id > 3
+                       AND deleted_at IS NULL
+                     ORDER BY assesment_period_from ASC`,
+                    [authUnitIds]
+                  )
+                : { rows: [] }
+              )
+            : await this.db.query(
+                `SELECT id, assesment_id, assesment_period_from, assesment_period_to, weighted_score, risk_data
+                 FROM report_scoring_master
+                 WHERE audit_unit_id = $1
+                   AND audit_status_id > 3
+                   AND deleted_at IS NULL
+                 ORDER BY assesment_period_from ASC`,
+                [auditUnitId]
+            );
+        
+        let completedAssessments = completedRes.rows;
+
+        if (isAllBranches && completedAssessments.length > 0) {
+            const grouped = new Map<string, any>();
+            completedAssessments.forEach((row: any) => {
+                const key = `${row.assesment_period_from.toISOString().split('T')[0]}_${row.assesment_period_to.toISOString().split('T')[0]}`;
+                if (!grouped.has(key)) {
+                    grouped.set(key, {
+                        assesment_id: key,
+                        assesment_period_from: row.assesment_period_from,
+                        assesment_period_to: row.assesment_period_to,
+                        scores: [],
+                        riskDataList: []
+                    });
+                }
+                const group = grouped.get(key);
+                group.scores.push(Number(row.weighted_score || 0));
+                if (row.risk_data) {
+                    try {
+                        group.riskDataList.push(typeof row.risk_data === 'string' ? JSON.parse(row.risk_data) : row.risk_data);
+                    } catch(e) {}
+                }
+            });
+
+            completedAssessments = Array.from(grouped.values()).map((g: any) => {
+                const avgScore = g.scores.reduce((a: number, b: number) => a + b, 0) / g.scores.length;
+                const mergedRiskData: any = {};
+                g.riskDataList.forEach((rd: any) => {
+                    if (rd) {
+                        Object.keys(rd).forEach((catId) => {
+                            if (!mergedRiskData[catId]) {
+                                mergedRiskData[catId] = { avg_sc: 0, '1': 0, '2': 0, '3': 0 };
+                             }
+                             const target = mergedRiskData[catId];
+                             const source = rd[catId];
+                             target['1'] += Number(source['1'] || 0);
+                             target['2'] += Number(source['2'] || 0);
+                             target['3'] += Number(source['3'] || 0);
+                             target.avg_sc = 1; 
+                        });
+                    }
+                });
+
+                return {
+                    assesment_id: g.assesment_id,
+                    assesment_period_from: g.assesment_period_from,
+                    assesment_period_to: g.assesment_period_to,
+                    weighted_score: avgScore,
+                    risk_data: mergedRiskData
+                };
+            });
+        }
 
         const assessmentList: any[] = [];
         const highRiskTrend: any[] = [];
@@ -2990,28 +3133,152 @@ ORDER BY
             riskCategoryRes.rows.map((r: any) => [Number(r.id), r.risk_category])
         );
 
+        const isAllBranches = Number(auditUnitId) === 0;
+        let unitIds: number[] = [];
+        if (isAllBranches) {
+            const activeUnitsRes = await this.db.query(
+                `SELECT id FROM audit_unit_master WHERE is_active = 1 AND deleted_at IS NULL`
+            );
+            unitIds = activeUnitsRes.rows.map((r: any) => r.id);
+        }
+
+        const isRange = typeof assessmentId === 'string' && assessmentId.includes('_');
+
         let riskDataRows: any[] = [];
         let heatmapRows: any[] = [];
 
         if (assessmentId === 'all') {
-            const res = await this.db.query(
-                `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = $1 AND audit_status_id > 3 AND deleted_at IS NULL`,
-                [auditUnitId]
-            );
+            const res = isAllBranches
+                ? (unitIds.length > 0 
+                    ? await this.db.query(
+                        `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = ANY($1) AND audit_status_id > 3 AND deleted_at IS NULL`,
+                        [unitIds]
+                      )
+                    : { rows: [] }
+                  )
+                : await this.db.query(
+                    `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = $1 AND audit_status_id > 3 AND deleted_at IS NULL`,
+                    [auditUnitId]
+                  );
+            riskDataRows = res.rows;
+
+            const heatRes = isAllBranches
+                ? (unitIds.length > 0
+                    ? await this.db.query(
+                        `SELECT business_risk, control_risk, COUNT(*)::int AS count
+                         FROM (
+                           SELECT 
+                             NULLIF(ans.business_risk::text, '')::int AS business_risk, 
+                             NULLIF(ans.control_risk::text, '')::int AS control_risk
+                           FROM answers_data ans
+                           INNER JOIN question_master qm ON qm.id = ans.question_id
+                           INNER JOIN audit_assesment_master am ON am.id = ans.assesment_id
+                           WHERE am.audit_unit_id = ANY($1)
+                             AND am.audit_status_id > 3
+                             AND qm.option_id != 4
+                             AND NULLIF(ans.business_risk::text, '')::int IN (1, 2, 3)
+                             AND NULLIF(ans.control_risk::text, '')::int IN (1, 2, 3)
+                             AND ans.is_compliance = 1
+                             AND ans.deleted_at IS NULL
+                             AND qm.deleted_at IS NULL
+                             AND am.deleted_at IS NULL
+
+                           UNION ALL
+
+                           SELECT 
+                             NULLIF(ax.business_risk::text, '')::int AS business_risk, 
+                             NULLIF(ax.control_risk::text, '')::int AS control_risk
+                           FROM answers_data_annexure ax
+                           INNER JOIN answers_data ans ON ans.id = ax.answer_id
+                           INNER JOIN question_master qm ON qm.id = ans.question_id
+                           INNER JOIN audit_assesment_master am ON am.id = ax.assesment_id
+                           WHERE am.audit_unit_id = ANY($1)
+                             AND am.audit_status_id > 3
+                             AND qm.option_id = 4
+                             AND NULLIF(ax.business_risk::text, '')::int IN (1, 2, 3)
+                             AND NULLIF(ax.control_risk::text, '')::int IN (1, 2, 3)
+                             AND ax.deleted_at IS NULL
+                             AND ans.deleted_at IS NULL
+                             AND qm.deleted_at IS NULL
+                             AND am.deleted_at IS NULL
+                         ) combined
+                         GROUP BY business_risk, control_risk`,
+                        [unitIds]
+                      )
+                    : { rows: [] }
+                  )
+                : await this.db.query(
+                    `SELECT business_risk, control_risk, COUNT(*)::int AS count
+                     FROM (
+                       SELECT 
+                         NULLIF(ans.business_risk::text, '')::int AS business_risk, 
+                         NULLIF(ans.control_risk::text, '')::int AS control_risk
+                       FROM answers_data ans
+                       INNER JOIN question_master qm ON qm.id = ans.question_id
+                       INNER JOIN audit_assesment_master am ON am.id = ans.assesment_id
+                       WHERE am.audit_unit_id = $1
+                         AND am.audit_status_id > 3
+                         AND qm.option_id != 4
+                         AND NULLIF(ans.business_risk::text, '')::int IN (1, 2, 3)
+                         AND NULLIF(ans.control_risk::text, '')::int IN (1, 2, 3)
+                         AND ans.is_compliance = 1
+                         AND ans.deleted_at IS NULL
+                         AND qm.deleted_at IS NULL
+                         AND am.deleted_at IS NULL
+
+                       UNION ALL
+
+                       SELECT 
+                         NULLIF(ax.business_risk::text, '')::int AS business_risk, 
+                         NULLIF(ax.control_risk::text, '')::int AS control_risk
+                       FROM answers_data_annexure ax
+                       INNER JOIN answers_data ans ON ans.id = ax.answer_id
+                       INNER JOIN question_master qm ON qm.id = ans.question_id
+                       INNER JOIN audit_assesment_master am ON am.id = ans.assesment_id
+                       WHERE am.audit_unit_id = $1
+                         AND am.audit_status_id > 3
+                         AND qm.option_id = 4
+                         AND NULLIF(ax.business_risk::text, '')::int IN (1, 2, 3)
+                         AND NULLIF(ax.control_risk::text, '')::int IN (1, 2, 3)
+                         AND ax.deleted_at IS NULL
+                         AND ans.deleted_at IS NULL
+                         AND qm.deleted_at IS NULL
+                         AND am.deleted_at IS NULL
+                     ) combined
+                     GROUP BY business_risk, control_risk`,
+                    [auditUnitId]
+                  );
+            heatmapRows = heatRes.rows;
+        } else if (isRange) {
+            const [fromStr, toStr] = assessmentId.split('_');
+            const res = isAllBranches
+                ? (unitIds.length > 0
+                    ? await this.db.query(
+                        `SELECT risk_data FROM report_scoring_master 
+                         WHERE audit_unit_id = ANY($1) AND assesment_period_from = $2 AND assesment_period_to = $3 AND audit_status_id > 3 AND deleted_at IS NULL`,
+                        [unitIds, fromStr, toStr]
+                      )
+                    : { rows: [] }
+                  )
+                : await this.db.query(
+                    `SELECT risk_data FROM report_scoring_master 
+                     WHERE audit_unit_id = $1 AND assesment_period_from = $2 AND assesment_period_to = $3 AND audit_status_id > 3 AND deleted_at IS NULL`,
+                    [auditUnitId, fromStr, toStr]
+                  );
             riskDataRows = res.rows;
 
             const heatRes = await this.db.query(
                 `SELECT business_risk, control_risk, COUNT(*)::int AS count
                  FROM (
-                   -- 1. Regular questions
                    SELECT 
                      NULLIF(ans.business_risk::text, '')::int AS business_risk, 
                      NULLIF(ans.control_risk::text, '')::int AS control_risk
                    FROM answers_data ans
                    INNER JOIN question_master qm ON qm.id = ans.question_id
                    INNER JOIN audit_assesment_master am ON am.id = ans.assesment_id
-                   WHERE am.audit_unit_id = $1
-                     AND am.audit_status_id > 3
+                   WHERE am.assesment_period_from = $1
+                     AND am.assesment_period_to = $2
+                     AND am.audit_unit_id = ANY($3)
                      AND qm.option_id != 4
                      AND NULLIF(ans.business_risk::text, '')::int IN (1, 2, 3)
                      AND NULLIF(ans.control_risk::text, '')::int IN (1, 2, 3)
@@ -3022,7 +3289,6 @@ ORDER BY
 
                    UNION ALL
 
-                   -- 2. Annexure questions (all existing annexure rows are deviations)
                    SELECT 
                      NULLIF(ax.business_risk::text, '')::int AS business_risk, 
                      NULLIF(ax.control_risk::text, '')::int AS control_risk
@@ -3030,8 +3296,9 @@ ORDER BY
                    INNER JOIN answers_data ans ON ans.id = ax.answer_id
                    INNER JOIN question_master qm ON qm.id = ans.question_id
                    INNER JOIN audit_assesment_master am ON am.id = ax.assesment_id
-                   WHERE am.audit_unit_id = $1
-                     AND am.audit_status_id > 3
+                   WHERE am.assesment_period_from = $1
+                     AND am.assesment_period_to = $2
+                     AND am.audit_unit_id = ANY($3)
                      AND qm.option_id = 4
                      AND NULLIF(ax.business_risk::text, '')::int IN (1, 2, 3)
                      AND NULLIF(ax.control_risk::text, '')::int IN (1, 2, 3)
@@ -3041,20 +3308,24 @@ ORDER BY
                      AND am.deleted_at IS NULL
                  ) combined
                  GROUP BY business_risk, control_risk`,
-                [auditUnitId]
+                [fromStr, toStr, isAllBranches ? unitIds : [auditUnitId]]
             );
             heatmapRows = heatRes.rows;
         } else {
-            const res = await this.db.query(
-                `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = $1 AND assesment_id = $2 AND audit_status_id > 3 AND deleted_at IS NULL`,
-                [auditUnitId, Number(assessmentId)]
-            );
+            const res = isAllBranches
+                ? await this.db.query(
+                    `SELECT risk_data FROM report_scoring_master WHERE assesment_id = $1 AND audit_status_id > 3 AND deleted_at IS NULL`,
+                    [Number(assessmentId)]
+                  )
+                : await this.db.query(
+                    `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = $1 AND assesment_id = $2 AND audit_status_id > 3 AND deleted_at IS NULL`,
+                    [auditUnitId, Number(assessmentId)]
+                  );
             riskDataRows = res.rows;
 
             const heatRes = await this.db.query(
                 `SELECT business_risk, control_risk, COUNT(*)::int AS count
                  FROM (
-                   -- 1. Regular questions
                    SELECT 
                      NULLIF(ans.business_risk::text, '')::int AS business_risk, 
                      NULLIF(ans.control_risk::text, '')::int AS control_risk
@@ -3070,7 +3341,6 @@ ORDER BY
 
                    UNION ALL
 
-                   -- 2. Annexure questions (all existing annexure rows are deviations)
                    SELECT 
                      NULLIF(ax.business_risk::text, '')::int AS business_risk, 
                      NULLIF(ax.control_risk::text, '')::int AS control_risk
@@ -3092,6 +3362,7 @@ ORDER BY
         }
 
         const riskTypeWiseScoreMap = new Map<number, number>();
+        const riskTypeWiseCountMap = new Map<number, number>();
         let totalHighRisk = 0;
         let totalMediumRisk = 0;
         let totalLowRisk = 0;
@@ -3106,6 +3377,7 @@ ORDER BY
                         
                         const wgSc = Number(catData.wg_sc || 0);
                         riskTypeWiseScoreMap.set(catId, (riskTypeWiseScoreMap.get(catId) || 0) + wgSc);
+                        riskTypeWiseCountMap.set(catId, (riskTypeWiseCountMap.get(catId) || 0) + 1);
 
                         if (Number(catData.avg_sc || 0) > 0) {
                             totalHighRisk += Number(catData['1'] || 0);
@@ -3121,9 +3393,11 @@ ORDER BY
 
         const riskTypeWiseScore: any[] = [];
         riskTypeWiseScoreMap.forEach((val, key) => {
+            const count = riskTypeWiseCountMap.get(key) || 1;
+            const avgVal = isAllBranches ? (val / count) : val;
             riskTypeWiseScore.push({
                 label: categoryMap.get(key) || `Category ${key}`,
-                y: Number(val.toFixed(2)),
+                y: Number(avgVal.toFixed(2)),
             });
         });
 
@@ -3202,7 +3476,7 @@ ORDER BY
                 `SELECT 
                    rsm.audit_unit_id,
                    aum.name AS branch_name,
-                   SUM(rsm.weighted_score)::float AS weighted_score
+                   SUM(COALESCE(rsm.weighted_score::float, 0)) AS weighted_score
                  FROM report_scoring_master rsm
                  LEFT JOIN audit_unit_master aum ON aum.id = rsm.audit_unit_id
                  WHERE rsm.audit_unit_id = ANY($1)
