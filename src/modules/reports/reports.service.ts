@@ -8092,6 +8092,7 @@ export class ReportsService {
 
     // Step 4: Fetch Menus — use ALL menu_ids that actually appear in the categories
     // (assessment.menu_ids can be incomplete; category.menu_id is the source of truth)
+    const catIds = String(assessment.cat_ids || '').split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
     const menusResult = catIds.length ? await this.db.query(
       `
       SELECT DISTINCT mm.id, mm.name
@@ -8176,7 +8177,6 @@ export class ReportsService {
     };
 
     // Step 7: Fetch Category Master records
-    const catIds = String(assessment.cat_ids || '').split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
     const categoriesResult = catIds.length ? await this.db.query(
       `
       SELECT id, menu_id, name, linked_table_id, question_set_ids
