@@ -14,6 +14,7 @@ import { PolicyDocumentsService } from './policy-documents.service';
 import { CreatePolicyDocumentDto, UpdatePolicyDocumentDto } from './dto/policy-document.dto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import * as fs from 'fs';
+import '@fastify/multipart';
 
 @Controller('policy-documents')
 export class PolicyDocumentsController {
@@ -24,31 +25,34 @@ export class PolicyDocumentsController {
     const isMultipart = contentType.includes('multipart/form-data');
 
     if (isMultipart) {
-      const part = await req.file();
-      if (!part) {
-        return { fields: {}, file: undefined };
-      }
-
       const fields: any = {};
-      for (const key in part.fields) {
-        fields[key] = (part.fields as any)[key]?.value;
+      let file: any = undefined;
+
+      const parts = (req as any).parts();
+      for await (const part of parts) {
+        const p = part as any;
+        if (p.file) {
+          file = {
+            filename: p.filename,
+            mimetype: p.mimetype,
+            buffer: await p.toBuffer(),
+          };
+        } else {
+          fields[p.fieldname] = p.value === '' ? null : p.value;
+        }
       }
 
       // Numeric conversions for database types
-      if (fields.uploaded_by !== undefined && fields.uploaded_by !== '') {
+      if (fields.uploaded_by !== undefined && fields.uploaded_by !== null && fields.uploaded_by !== '') {
         fields.uploaded_by = Number(fields.uploaded_by);
       }
-      if (fields.is_active !== undefined && fields.is_active !== '') {
+      if (fields.is_active !== undefined && fields.is_active !== null && fields.is_active !== '') {
         fields.is_active = Number(fields.is_active);
       }
 
       return {
         fields,
-        file: {
-          filename: part.filename,
-          mimetype: part.mimetype,
-          buffer: await part.toBuffer(),
-        },
+        file,
       };
     } else {
       const body = (req.body as any) || {};
