@@ -1,4 +1,7 @@
 import {
+    ArrayUnique,
+    IsArray,
+    IsInt,
     IsNotEmpty,
     IsNumber,
     IsOptional,
@@ -6,6 +9,11 @@ import {
 } from "class-validator";
 
 export class CreateMultiLevelControlMasterDto {
+
+    @IsArray()
+    @ArrayUnique()
+    @IsInt({ each: true })
+    audit_type_ids!: number[];
 
     @IsNotEmpty()
     @IsNumber()

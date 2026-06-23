@@ -35,7 +35,7 @@ export class AuditSectionsController {
 
   @Put(':id')
   update(@Param('id') id: string, @Body() dto: CreateAuditSectionDto) {
-    return this.service.update(Number(id), dto.name);
+    return this.service.update(Number(id), dto);
   }
 
   @Put(':id/toggle-status')

@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { AuditLogService } from '../../audit-logs/audit-log.service';
+import { AuditTypeService } from '../../admin/audit-type-master/audit-type.service';
 
 const AUDITOR_STATUS_IDS = [1, 3];
 const REMARK_TYPES: Record<number, string> = {
@@ -111,6 +112,8 @@ export class InternalAuditService {
       DatabaseService,
     private readonly auditLogService:
       AuditLogService,
+    private readonly auditTypeService:
+      AuditTypeService,
   ) { }
 
   private isLiveComplianceSettledStatus(
@@ -862,6 +865,11 @@ export class InternalAuditService {
       error = 'multiLevelControlNoData';
     }
 
+    const internalAuditType =
+      await this.auditTypeService.findActiveByCode(
+        'INTERNAL_AUDIT',
+      );
+
     return {
       can_start:
         !error,
@@ -869,7 +877,8 @@ export class InternalAuditService {
       audit_unit: unit,
       year,
       data: {
-        audit_type_id: 1,
+        audit_type_id:
+          Number(internalAuditType.id),
         year_id: yearId,
         audit_unit_id: auditUnitId,
         frequency: freeFlow
@@ -2933,6 +2942,12 @@ export class InternalAuditService {
         SELECT
             aam.id,
             aam.audit_type_id,
+            (
+              SELECT audit_type.name
+              FROM audit_type_master audit_type
+              WHERE audit_type.id = aam.audit_type_id
+                AND audit_type.deleted_at IS NULL
+            ) AS audit_type_name,
             aam.audit_unit_id,
             aam.audit_status_id,
             aam.assesment_period_from,
@@ -3003,6 +3018,12 @@ export class InternalAuditService {
         SELECT
             aam.id,
             aam.audit_type_id,
+            (
+              SELECT audit_type.name
+              FROM audit_type_master audit_type
+              WHERE audit_type.id = aam.audit_type_id
+                AND audit_type.deleted_at IS NULL
+            ) AS audit_type_name,
             aam.audit_unit_id,
             aam.audit_status_id,
             aam.assesment_period_from,
@@ -5474,6 +5495,12 @@ export class InternalAuditService {
           SELECT
               aam.id,
               aam.audit_type_id,
+              (
+                SELECT audit_type.name
+                FROM audit_type_master audit_type
+                WHERE audit_type.id = aam.audit_type_id
+                  AND audit_type.deleted_at IS NULL
+              ) AS audit_type_name,
               aam.audit_unit_id,
               aam.audit_status_id,
               aam.assesment_period_from,
@@ -5556,6 +5583,12 @@ export class InternalAuditService {
         SELECT
             aam.id,
             aam.audit_type_id,
+            (
+              SELECT audit_type.name
+              FROM audit_type_master audit_type
+              WHERE audit_type.id = aam.audit_type_id
+                AND audit_type.deleted_at IS NULL
+            ) AS audit_type_name,
             aam.audit_unit_id,
             aam.audit_status_id,
             aam.assesment_period_from,
@@ -7048,7 +7081,32 @@ ORDER BY id DESC;
               qm.question,
               qm.question_type_id,
               qm.option_id,
-              qm.parameters,
+              COALESCE(
+                  NULLIF(NULLIF(BTRIM(qm.parameters), ''), '[]'),
+                  (
+                      SELECT jsonb_agg(
+                          jsonb_build_object(
+                              'rt', qrm.risk_type,
+                              'br', CASE UPPER(BTRIM(qrm.business_risk))
+                                  WHEN 'HIGH RISK' THEN 1
+                                  WHEN 'MEDIUM RISK' THEN 2
+                                  WHEN 'LOW RISK' THEN 3
+                                  ELSE 4
+                              END,
+                              'cr', CASE UPPER(BTRIM(qrm.control_risk))
+                                  WHEN 'HIGH RISK' THEN 1
+                                  WHEN 'MEDIUM RISK' THEN 2
+                                  WHEN 'LOW RISK' THEN 3
+                                  ELSE 4
+                              END
+                          )
+                          ORDER BY qrm.id
+                      )::text
+                      FROM question_risk_mapping qrm
+                      WHERE qrm.question_id = qm.id
+                          AND qrm.deleted_at IS NULL
+                  )
+              ) AS parameters,
               qm.risk_category_id,
               qm.annexure_id,
               qm.subset_multi_id,
@@ -7194,7 +7252,32 @@ ORDER BY id DESC;
               qm.question,
               qm.question_type_id,
               qm.option_id,
-              qm.parameters,
+              COALESCE(
+                  NULLIF(NULLIF(BTRIM(qm.parameters), ''), '[]'),
+                  (
+                      SELECT jsonb_agg(
+                          jsonb_build_object(
+                              'rt', qrm.risk_type,
+                              'br', CASE UPPER(BTRIM(qrm.business_risk))
+                                  WHEN 'HIGH RISK' THEN 1
+                                  WHEN 'MEDIUM RISK' THEN 2
+                                  WHEN 'LOW RISK' THEN 3
+                                  ELSE 4
+                              END,
+                              'cr', CASE UPPER(BTRIM(qrm.control_risk))
+                                  WHEN 'HIGH RISK' THEN 1
+                                  WHEN 'MEDIUM RISK' THEN 2
+                                  WHEN 'LOW RISK' THEN 3
+                                  ELSE 4
+                              END
+                          )
+                          ORDER BY qrm.id
+                      )::text
+                      FROM question_risk_mapping qrm
+                      WHERE qrm.question_id = qm.id
+                          AND qrm.deleted_at IS NULL
+                  )
+              ) AS parameters,
               qm.risk_category_id,
               qm.annexure_id,
               qm.subset_multi_id,
@@ -12539,6 +12622,12 @@ ORDER BY id DESC;
       SELECT
           aam.id,
           aam.audit_type_id,
+          (
+            SELECT audit_type.name
+            FROM audit_type_master audit_type
+            WHERE audit_type.id = aam.audit_type_id
+              AND audit_type.deleted_at IS NULL
+          ) AS audit_type_name,
           aam.year_id,
           aam.audit_unit_id,
           aam.frequency,

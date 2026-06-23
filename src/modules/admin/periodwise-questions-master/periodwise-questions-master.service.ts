@@ -25,6 +25,37 @@ export class PeriodwiseQuestionsMasterService {
     mlcm.admin_id,
     mlcm.created_at,
     mlcm.updated_at,
+    COALESCE(
+        (
+            SELECT array_agg(mapping.audit_type_id ORDER BY mapping.audit_type_id)
+            FROM audit_type_question_setup_mapping mapping
+            WHERE mapping.control_master_id = mlcm.id
+              AND mapping.is_active = 1
+              AND mapping.deleted_at IS NULL
+        ),
+        ARRAY[
+            (
+                SELECT id
+                FROM audit_type_master
+                WHERE code = 'INTERNAL_AUDIT'
+                  AND deleted_at IS NULL
+                LIMIT 1
+            )
+        ]::bigint[]
+    ) AS audit_type_ids,
+    COALESCE(
+        (
+            SELECT string_agg(audit_type.name, ', ' ORDER BY audit_type.name)
+            FROM audit_type_question_setup_mapping mapping
+            JOIN audit_type_master audit_type
+              ON audit_type.id = mapping.audit_type_id
+             AND audit_type.deleted_at IS NULL
+            WHERE mapping.control_master_id = mlcm.id
+              AND mapping.is_active = 1
+              AND mapping.deleted_at IS NULL
+        ),
+        'Internal Audit'
+    ) AS audit_type_names,
     ym.year,
     stm.name AS section_type_name,
     aum.name AS audit_unit_name,
@@ -150,7 +181,7 @@ ORDER BY
 
     }
 
-    async create(data: { year_id: number, section_type_id: number, user_type_id: number, audit_unit_id: number, start_month_year: string, end_month_year: string, admin_id: number }) {
+    async create(data: { audit_type_ids: number[], year_id: number, section_type_id: number, user_type_id: number, audit_unit_id: number, start_month_year: string, end_month_year: string, admin_id: number }) {
         const existing = await this.db.query(
             `SELECT id 
              FROM multi_level_control_master 
@@ -165,13 +196,23 @@ ORDER BY
         }
 
         try {
-            return await this.db.query(
-                ` INSERT INTO multi_level_control_master (year_id, section_type_id, user_type_id, audit_unit_id, start_month_year, end_month_year, admin_id)
-              VALUES ($1, $2, $3, $4, $5, $6, $7)
-              RETURNING *
-              `,
-                [data.year_id, data.section_type_id, data.user_type_id, data.audit_unit_id, data.start_month_year, data.end_month_year, data.admin_id]
-            );
+            return await this.db.transaction(async (client) => {
+                const created = await client.query(
+                    ` INSERT INTO multi_level_control_master (year_id, section_type_id, user_type_id, audit_unit_id, start_month_year, end_month_year, admin_id)
+                  VALUES ($1, $2, $3, $4, $5, $6, $7)
+                  RETURNING *
+                  `,
+                    [data.year_id, data.section_type_id, data.user_type_id, data.audit_unit_id, data.start_month_year, data.end_month_year, data.admin_id]
+                );
+
+                await this.replaceAuditTypeMappings(
+                    client,
+                    Number(created.rows[0].id),
+                    data.audit_type_ids,
+                );
+
+                return created;
+            });
         } catch (err: any) {
             if (err.code === '23505') {
                 throw new BadRequestException('Menu master already exists')
@@ -180,7 +221,7 @@ ORDER BY
         }
     }
 
-    async update(id: number, data: { year_id: number, section_type_id: number, user_type_id: number, audit_unit_id: number, start_month_year: string, end_month_year: string }) {
+    async update(id: number, data: { audit_type_ids: number[], year_id: number, section_type_id: number, user_type_id: number, audit_unit_id: number, start_month_year: string, end_month_year: string }) {
         const existing = await this.db.query(
             `SELECT id FROM multi_level_control_master 
        WHERE audit_unit_id = $1 AND start_month_year = $2 AND end_month_year = $3
@@ -192,15 +233,84 @@ ORDER BY
             throw new BadRequestException('Menu master already exists');
         }
 
-        return this.db.query(
+        return this.db.transaction(async (client) => {
+            const updated = await client.query(
+                `
+                 UPDATE multi_level_control_master
+                 SET year_id = $1, section_type_id = $2, user_type_id = $3, audit_unit_id = $4, start_month_year = $5, end_month_year = $6, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $7
+                 RETURNING *
+                 `,
+                [data.year_id, data.section_type_id, data.user_type_id, data.audit_unit_id, data.start_month_year, data.end_month_year, id]
+            );
+
+            await this.replaceAuditTypeMappings(
+                client,
+                id,
+                data.audit_type_ids,
+            );
+
+            return updated;
+        });
+    }
+
+    private async replaceAuditTypeMappings(
+        client: any,
+        controlMasterId: number,
+        auditTypeIds: number[],
+    ) {
+        const ids = [
+            ...new Set(
+                (auditTypeIds || [])
+                    .map(Number)
+                    .filter((value) => Number.isInteger(value) && value > 0),
+            ),
+        ];
+
+        if (!ids.length) {
+            throw new BadRequestException('Select at least one audit type');
+        }
+
+        const valid = await client.query(
             `
-             UPDATE multi_level_control_master
-             SET year_id = $1, section_type_id = $2, user_type_id = $3, audit_unit_id = $4, start_month_year = $5, end_month_year = $6, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $7
-             RETURNING *
-             `,
-            [data.year_id, data.section_type_id, data.user_type_id, data.audit_unit_id, data.start_month_year, data.end_month_year, id]
+            SELECT id
+            FROM audit_type_master
+            WHERE id = ANY($1::bigint[])
+              AND is_active = 1
+              AND deleted_at IS NULL
+            `,
+            [ids],
         );
+
+        if (valid.rows.length !== ids.length) {
+            throw new BadRequestException('One or more selected audit types are invalid');
+        }
+
+        await client.query(
+            `
+            UPDATE audit_type_question_setup_mapping
+            SET is_active = 0,
+                deleted_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE control_master_id = $1
+              AND deleted_at IS NULL
+            `,
+            [controlMasterId],
+        );
+
+        for (const auditTypeId of ids) {
+            await client.query(
+                `
+                INSERT INTO audit_type_question_setup_mapping (
+                    audit_type_id,
+                    control_master_id,
+                    is_active
+                )
+                VALUES ($1, $2, 1)
+                `,
+                [auditTypeId, controlMasterId],
+            );
+        }
     }
 
 

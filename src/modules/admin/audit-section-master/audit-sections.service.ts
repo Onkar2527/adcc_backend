@@ -7,14 +7,36 @@ export class AuditSectionService {
 
   async findAll() {
     return this.db.query(`
-            SELECT id, name, is_active
-            FROM audit_section_master
-            WHERE deleted_at IS NULL
-            ORDER BY id DESC
+            SELECT
+                section.id,
+                section.name,
+                section.audit_type_id,
+                section.is_active,
+                COALESCE(
+                    (
+                        SELECT STRING_AGG(audit_type.name, ', ' ORDER BY audit_type.name)
+                        FROM audit_type_master audit_type
+                        WHERE audit_type.deleted_at IS NULL
+                            AND audit_type.id::text = ANY(
+                                string_to_array(
+                                    COALESCE(section.audit_type_id, ''),
+                                    ','
+                                )
+                            )
+                    ),
+                    ''
+                ) AS audit_type_names
+            FROM audit_section_master section
+            WHERE section.deleted_at IS NULL
+            ORDER BY section.id DESC
       `);
   }
 
-  async create(data: { name: string; admin_id: number }) {
+  async create(data: {
+    name: string;
+    audit_type_id?: string;
+    admin_id: number;
+  }) {
     const existing = await this.db.query(
       `SELECT id 
              FROM audit_section_master 
@@ -30,11 +52,15 @@ export class AuditSectionService {
 
     try {
       return await this.db.query(
-        ` INSERT INTO audit_section_master (name, admin_id)
-              VALUES ($1, $2)
+        ` INSERT INTO audit_section_master (name, audit_type_id, admin_id)
+              VALUES ($1, $2, $3)
               RETURNING *
               `,
-        [data.name, data.admin_id],
+        [
+          data.name,
+          data.audit_type_id || null,
+          data.admin_id,
+        ],
       );
     } catch (err: any) {
       if (err.code === '23505') {
@@ -44,12 +70,18 @@ export class AuditSectionService {
     }
   }
 
-  async update(id: number, name: string) {
+  async update(
+    id: number,
+    data: {
+      name: string;
+      audit_type_id?: string;
+    },
+  ) {
     const existing = await this.db.query(
       `SELECT id FROM audit_section_master 
        WHERE LOWER(name) = LOWER($1) 
        AND id != $2 AND deleted_at IS NULL`,
-      [name, id],
+      [data.name, id],
     );
 
     if (existing.rows.length) {
@@ -59,11 +91,18 @@ export class AuditSectionService {
     return this.db.query(
       `
              UPDATE audit_section_master
-             SET name = $1, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $2
+             SET
+                name = $1,
+                audit_type_id = $2,
+                updated_at = CURRENT_TIMESTAMP
+             WHERE id = $3
              RETURNING *
              `,
-      [name, id],
+      [
+        data.name,
+        data.audit_type_id || null,
+        id,
+      ],
     );
   }
 
