@@ -9,7 +9,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() body: any, @Req() req: any) {
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
-    return this.authService.login(body.username, body.password, ipAddress);
+    return this.authService.login(body.username, body.password, ipAddress, body.enable_2fa);
+  }
+
+  @Post('verify-2fa')
+  @HttpCode(HttpStatus.OK)
+  async verify2fa(@Body() body: any, @Req() req: any) {
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+    return this.authService.verify2fa(body.username, body.code, ipAddress);
   }
 
   @Post('logout')

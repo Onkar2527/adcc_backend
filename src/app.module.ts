@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './core/database/database.module';
 import { IdModule } from './core/id/id.module';
+import { EmailModule } from './core/email/email.module';
 import { EmployeesModule } from './modules/admin/employee-master/employees.module';
 import { PasswordPolicyModule } from './modules/admin/password-policy/password-policy.module';
 import { AuditUnitsModule } from './modules/admin/audit-unit-master/audit-units.module';
@@ -35,6 +36,7 @@ import { SpecialAuditModule } from './modules/admin/special-audit/special-audit.
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { MasterBulkUploadModule } from './modules/admin/master-bulk-upload/master-bulk-upload.module';
 import { AuditTypeModule } from './modules/admin/audit-type-master/audit-type.module';
+import { IncidentManagementModule } from './modules/incident-management/incident-management.module';
 
 
 @Module({
@@ -42,6 +44,7 @@ import { AuditTypeModule } from './modules/admin/audit-type-master/audit-type.mo
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     IdModule,
+    EmailModule,
     EmployeesModule,
     PasswordPolicyModule,
     AuditSectionsModule,
@@ -73,7 +76,8 @@ import { AuditTypeModule } from './modules/admin/audit-type-master/audit-type.mo
     SpecialAuditModule,
     AuditLogsModule,
     MasterBulkUploadModule,
-    AuditTypeModule
+    AuditTypeModule,
+    IncidentManagementModule
   ],
   controllers: [AppController],
   providers: [AppService],
