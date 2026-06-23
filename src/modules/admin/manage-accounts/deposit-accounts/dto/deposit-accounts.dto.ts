@@ -91,6 +91,10 @@ export class CreateDepositAccountDto {
     @IsOptional()
     @IsInt()
     admin_id?: number;
+
+    @IsOptional()
+    @IsString()
+    kyc?: string;
 }
 
 export class UpdateDepositAccountDto

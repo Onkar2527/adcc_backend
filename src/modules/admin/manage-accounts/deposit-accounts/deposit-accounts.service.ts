@@ -337,7 +337,9 @@ export class DepositAccountsService {
 
                 assesment_period_id,
 
-                admin_id
+                admin_id,
+
+                kyc
 
               )
 
@@ -347,7 +349,7 @@ export class DepositAccountsService {
                 $6,$7,$8,$9,$10,
                 $11,$12,$13,$14,$15,
                 $16,$17,$18,$19,$20,
-                $21
+                $21,$22
               )
 
               RETURNING *
@@ -395,6 +397,8 @@ export class DepositAccountsService {
                                 data.assesment_period_id,
 
                                 data.admin_id ?? 1,
+
+                                data.kyc,
                             ],
                         );
 
@@ -535,6 +539,11 @@ export class DepositAccountsService {
               upload_period_to
             ),
 
+            kyc = COALESCE(
+              $20,
+              kyc
+            ),
+
             updated_at = CURRENT_TIMESTAMP
 
           WHERE id = $1
@@ -580,6 +589,8 @@ export class DepositAccountsService {
                         data.upload_period_from,
 
                         data.upload_period_to,
+
+                        data.kyc,
                     ],
                 );
 
@@ -1112,7 +1123,7 @@ export class DepositAccountsService {
             const c_data =
                 filteredRows[i];
 
-            if (c_data.length !== 17) {
+            if (c_data.length !== 18) {
 
                 failed++;
 
@@ -1173,6 +1184,9 @@ export class DepositAccountsService {
 
                 account_status:
                     this.toUpper(c_data[16]),
+
+                kyc:
+                    String(c_data[17] || '').trim(),
             };
 
             try {
@@ -1397,6 +1411,8 @@ export class DepositAccountsService {
                     0,
 
                     1,
+
+                    row.kyc,
                 ]);
 
                 // =====================================
@@ -1585,6 +1601,7 @@ export class DepositAccountsService {
         $${paramIndex++},
         $${paramIndex++},
         $${paramIndex++},
+        $${paramIndex++},
 
         NOW(),
 
@@ -1618,6 +1635,7 @@ export class DepositAccountsService {
             sampling_filter,
             assesment_period_id,
             admin_id,
+            kyc,
             created_at,
             updated_at
 

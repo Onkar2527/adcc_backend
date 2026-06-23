@@ -334,7 +334,11 @@ export class AdvanceAccountsService {
 
                 assesment_period_id,
 
-                admin_id
+                admin_id,
+
+                npa_classification,
+
+                kyc
 
               )
 
@@ -344,7 +348,7 @@ export class AdvanceAccountsService {
                 $6,$7,$8,$9,$10,
                 $11,$12,$13,$14,$15,
                 $16,$17,$18,$19,$20,
-                $21
+                $21,$22,$23
               )
 
               RETURNING *
@@ -392,6 +396,10 @@ export class AdvanceAccountsService {
                                 data.assesment_period_id,
 
                                 data.admin_id ?? 1,
+
+                                data.npa_classification,
+
+                                data.kyc,
                             ],
                         );
 
@@ -532,6 +540,16 @@ export class AdvanceAccountsService {
               upload_period_to
             ),
 
+            npa_classification = COALESCE(
+              $20,
+              npa_classification
+            ),
+
+            kyc = COALESCE(
+              $21,
+              kyc
+            ),
+
             updated_at = CURRENT_TIMESTAMP
 
           WHERE id = $1
@@ -576,7 +594,11 @@ export class AdvanceAccountsService {
 
                         data.upload_period_from,
 
-                        data.upload_period_to
+                        data.upload_period_to,
+
+                        data.npa_classification,
+
+                        data.kyc
                     ],
                 );
 
@@ -1090,7 +1112,7 @@ export class AdvanceAccountsService {
             const c_data =
                 filteredRows[i];
 
-            if (c_data.length !== 17) {
+            if (c_data.length !== 19) {
 
                 failed++;
 
@@ -1151,6 +1173,12 @@ export class AdvanceAccountsService {
 
                 account_status:
                     this.toUpper(c_data[16]),
+
+                npa_classification:
+                    String(c_data[17] || '').trim(),
+
+                kyc:
+                    String(c_data[18] || '').trim(),
             };
 
             try {
@@ -1398,6 +1426,10 @@ export class AdvanceAccountsService {
                     0,
 
                     1,
+
+                    row.npa_classification,
+
+                    row.kyc,
                 ]);
                 // =====================================
                 // ADD TO SET
@@ -1585,6 +1617,8 @@ export class AdvanceAccountsService {
         $${paramIndex++},
         $${paramIndex++},
         $${paramIndex++},
+        $${paramIndex++},
+        $${paramIndex++},
 
         NOW(),
 
@@ -1618,6 +1652,8 @@ export class AdvanceAccountsService {
             sampling_filter,
             assesment_period_id,
             admin_id,
+            npa_classification,
+            kyc,
             created_at,
             updated_at
 

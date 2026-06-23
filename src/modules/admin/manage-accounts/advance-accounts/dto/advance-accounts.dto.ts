@@ -91,6 +91,14 @@ export class CreateAdvanceAccountDto {
     @IsOptional()
     @IsInt()
     admin_id?: number;
+
+    @IsOptional()
+    @IsString()
+    npa_classification?: string;
+
+    @IsOptional()
+    @IsString()
+    kyc?: string;
 }
 
 export class UpdateAdvanceAccountDto

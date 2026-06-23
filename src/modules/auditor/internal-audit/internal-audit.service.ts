@@ -98,6 +98,69 @@ const LIVE_COMPLIANCE_REVIEWER_QUEUE_STATUSES = [
   LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED,
 ];
 
+const NPA_CLASSIFICATION_MAP: Record<string, string[]> = {
+  'STANDARD': ['STANDARD', 'STD', 'REGULAR', 'PERFORMING', 'NORMAL', 'S'],
+  'SMA-0': ['SMA0', 'SMA-0', 'SPECIAL MENTION 0'],
+  'SMA-1': ['SMA1', 'SMA-1', 'SPECIAL MENTION 1'],
+  'SMA-2': ['SMA2', 'SMA-2', 'SPECIAL MENTION 2'],
+  'SUB-STANDARD': ['SUBSTANDARD', 'SUB-STANDARD', 'SUB STD', 'SS', 'SUB'],
+  'DOUBTFUL-I': ['DOUBTFUL-I', 'D1', 'DB1', 'DOUBTFUL 1'],
+  'DOUBTFUL-II': ['DOUBTFUL-II', 'D2', 'DB2', 'DOUBTFUL 2'],
+  'DOUBTFUL-III': ['DOUBTFUL-III', 'D3', 'DB3', 'DOUBTFUL 3'],
+  'LOSS ASSET': ['LOSS', 'LOSS ASSET', 'LA', 'L']
+};
+
+const KYC_MAP: Record<string, string[]> = {
+  'KYC COMPLIED': ['VALID', 'COMPLETE', 'UPDATED', 'COMPLIED', 'YES', 'Y', 'ACTIVE'],
+  'KYC DUE': ['DUE', 'PENDING REVIEW', 'REVIEW DUE', 'RE-KYC DUE'],
+  'KYC EXPIRED': ['EXPIRED', 'OVERDUE', 'RE-KYC OVERDUE'],
+  'KYC PENDING': ['PENDING', 'INCOMPLETE', 'NOT UPDATED', 'DOCUMENT PENDING'],
+  'KYC NOT AVAILABLE': ['NA', 'NOT AVAILABLE', 'NOT DONE', 'MISSING'],
+  'KYC REJECTED': ['REJECTED', 'FAILED', 'INVALID DOCUMENT']
+};
+
+function standardizeNpa(val: string | null | undefined): string {
+  if (!val) return '';
+  const trimmed = val.trim().toUpperCase();
+  for (const [standardized, rawList] of Object.entries(NPA_CLASSIFICATION_MAP)) {
+    if (standardized === trimmed || rawList.some(r => r.toUpperCase() === trimmed)) {
+      return standardized;
+    }
+  }
+  return val;
+}
+
+function standardizeKyc(val: string | null | undefined): string {
+  if (!val) return '';
+  const trimmed = val.trim().toUpperCase();
+  for (const [standardized, rawList] of Object.entries(KYC_MAP)) {
+    if (standardized === trimmed || rawList.some(r => r.toUpperCase() === trimmed)) {
+      return standardized;
+    }
+  }
+  return val;
+}
+
+function getMatchingNpaValues(input: string): string[] {
+  const clean = input.trim().toUpperCase();
+  for (const [standardized, rawList] of Object.entries(NPA_CLASSIFICATION_MAP)) {
+    if (standardized === clean || rawList.some(r => r.toUpperCase() === clean)) {
+      return rawList;
+    }
+  }
+  return [input];
+}
+
+function getMatchingKycValues(input: string): string[] {
+  const clean = input.trim().toUpperCase();
+  for (const [standardized, rawList] of Object.entries(KYC_MAP)) {
+    if (standardized === clean || rawList.some(r => r.toUpperCase() === clean)) {
+      return rawList;
+    }
+  }
+  return [input];
+}
+
 @Injectable()
 export class InternalAuditService {
   private annexureRiskOptionsCache =
@@ -11732,29 +11795,112 @@ ORDER BY id DESC;
         secondaryValue,
       );
 
+    let npaOptions: string[] = [];
+    let kycOptions: string[] = [];
+
+    const linkedTableId = Number(detail.category.linked_table_id);
+    if ([1, 2].includes(linkedTableId)) {
+      const table = linkedTableId === 1 ? 'dump_deposits' : 'dump_advances';
+      const schemeIds = linkedTableId === 1 ? detail.overview.deposits_scheme_ids || '' : detail.overview.advances_scheme_ids || '';
+      const periodCondition = linkedTableId === 1
+        ? 'd.account_opening_date BETWEEN $2 AND $3'
+        : '(d.account_opening_date BETWEEN $2 AND $3 OR d.renewal_date BETWEEN $2 AND $3)';
+
+      if (String(schemeIds).trim()) {
+        if (linkedTableId === 2) {
+          const npaRes = await this.db.query(`
+            SELECT DISTINCT d.npa_classification
+            FROM dump_advances d
+            INNER JOIN scheme_master sm 
+                ON sm.id = d.scheme_id 
+                AND sm.scheme_type_id = 2 
+                AND sm.category_id = $1 
+                AND sm.is_active = 1 
+                AND sm.deleted_at IS NULL
+            WHERE d.branch_id = $4
+              AND d.scheme_id::text = ANY(string_to_array($5, ','))
+              AND ${periodCondition}
+              AND (COALESCE(d.sampling_filter, 0) = 0 OR d.sampling_filter = 1)
+              AND d.deleted_at IS NULL
+              AND d.npa_classification IS NOT NULL AND TRIM(d.npa_classification) <> ''
+          `, [
+            categoryId,
+            detail.overview.assesment_period_from,
+            detail.overview.assesment_period_to,
+            detail.overview.audit_unit_id,
+            String(schemeIds)
+          ]);
+          
+          const mapped = npaRes.rows.map(r => standardizeNpa(r.npa_classification)).filter(Boolean);
+          npaOptions = Array.from(new Set(mapped)).sort();
+        }
+
+        const kycRes = await this.db.query(`
+          SELECT DISTINCT d.kyc
+          FROM ${table} d
+          INNER JOIN scheme_master sm 
+              ON sm.id = d.scheme_id 
+              AND sm.scheme_type_id = $6 
+              AND sm.category_id = $1 
+              AND sm.is_active = 1 
+              AND sm.deleted_at IS NULL
+          WHERE d.branch_id = $4
+            AND d.scheme_id::text = ANY(string_to_array($5, ','))
+            AND ${periodCondition}
+            AND (COALESCE(d.sampling_filter, 0) = 0 OR d.sampling_filter = 1)
+            AND d.deleted_at IS NULL
+            AND d.kyc IS NOT NULL AND TRIM(d.kyc) <> ''
+        `, [
+          categoryId,
+          detail.overview.assesment_period_from,
+          detail.overview.assesment_period_to,
+          detail.overview.audit_unit_id,
+          String(schemeIds),
+          linkedTableId
+        ]);
+
+        const mappedKyc = kycRes.rows.map(r => standardizeKyc(r.kyc)).filter(Boolean);
+        kycOptions = Array.from(new Set(mappedKyc)).sort();
+      }
+    }
+
+    const filterTypes = [
+      {
+        id: 1,
+        name: 'Block Sampling',
+      },
+      {
+        id: 2,
+        name: 'High Value Sampling',
+      },
+      {
+        id: 3,
+        name: 'Systematic Sampling - Below 1 Lakh',
+      },
+      {
+        id: 4,
+        name: 'Systematic Sampling - Between 1 Lakh To 2 Lakhs',
+      },
+      {
+        id: 5,
+        name: 'Systematic Sampling - Above 2 Lakhs',
+      },
+    ];
+
+    if (Number(detail.category.linked_table_id) === 2) {
+      filterTypes.push({
+        id: 6,
+        name: 'NPA Classification',
+      });
+    }
+
+    filterTypes.push({
+      id: 7,
+      name: 'KYC Status',
+    });
+
     return {
-      filter_types: [
-        {
-          id: 1,
-          name: 'Block Sampling',
-        },
-        {
-          id: 2,
-          name: 'High Value Sampling',
-        },
-        {
-          id: 3,
-          name: 'Systematic Sampling - Below 1 Lakh',
-        },
-        {
-          id: 4,
-          name: 'Systematic Sampling - Between 1 Lakh To 2 Lakhs',
-        },
-        {
-          id: 5,
-          name: 'Systematic Sampling - Above 2 Lakhs',
-        },
-      ],
+      filter_types: filterTypes,
       selected_accounts:
         detail.accounts || [],
       candidates:
@@ -11763,6 +11909,8 @@ ORDER BY id DESC;
         candidateData.matching_count,
       displayed_count:
         candidateData.accounts.length,
+      npa_options: npaOptions,
+      kyc_options: kycOptions,
     };
   }
 
@@ -12026,11 +12174,23 @@ ORDER BY id DESC;
     if (
       filterType
       &&
-      ![1, 2, 3, 4, 5].includes(filterType)
+      ![1, 2, 3, 4, 5, 6, 7].includes(filterType)
     ) {
       throw new BadRequestException(
         'Select a valid sampling filter.',
       );
+    }
+
+    if (filterType === 6 && linkedTableId !== 2) {
+      throw new BadRequestException('NPA Classification filter is available only for Advances.');
+    }
+
+    if (
+      [6, 7].includes(filterType)
+      &&
+      !String(primaryValue).trim()
+    ) {
+      throw new BadRequestException('Please select a filter value.');
     }
 
     if (
@@ -12140,7 +12300,26 @@ ORDER BY id DESC;
     ) {
       filterClause =
         ` AND ${amountColumn} > 200000`;
+    } else if (
+      filterType === 6
+    ) {
+      const selectedCategory = String(primaryValue).trim();
+      const npaValues = getMatchingNpaValues(selectedCategory);
+      filterClause = ' AND UPPER(TRIM(d.npa_classification)) = ANY($8::text[])';
+      params.push(npaValues.map(v => v.toUpperCase()));
+    } else if (
+      filterType === 7
+    ) {
+      const selectedStatus = String(primaryValue).trim();
+      const kycValues = getMatchingKycValues(selectedStatus);
+      filterClause = ' AND UPPER(TRIM(d.kyc)) = ANY($8::text[])';
+      params.push(kycValues.map(v => v.toUpperCase()));
     }
+
+    const npaSelect =
+      linkedTableId === 1
+        ? 'NULL::text AS npa_classification'
+        : 'd.npa_classification';
 
     const result =
       await this.db.query(
@@ -12153,6 +12332,8 @@ ORDER BY id DESC;
             d.account_opening_date,
             ${renewalColumn},
             ${amountColumn} AS ${amountAlias},
+            ${npaSelect},
+            d.kyc,
             sm.name AS scheme_name,
             sm.scheme_code,
             COALESCE(d.sampling_filter, 0) AS sampling_filter,
@@ -12165,7 +12346,7 @@ ORDER BY id DESC;
                 FROM answers_data ad
                 WHERE ad.assesment_id = $7
                     AND ad.category_id = $2
-                    AND ad.dump_id = d.id
+                    AND d.id = ad.dump_id
                     AND ad.deleted_at IS NULL
             ) AS has_answers
         FROM ${table} d
@@ -12190,12 +12371,18 @@ ORDER BY id DESC;
         params,
       );
 
+    const standardizedRows = result.rows.map(row => ({
+      ...row,
+      npa_classification: standardizeNpa(row.npa_classification),
+      kyc: standardizeKyc(row.kyc),
+    }));
+
     const matchingCount =
-      result.rows.length;
+      standardizedRows.length;
 
     const accounts =
       [2, 3, 4, 5].includes(filterType)
-        ? result.rows.slice(
+        ? standardizedRows.slice(
           0,
           Math.max(
             1,
@@ -12204,7 +12391,7 @@ ORDER BY id DESC;
             ),
           ),
         )
-        : result.rows;
+        : standardizedRows;
 
     return {
       accounts,
@@ -12250,6 +12437,26 @@ ORDER BY id DESC;
         ? 'd.account_opening_date BETWEEN $4 AND $5'
         : '(d.account_opening_date BETWEEN $4 AND $5 OR d.renewal_date BETWEEN $4 AND $5)';
 
+    const amountColumn =
+      linkedTableId === 1
+        ? 'd.principal_amount'
+        : 'd.sanction_amount';
+
+    const amountAlias =
+      linkedTableId === 1
+        ? 'principal_amount'
+        : 'sanction_amount';
+
+    const renewalColumn =
+      linkedTableId === 1
+        ? 'NULL::date AS renewal_date'
+        : 'd.renewal_date';
+
+    const npaSelect =
+      linkedTableId === 1
+        ? 'NULL::text AS npa_classification'
+        : 'd.npa_classification';
+
     const result =
       await this.db.query(
         `
@@ -12261,6 +12468,10 @@ ORDER BY id DESC;
             d.account_opening_date,
             d.account_status,
             d.assesment_period_id,
+            ${renewalColumn},
+            ${amountColumn} AS ${amountAlias},
+            ${npaSelect},
+            d.kyc,
             sm.name AS scheme_name,
             sm.scheme_code,
             CASE
@@ -12294,7 +12505,11 @@ ORDER BY id DESC;
         ],
       );
 
-    return result.rows;
+    return result.rows.map(row => ({
+      ...row,
+      npa_classification: standardizeNpa(row.npa_classification),
+      kyc: standardizeKyc(row.kyc),
+    }));
   }
 
   private assertAccountSelection(
