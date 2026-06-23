@@ -8,6 +8,10 @@ import {
 } from 'class-validator';
 
 export class CreateSpecialAuditDto {
+  @IsInt()
+  @Min(1)
+  audit_type_id!: number;
+
   @IsString()
   @IsNotEmpty()
   title!: string;
@@ -40,6 +44,11 @@ export class CreateSpecialAuditDto {
 }
 
 export class UpdateSpecialAuditDto {
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  audit_type_id?: number;
+
   @IsString()
   @IsNotEmpty()
   @IsOptional()

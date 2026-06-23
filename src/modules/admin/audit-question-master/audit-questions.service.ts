@@ -1482,16 +1482,23 @@ export class AuditQuestionMasterService {
             );
         }
 
+        await this.syncQuestionParameters(
+            data.question_id,
+        );
+
         return row;
     }
 
     async removeRiskMapping(
         id: number,
     ) {
-        const existing =
+        const existing: {
+            id: number;
+            question_id: number;
+        } | null =
             await this.queryOne(
                 `
-      SELECT id
+      SELECT id, question_id
       FROM question_risk_mapping
       WHERE id = $1
       AND deleted_at IS NULL
@@ -1527,7 +1534,52 @@ export class AuditQuestionMasterService {
             );
         }
 
+        await this.syncQuestionParameters(
+            Number(existing.question_id),
+        );
+
         return row;
+    }
+
+    private async syncQuestionParameters(
+        questionId: number,
+    ) {
+        await this.queryOne(
+            `
+            UPDATE question_master qm
+            SET
+                parameters = COALESCE(
+                    (
+                        SELECT jsonb_agg(
+                            jsonb_build_object(
+                                'rt', qrm.risk_type,
+                                'br', CASE UPPER(BTRIM(qrm.business_risk))
+                                    WHEN 'HIGH RISK' THEN 1
+                                    WHEN 'MEDIUM RISK' THEN 2
+                                    WHEN 'LOW RISK' THEN 3
+                                    ELSE 4
+                                END,
+                                'cr', CASE UPPER(BTRIM(qrm.control_risk))
+                                    WHEN 'HIGH RISK' THEN 1
+                                    WHEN 'MEDIUM RISK' THEN 2
+                                    WHEN 'LOW RISK' THEN 3
+                                    ELSE 4
+                                END
+                            )
+                            ORDER BY qrm.id
+                        )::text
+                        FROM question_risk_mapping qrm
+                        WHERE qrm.question_id = qm.id
+                            AND qrm.deleted_at IS NULL
+                    ),
+                    ''
+                ),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE qm.id = $1
+            RETURNING qm.id;
+            `,
+            [questionId],
+        );
     }
 
     private async validateRiskMapping(

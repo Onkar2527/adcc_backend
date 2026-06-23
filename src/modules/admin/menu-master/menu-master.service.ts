@@ -13,6 +13,7 @@ export class MenuMasterService {
     m.linked_table_id,
     m.name,
     a.name AS section_name,
+    a.audit_type_id AS section_audit_type_ids,
     m.name AS menu_name,
     m.is_active
 FROM menu_master m

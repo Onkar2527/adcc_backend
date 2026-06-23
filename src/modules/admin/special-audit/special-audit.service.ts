@@ -7,8 +7,6 @@ import {
 
 @Injectable()
 export class SpecialAuditService {
-  private readonly SPECIAL_AUDIT_TYPE_ID = 2;
-
   constructor(private readonly db: DatabaseService) {}
 
   async findAll() {
@@ -30,8 +28,14 @@ export class SpecialAuditService {
           aam.audit_due_date,
           aam.audit_status_id,
           aam.frequency,
+          aam.audit_type_id,
+          atm.code AS audit_type_code,
+          atm.name AS audit_type_name,
           aam.created_at
       FROM audit_assesment_master aam
+      INNER JOIN audit_type_master atm
+        ON atm.id = aam.audit_type_id
+       AND atm.deleted_at IS NULL
       LEFT JOIN year_master ym ON ym.id = aam.year_id
       LEFT JOIN audit_unit_master aum ON aum.id = aam.audit_unit_id
       LEFT JOIN employee_master auditor ON auditor.id = aam.audit_head_id
@@ -39,7 +43,7 @@ export class SpecialAuditService {
         ON sam.assessment_id = aam.id
        AND sam.deleted_at IS NULL
       WHERE aam.deleted_at IS NULL
-        AND COALESCE(aam.audit_type_id, 1) = ${this.SPECIAL_AUDIT_TYPE_ID}
+        AND sam.id IS NOT NULL
       ORDER BY aam.id DESC;
     `);
 
@@ -56,8 +60,13 @@ export class SpecialAuditService {
           ym.year,
           aum.name AS audit_unit_name,
           aum.audit_unit_code,
-          auditor.name AS auditor_name
+          auditor.name AS auditor_name,
+          atm.code AS audit_type_code,
+          atm.name AS audit_type_name
       FROM audit_assesment_master aam
+      INNER JOIN audit_type_master atm
+        ON atm.id = aam.audit_type_id
+       AND atm.deleted_at IS NULL
       LEFT JOIN year_master ym ON ym.id = aam.year_id
       LEFT JOIN audit_unit_master aum ON aum.id = aam.audit_unit_id
       LEFT JOIN employee_master auditor ON auditor.id = aam.audit_head_id
@@ -66,9 +75,9 @@ export class SpecialAuditService {
        AND sam.deleted_at IS NULL
       WHERE aam.id = $1
         AND aam.deleted_at IS NULL
-        AND COALESCE(aam.audit_type_id, 1) = $2;
+        AND sam.id IS NOT NULL;
       `,
-      [id, this.SPECIAL_AUDIT_TYPE_ID],
+      [id],
     );
 
     if (!result.rows.length) {
@@ -79,7 +88,7 @@ export class SpecialAuditService {
   }
 
   async lookups() {
-    const [years, auditUnits, auditors, controls] = await Promise.all([
+    const [years, auditUnits, auditors, auditTypes, controls] = await Promise.all([
       this.db.query(`
         SELECT id, year AS label
         FROM year_master
@@ -100,6 +109,14 @@ export class SpecialAuditService {
         ORDER BY name ASC;
       `),
       this.db.query(`
+        SELECT id, name AS label, code
+        FROM audit_type_master
+        WHERE deleted_at IS NULL
+          AND is_active = 1
+          AND code <> 'INTERNAL_AUDIT'
+        ORDER BY name ASC;
+      `),
+      this.db.query(`
         SELECT
             mlcm.id,
             CONCAT(
@@ -110,8 +127,13 @@ export class SpecialAuditService {
               mlcm.end_month_year
             ) AS label,
             mlcm.year_id,
-            mlcm.audit_unit_id
+            mlcm.audit_unit_id,
+            mapping.audit_type_id
         FROM multi_level_control_master mlcm
+        INNER JOIN audit_type_question_setup_mapping mapping
+          ON mapping.control_master_id = mlcm.id
+         AND mapping.is_active = 1
+         AND mapping.deleted_at IS NULL
         LEFT JOIN audit_unit_master aum ON aum.id = mlcm.audit_unit_id
         WHERE mlcm.deleted_at IS NULL
         ORDER BY mlcm.id DESC;
@@ -122,11 +144,16 @@ export class SpecialAuditService {
       years: years.rows,
       audit_units: auditUnits.rows,
       auditors: auditors.rows,
+      audit_types: auditTypes.rows,
       periodwise_questions: controls.rows,
     };
   }
 
   async create(body: CreateSpecialAuditDto) {
+    const auditType = await this.findMappedAuditType(
+      body.audit_type_id,
+      body.control_master_id,
+    );
     const fromDate = this.normalizeDate(body.assesment_period_from);
     const toDate = this.normalizeDate(body.assesment_period_to);
 
@@ -230,7 +257,7 @@ export class SpecialAuditService {
         RETURNING id;
         `,
         [
-          this.SPECIAL_AUDIT_TYPE_ID,
+          Number(auditType.id),
           body.year_id,
           body.audit_unit_id,
           frequency,
@@ -329,6 +356,7 @@ export class SpecialAuditService {
 
     const next = {
       title: body.title ?? existing.title,
+      audit_type_id: Number(body.audit_type_id ?? existing.audit_type_id),
       year_id: Number(body.year_id ?? existing.year_id),
       audit_unit_id: Number(body.audit_unit_id ?? existing.audit_unit_id),
       control_master_id: Number(body.control_master_id ?? existing.control_master_id),
@@ -345,6 +373,11 @@ export class SpecialAuditService {
           ? this.normalizeDate(existing.audit_due_date)
           : null,
     };
+
+    const auditType = await this.findMappedAuditType(
+      next.audit_type_id,
+      next.control_master_id,
+    );
 
     if (!next.title?.trim()) {
       throw new BadRequestException('Special audit title is required.');
@@ -414,29 +447,30 @@ export class SpecialAuditService {
         `
         UPDATE audit_assesment_master
         SET
-            year_id = $1,
-            audit_unit_id = $2,
-            frequency = $3,
-            audit_head_id = $4,
-            branch_head_id = $5,
-            branch_subhead_id = $6,
-            multi_compliance_ids = $7,
-            assesment_period_from = $8,
-            assesment_period_to = $9,
-            audit_due_date = $10,
-            menu_ids = $11,
-            cat_ids = $12,
-            header_ids = $13,
-            question_ids = $14,
-            advances_scheme_ids = $15,
-            deposits_scheme_ids = $16,
-            is_multiple_auditors = $17,
+            audit_type_id = $1,
+            year_id = $2,
+            audit_unit_id = $3,
+            frequency = $4,
+            audit_head_id = $5,
+            branch_head_id = $6,
+            branch_subhead_id = $7,
+            multi_compliance_ids = $8,
+            assesment_period_from = $9,
+            assesment_period_to = $10,
+            audit_due_date = $11,
+            menu_ids = $12,
+            cat_ids = $13,
+            header_ids = $14,
+            question_ids = $15,
+            advances_scheme_ids = $16,
+            deposits_scheme_ids = $17,
+            is_multiple_auditors = $18,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $18
-          AND deleted_at IS NULL
-          AND COALESCE(audit_type_id, 1) = $19;
+        WHERE id = $19
+          AND deleted_at IS NULL;
         `,
         [
+          Number(auditType.id),
           next.year_id,
           next.audit_unit_id,
           frequency,
@@ -455,7 +489,6 @@ export class SpecialAuditService {
           control.deposits_scheme_ids,
           !!control.is_multiple_auditors,
           id,
-          this.SPECIAL_AUDIT_TYPE_ID,
         ],
       );
 
@@ -491,6 +524,37 @@ export class SpecialAuditService {
       assessment_id: id,
       message: 'Special audit updated successfully.',
     };
+  }
+
+  private async findMappedAuditType(
+    auditTypeId: number,
+    controlMasterId: number,
+  ) {
+    const result = await this.db.query(
+      `
+        SELECT audit_type.id
+        FROM audit_type_master audit_type
+        INNER JOIN audit_type_question_setup_mapping mapping
+          ON mapping.audit_type_id = audit_type.id
+         AND mapping.control_master_id = $2
+         AND mapping.is_active = 1
+         AND mapping.deleted_at IS NULL
+        WHERE audit_type.id = $1
+          AND audit_type.code <> 'INTERNAL_AUDIT'
+          AND audit_type.is_active = 1
+          AND audit_type.deleted_at IS NULL
+        LIMIT 1
+      `,
+      [auditTypeId, controlMasterId],
+    );
+
+    if (!result.rows.length) {
+      throw new BadRequestException(
+        'Selected question setup is not mapped to this audit type.',
+      );
+    }
+
+    return result.rows[0];
   }
 
   private normalizeDate(value: string | Date) {

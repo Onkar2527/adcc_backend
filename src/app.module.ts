@@ -35,6 +35,7 @@ import { RegionMasterModule } from './modules/admin/region-master/region-master.
 import { SpecialAuditModule } from './modules/admin/special-audit/special-audit.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { MasterBulkUploadModule } from './modules/admin/master-bulk-upload/master-bulk-upload.module';
+import { AuditTypeModule } from './modules/admin/audit-type-master/audit-type.module';
 import { IncidentManagementModule } from './modules/incident-management/incident-management.module';
 
 
@@ -75,6 +76,7 @@ import { IncidentManagementModule } from './modules/incident-management/incident
     SpecialAuditModule,
     AuditLogsModule,
     MasterBulkUploadModule,
+    AuditTypeModule,
     IncidentManagementModule
   ],
   controllers: [AppController],
