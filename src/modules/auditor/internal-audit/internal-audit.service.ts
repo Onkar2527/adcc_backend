@@ -1472,10 +1472,45 @@ export class InternalAuditService {
         assessmentId,
       );
 
-    await this.assertAuthority(
-      assessment.audit_unit_id,
-      employeeId,
-    );
+    const employee =
+      await this.db.findOne(
+        `
+        SELECT user_type_id
+        FROM employee_master
+        WHERE id = $1
+            AND deleted_at IS NULL
+        LIMIT 1;
+        `,
+        [
+          employeeId,
+        ],
+      );
+
+    const userTypeId =
+      Number(
+        employee?.user_type_id || 0,
+      );
+
+    if (
+      userTypeId === 3
+    ) {
+      await this.assertComplianceAuthority(
+        assessmentId,
+        employeeId,
+      );
+    } else if (
+      userTypeId === 4
+    ) {
+      await this.assertReviewerAuthority(
+        assessmentId,
+        employeeId,
+      );
+    } else {
+      await this.assertAuthority(
+        assessment.audit_unit_id,
+        employeeId,
+      );
+    }
 
     const existing =
       await this.getCarryForwardCount(
@@ -2659,7 +2694,13 @@ export class InternalAuditService {
               AND COALESCE(ad.compliance_status_id, 0) NOT IN (
                   2,
                   5,
+                  ${LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING},
+                  ${LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED},
                   ${LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED}
+              )
+              AND NOT (
+                  COALESCE(ad.compliance_status_id, 0) IN (0, 4)
+                  AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
               )
               AND ad.deleted_at IS NULL
           ORDER BY
@@ -2835,6 +2876,37 @@ export class InternalAuditService {
       );
     }
 
+    const liveStageResult =
+      liveManagerCompliance
+        ? await this.db.findOne(
+          `
+          SELECT
+              COUNT(*) FILTER (
+                  WHERE COALESCE(compliance_status_id, 0) IN (0, 4)
+                      AND NULLIF(BTRIM(COALESCE(audit_commpliance, '')), '') IS NULL
+              )::int AS manager_pending_count,
+              COUNT(*) FILTER (
+                  WHERE COALESCE(compliance_status_id, 0) = $2
+              )::int AS reviewer_pending_count
+          FROM answers_data
+          WHERE assesment_id = $1
+              AND is_compliance = 1
+              AND deleted_at IS NULL;
+          `,
+          [
+            assessmentId,
+            LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
+          ],
+        )
+        : null;
+
+    const liveNextStatus =
+      Number(liveStageResult?.manager_pending_count || 0) > 0
+        ? 4
+        : Number(liveStageResult?.reviewer_pending_count || 0) > 0
+          ? 5
+          : 7;
+
     return {
       can_submit:
         issues.length === 0,
@@ -2847,11 +2919,19 @@ export class InternalAuditService {
       message:
         issues.length
           ? liveManagerCompliance
-            ? 'Complete audit points and resolve all live compliance points before completing assessment.'
+            ? 'Complete audit points and take action on every response pending with Auditor.'
             : 'Complete the pending audit points before submitting for review.'
           : liveManagerCompliance
-            ? 'Audit is ready to complete.'
+            ? liveNextStatus === 4
+              ? 'Audit is ready to submit to Manager for compliance responses.'
+              : liveNextStatus === 5
+                ? 'Auditor actions are complete. Assessment is ready to submit to Reviewer.'
+                : 'All live compliance points are settled. Assessment is ready to complete.'
             : 'Audit is ready to submit for review.',
+      live_next_status:
+        liveManagerCompliance
+          ? liveNextStatus
+          : null,
       issues,
       overview,
     };
@@ -2889,6 +2969,11 @@ export class InternalAuditService {
               preview.overview.audit_status_id,
             );
 
+          const liveNextStatus =
+            liveManagerCompliance
+              ? Number(preview.live_next_status || 7)
+              : 2;
+
           const updated =
             await client.query(
               `
@@ -2906,7 +2991,7 @@ export class InternalAuditService {
                 assessmentId,
                 employeeId,
                 currentStatus,
-                liveManagerCompliance ? 7 : 2,
+                liveNextStatus,
               ],
             );
 
@@ -2934,7 +3019,7 @@ export class InternalAuditService {
               assessmentId,
               employeeId,
               preview.overview.batch_key,
-              liveManagerCompliance ? 7 : 2,
+              liveNextStatus,
             ],
           );
 
@@ -2957,7 +3042,7 @@ export class InternalAuditService {
               employeeId,
               auditAssessmentId: assessmentId,
               oldStatus: STATUS_LABELS[currentStatus],
-              newStatus: STATUS_LABELS[liveManagerCompliance ? 7 : 2],
+              newStatus: STATUS_LABELS[liveNextStatus],
               description: 'Audit assessment submitted by auditor.',
             },
             client,
@@ -2976,15 +3061,25 @@ export class InternalAuditService {
         true,
       message:
         liveManagerCompliance
-          ? 'Audit assessment completed successfully.'
+          ? Number(preview.live_next_status) === 4
+            ? 'Audit submitted to Manager for compliance responses.'
+            : Number(preview.live_next_status) === 5
+              ? 'Auditor actions submitted to Reviewer.'
+              : 'Audit assessment completed successfully.'
           :
           Number(preview.overview.audit_status_id) === 3
             ? 'Corrected audit points submitted back to Reviewer successfully.'
             : 'Audit submitted to reviewer successfully.',
       status_id:
-        liveManagerCompliance ? 7 : 2,
+        liveManagerCompliance
+          ? Number(preview.live_next_status || 7)
+          : 2,
       status:
-        STATUS_LABELS[liveManagerCompliance ? 7 : 2],
+        STATUS_LABELS[
+          liveManagerCompliance
+            ? Number(preview.live_next_status || 7)
+            : 2
+        ],
     };
   }
 
@@ -3160,7 +3255,7 @@ export class InternalAuditService {
               AND sam.deleted_at IS NULL
           LEFT JOIN year_master ym
               ON ym.id = aam.year_id
-          WHERE aam.audit_status_id IN (1, 3)
+          WHERE aam.audit_status_id IN (1, 3, 4, 5)
             AND aam.deleted_at IS NULL
             AND EXISTS (
                 SELECT 1
@@ -3202,9 +3297,19 @@ export class InternalAuditService {
           [employeeId],
         );
 
-      assessments.push(
-        ...liveResult.rows,
-      );
+      for (const liveAssessment of liveResult.rows) {
+        const existingIndex =
+          assessments.findIndex(
+            (assessment: any) =>
+              Number(assessment.id) === Number(liveAssessment.id),
+          );
+
+        if (existingIndex >= 0) {
+          assessments.splice(existingIndex, 1);
+        }
+
+        assessments.push(liveAssessment);
+      }
     }
 
     return {
@@ -4591,6 +4696,77 @@ export class InternalAuditService {
       );
     }
 
+    if (
+      liveManagerCompliance
+      && Number(assessment.audit_status_id) === 5
+    ) {
+      const pending =
+        await this.db.findOne(
+          `
+          SELECT COUNT(*)::int AS pending_count
+          FROM answers_data
+          WHERE assesment_id = $1
+              AND is_compliance = 1
+              AND COALESCE(compliance_status_id, 0) IN ($2, $3)
+              AND deleted_at IS NULL;
+          `,
+          [
+            assessmentId,
+            LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
+            LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING,
+          ],
+        );
+
+      if (
+        Number(pending?.pending_count || 0) > 0
+      ) {
+        throw new BadRequestException(
+          'Settle all points pending with Reviewer or Manager before submitting.',
+        );
+      }
+
+      await this.db.query(
+        `
+        UPDATE audit_assesment_master
+        SET
+            audit_status_id = 7,
+            audit_end_date = CURRENT_DATE,
+            compliance_review_emp_id = $2,
+            compliance_review_date = CURRENT_DATE
+        WHERE id = $1
+            AND audit_status_id = 5
+            AND deleted_at IS NULL;
+        `,
+        [
+          assessmentId,
+          employeeId,
+        ],
+      );
+
+      try {
+        await syncAssessmentScoring(
+          this.db,
+          assessmentId,
+        );
+      } catch (err) {
+        console.error(
+          `Failed to sync assessment scoring for assessment ${assessmentId}:`,
+          err,
+        );
+      }
+
+      return {
+        success:
+          true,
+        message:
+          'Live compliance review submitted. Assessment completed.',
+        status_id:
+          7,
+        status:
+          STATUS_LABELS[7],
+      };
+    }
+
     const pendingPartialResponses =
       await this.db.findOne(
         `
@@ -5606,7 +5782,7 @@ export class InternalAuditService {
           LEFT JOIN answers_data ad
               ON ad.assesment_id = aam.id
               AND ad.deleted_at IS NULL
-          WHERE aam.audit_status_id IN (1, 3)
+          WHERE aam.audit_status_id IN (1, 3, 4, 5)
               AND aam.deleted_at IS NULL
               AND aam.branch_head_id = $1
           GROUP BY
@@ -5814,7 +5990,7 @@ export class InternalAuditService {
         (
           liveManagerCompliance
           &&
-          [1, 3].includes(
+          [1, 3, 4, 5].includes(
             complianceStatus,
           )
         )
@@ -6661,7 +6837,7 @@ ORDER BY id DESC;
         (
           liveManagerCompliance
           &&
-          [1, 3].includes(
+          [1, 3, 4, 5].includes(
             complianceStatus,
           )
         )
@@ -6834,6 +7010,72 @@ ORDER BY id DESC;
     liveManagerCompliance = false,
   ) {
 
+    if (
+      liveManagerCompliance
+    ) {
+      await this.assertComplianceAuthority(
+        assessmentId,
+        employeeId,
+      );
+
+      const assessment =
+        await this.findAssessment(
+          assessmentId,
+        );
+
+      const counts =
+        await this.db.findOne(
+          `
+          SELECT
+              COUNT(*)::int AS total,
+              COUNT(*) FILTER (
+                  WHERE COALESCE(compliance_status_id, 0) IN (
+                      3,
+                      7,
+                      $2
+                  )
+                  OR (
+                      COALESCE(compliance_status_id, 0) IN (0, 4)
+                      AND NULLIF(BTRIM(COALESCE(audit_commpliance, '')), '') IS NULL
+                  )
+              )::int AS pending
+          FROM answers_data
+          WHERE assesment_id = $1
+              AND is_compliance = 1
+              AND deleted_at IS NULL;
+          `,
+          [
+            assessmentId,
+            LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING,
+          ],
+        );
+
+      const total =
+        Number(counts?.total || 0);
+      const pending =
+        Number(counts?.pending || 0);
+
+      return {
+        can_submit:
+          total > 0
+          && pending === 0,
+        total_points:
+          total,
+        completed_points:
+          Math.max(total - pending, 0),
+        pending_count:
+          pending,
+        message:
+          !total
+            ? 'No compliance-required observations were found.'
+            : pending
+              ? `${pending} compliance response(s) are pending.`
+              : Number(assessment.audit_status_id) === 4
+                ? 'All compliance responses are saved. Submit them to Auditor.'
+                : 'All corrected compliance responses are saved. Submit them back to Reviewer.',
+      };
+    }
+
     const detail =
       await this.getComplianceAssessment(
         assessmentId,
@@ -6893,19 +7135,45 @@ ORDER BY id DESC;
     if (
       liveManagerCompliance
     ) {
+      const assessment =
+        await this.findAssessment(
+          assessmentId,
+        );
+      const currentStatus =
+        Number(assessment.audit_status_id);
+      const nextStatus =
+        currentStatus === 4
+          ? 1
+          : currentStatus;
+
+      await this.db.query(
+        `
+        UPDATE audit_assesment_master
+        SET
+            audit_status_id = $2,
+            compliance_emp_id = $3,
+            compliance_end_date = CURRENT_DATE
+        WHERE id = $1
+            AND audit_status_id = $4
+            AND deleted_at IS NULL;
+        `,
+        [
+          assessmentId,
+          nextStatus,
+          employeeId,
+          currentStatus,
+        ],
+      );
+
       return {
         success:
           true,
         status_id:
-          Number(
-            (
-              await this.findAssessment(
-                assessmentId,
-              )
-            ).audit_status_id,
-          ),
+          nextStatus,
         message:
-          'Live compliance responses are ready for reviewer.',
+          currentStatus === 4
+            ? 'Compliance responses submitted to Auditor for review.'
+            : 'Corrected compliance responses returned to Reviewer.',
       };
     }
 
