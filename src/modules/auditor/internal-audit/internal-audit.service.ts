@@ -353,6 +353,40 @@ export class InternalAuditService {
             (
                 SELECT (
                     COUNT(*) FILTER (
+                        WHERE COALESCE(answer.compliance_status_id, 0) IN (0, $2)
+                            AND NULLIF(BTRIM(COALESCE(answer.audit_commpliance, '')), '') IS NOT NULL
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM answers_data_annexure annexure
+                                WHERE annexure.answer_id = answer.id
+                                    AND annexure.assesment_id = answer.assesment_id
+                                    AND COALESCE(annexure.compliance_status_id, 0) IN (0, $2)
+                                    AND NULLIF(BTRIM(COALESCE(annexure.audit_commpliance, '')), '') IS NOT NULL
+                                    AND annexure.deleted_at IS NULL
+                            )
+                    )
+                    + COALESCE((
+                        SELECT COUNT(*)
+                        FROM answers_data_annexure annexure
+                        INNER JOIN answers_data parent_answer
+                            ON parent_answer.id = annexure.answer_id
+                            AND parent_answer.assesment_id = annexure.assesment_id
+                            AND parent_answer.is_compliance = 1
+                            AND parent_answer.deleted_at IS NULL
+                        WHERE annexure.assesment_id = audit_assesment_master.id
+                            AND COALESCE(annexure.compliance_status_id, 0) IN (0, $2)
+                            AND NULLIF(BTRIM(COALESCE(annexure.audit_commpliance, '')), '') IS NOT NULL
+                            AND annexure.deleted_at IS NULL
+                    ), 0)
+                )::int
+                FROM answers_data answer
+                WHERE answer.assesment_id = audit_assesment_master.id
+                    AND answer.is_compliance = 1
+                    AND answer.deleted_at IS NULL
+            ) AS live_auditor_response_count,
+            (
+                SELECT (
+                    COUNT(*) FILTER (
                         WHERE answer.compliance_status_id = 5
                             AND NOT EXISTS (
                                 SELECT 1
@@ -417,7 +451,10 @@ export class InternalAuditService {
             AND deleted_at IS NULL
         ORDER BY year_id DESC, id ASC;
         `,
-        [auditUnitId],
+        [
+          auditUnitId,
+          LIVE_COMPLIANCE_STATUS.AUDITOR_PENDING,
+        ],
       );
 
     const assessmentMap =
@@ -1587,9 +1624,39 @@ export class InternalAuditService {
         )
         : false;
 
+    const liveComplianceTouched =
+      auditStatusId === 4
+        ? await this.db.findOne(
+          `
+          SELECT COUNT(*)::int AS point_count
+          FROM answers_data
+          WHERE assesment_id = $1
+              AND is_compliance = 1
+              AND COALESCE(compliance_status_id, 0) IN ($2, $3, $4, $5, $6)
+              AND deleted_at IS NULL;
+          `,
+          [
+            assessmentId,
+            LIVE_COMPLIANCE_STATUS.AUDITOR_PENDING,
+            LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
+            LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING,
+            LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
+            LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED,
+          ],
+        )
+        : null;
+
     const canContinue =
-      AUDITOR_STATUS_IDS.includes(
-        auditStatusId,
+      (
+        AUDITOR_STATUS_IDS.includes(
+          auditStatusId,
+        )
+        ||
+        (
+          auditStatusId === 4
+          &&
+          Number(liveComplianceTouched?.point_count || 0) > 0
+        )
       )
       &&
       !isBlocked
@@ -2367,6 +2434,12 @@ export class InternalAuditService {
 
     if (
       Number(overview.audit_status_id) !== 1
+      &&
+      !(
+        liveManagerCompliance
+        &&
+        Number(overview.audit_status_id) === 4
+      )
     ) {
       return {
         can_submit:
@@ -2901,11 +2974,11 @@ export class InternalAuditService {
         : null;
 
     const liveNextStatus =
+      Number(overview.audit_status_id) !== 4
+      &&
       Number(liveStageResult?.manager_pending_count || 0) > 0
         ? 4
-        : Number(liveStageResult?.reviewer_pending_count || 0) > 0
-          ? 5
-          : 7;
+        : 5;
 
     return {
       can_submit:
@@ -2924,9 +2997,7 @@ export class InternalAuditService {
           : liveManagerCompliance
             ? liveNextStatus === 4
               ? 'Audit is ready to submit to Manager for compliance responses.'
-              : liveNextStatus === 5
-                ? 'Auditor actions are complete. Assessment is ready to submit to Reviewer.'
-                : 'All live compliance points are settled. Assessment is ready to complete.'
+              : 'Auditor actions are complete. Assessment is ready to submit to Reviewer.'
             : 'Audit is ready to submit for review.',
       live_next_status:
         liveManagerCompliance
@@ -3497,6 +3568,8 @@ export class InternalAuditService {
             AND (
                 $2::boolean = false
                 OR (
+                    COALESCE(ad.compliance_status_id, 0) IN (0, 4)
+                    OR
                     (
                         NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
                         AND COALESCE(ad.compliance_status_id, 0) IN (${LIVE_COMPLIANCE_VISIBLE_STATUSES.join(', ')})
@@ -3826,7 +3899,7 @@ export class InternalAuditService {
       employeeId,
     );
 
-    if (![1, 3].includes(Number(assessment.audit_status_id))) {
+    if (![1, 3, 4].includes(Number(assessment.audit_status_id))) {
       throw new BadRequestException(
         'Assessment is not active for live compliance review.',
       );
@@ -4052,7 +4125,7 @@ export class InternalAuditService {
                       AND assesment_id = $6
                       AND is_compliance = 1
                       AND (
-                          COALESCE(compliance_status_id, 0) = $7
+                          COALESCE(compliance_status_id, 0) IN ($7, $8)
                           OR EXISTS (
                               SELECT 1
                               FROM answers_data_annexure aa
@@ -4073,6 +4146,7 @@ export class InternalAuditService {
                     observationId,
                     assessmentId,
                     LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
+                    LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
                   ],
                 );
 
@@ -4082,7 +4156,7 @@ export class InternalAuditService {
                   UPDATE answers_data_annexure
                   SET
                       compliance_status_id = CASE
-                          WHEN COALESCE(compliance_status_id, 0) IN ($1, 7, 8)
+                          WHEN COALESCE(compliance_status_id, 0) IN ($1, $8, 7, 8)
                               THEN $2
                           ELSE compliance_status_id
                       END,
@@ -4101,6 +4175,7 @@ export class InternalAuditService {
                     assessment.batch_key,
                     observationId,
                     assessmentId,
+                    LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
                   ],
                 );
               }
@@ -4119,7 +4194,7 @@ export class InternalAuditService {
                     batch_key = $4
                 WHERE aa.id = $5
                     AND aa.assesment_id = $6
-                    AND COALESCE(aa.compliance_status_id, 0) IN ($7, 7, 8)
+                    AND COALESCE(aa.compliance_status_id, 0) IN ($7, $8, 7, 8)
                     AND aa.deleted_at IS NULL
                 RETURNING aa.id, aa.answer_id;
                 `,
@@ -4131,6 +4206,7 @@ export class InternalAuditService {
                   observationId,
                   assessmentId,
                   LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
+                  LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
                 ],
               );
 
@@ -4583,114 +4659,6 @@ export class InternalAuditService {
     if (
       Number(assessment.audit_status_id) !== 5
     ) {
-      if (
-        liveManagerCompliance
-        &&
-        [1, 3].includes(
-          Number(assessment.audit_status_id),
-        )
-      ) {
-        const pending =
-          await this.db.findOne(
-            `
-            SELECT COUNT(*)::int AS pending_count
-            FROM answers_data
-            WHERE assesment_id = $1
-                AND is_compliance = 1
-                AND COALESCE(compliance_status_id, 0) = 0
-                AND NULLIF(BTRIM(COALESCE(audit_commpliance, '')), '') IS NOT NULL
-                AND deleted_at IS NULL;
-            `,
-            [
-              assessmentId,
-            ],
-          );
-
-        if (
-          Number(pending?.pending_count || 0) > 0
-        ) {
-          throw new BadRequestException(
-            'Accept or reject all live compliance observations before submitting.',
-          );
-        }
-
-        await this.db.transaction(
-            async (client) => {
-              const completion =
-                await client.query(
-                  `
-                  UPDATE audit_assesment_master
-                  SET
-                      audit_status_id = 7,
-                      audit_end_date = CURRENT_DATE,
-                      compliance_review_emp_id = $2,
-                      compliance_review_date = CURRENT_DATE
-                  WHERE id = $1
-                      AND audit_status_id IN (1, 3)
-                      AND deleted_at IS NULL
-                  RETURNING batch_key;
-                  `,
-                  [
-                    assessmentId,
-                    employeeId,
-                  ],
-                );
-
-              if (
-                !completion.rows.length
-              ) {
-                throw new BadRequestException(
-                  'Live compliance assessment status has changed.',
-                );
-              }
-
-              await client.query(
-                `
-                INSERT INTO audit_assesment_timeline (
-                    assesment_id,
-                    type_id,
-                    status_id,
-                    rejected_cnt,
-                    reviewer_emp_id,
-                    batch_key
-                )
-                VALUES ($1, 2, 7, 0, $2, $3);
-                `,
-                [
-                  assessmentId,
-                  employeeId,
-                  completion.rows[0].batch_key,
-                ],
-              );
-
-              return completion.rows[0];
-            },
-          );
-
-        try {
-          await syncAssessmentScoring(
-            this.db,
-            assessmentId,
-          );
-        } catch (err) {
-          console.error(
-            `Failed to sync assessment scoring for assessment ${assessmentId}:`,
-            err,
-          );
-        }
-
-        return {
-          success:
-            true,
-          message:
-            'Live compliance review submitted. Assessment completed.',
-          status_id:
-            7,
-          status:
-            STATUS_LABELS[7],
-        };
-      }
-
       throw new BadRequestException(
         'Assessment is not pending for compliance review.',
       );
@@ -4707,13 +4675,17 @@ export class InternalAuditService {
           FROM answers_data
           WHERE assesment_id = $1
               AND is_compliance = 1
-              AND COALESCE(compliance_status_id, 0) IN ($2, $3)
+              AND COALESCE(compliance_status_id, 0) IN ($2, $3, $4, $5, $6, $7)
               AND deleted_at IS NULL;
           `,
           [
             assessmentId,
+            0,
+            4,
+            LIVE_COMPLIANCE_STATUS.AUDITOR_PENDING,
             LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
             LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING,
+            LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
           ],
         );
 
@@ -13853,6 +13825,13 @@ SELECT (
         // Auditor
         if ([1, 3].includes(auditStatusId)) {
           actionLabel = auditStatusId === 3 ? 'DO RE-ASSESMENT' : 'DO ASSESMENT';
+          actionType = 'continue';
+          canContinue = true;
+        } else if (
+          auditStatusId === 4
+          && Number(assessment.live_auditor_response_count || 0) > 0
+        ) {
+          actionLabel = 'DO ASSESMENT';
           actionType = 'continue';
           canContinue = true;
         } else {
