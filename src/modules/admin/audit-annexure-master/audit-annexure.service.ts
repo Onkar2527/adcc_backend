@@ -413,25 +413,17 @@ export class AuditAnnexureMasterService {
         END AS column_type_name,
 
         COALESCE(
-          JSON_AGG(
-            JSON_BUILD_OBJECT(
-              'id', aco.id,
-              'option_label', aco.option_label
-            )
-          ) FILTER (WHERE aco.id IS NOT NULL),
-          '[]'
+          (CASE 
+            WHEN ac.column_options IS NULL OR BTRIM(ac.column_options) = '' OR BTRIM(ac.column_options) = '[]' THEN '[]'::jsonb
+            ELSE ac.column_options::jsonb
+          END), 
+          '[]'::jsonb
         ) AS options
 
       FROM annexure_columns ac
 
-      LEFT JOIN annexure_column_options aco
-        ON aco.annexure_column_id = ac.id
-        AND aco.deleted_at IS NULL
-
       WHERE ac.annexure_id = $1
       AND ac.deleted_at IS NULL
-
-      GROUP BY ac.id
 
       ORDER BY ac.id DESC
       `,
@@ -483,49 +475,30 @@ export class AuditAnnexureMasterService {
           data.annexure_id,
         );
 
+        const jsonOptions = data.column_type_id === 3 && data.options?.length
+          ? JSON.stringify(data.options.map(opt => ({ option_label: opt.trim(), column_option: opt.trim() })))
+          : '[]';
+
         const columnResult = await client.query(
           `
         INSERT INTO annexure_columns (
           annexure_id,
           name,
           column_type_id,
+          column_options,
           admin_id
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *
         `,
           [
             data.annexure_id,
             data.name,
             data.column_type_id,
+            jsonOptions,
             data.admin_id,
           ],
         );
-
-        const columnId = columnResult.rows[0].id;
-
-        if (
-          data.column_type_id === 3 &&
-          data.options?.length
-        ) {
-          for (const option of data.options) {
-            await client.query(
-              `
-            INSERT INTO annexure_column_options (
-              annexure_column_id,
-              option_label,
-              admin_id
-            )
-            VALUES ($1, $2, $3)
-            `,
-              [
-                columnId,
-                option,
-                data.admin_id,
-              ],
-            );
-          }
-        }
 
         return columnResult.rows[0];
       });
@@ -571,49 +544,27 @@ export class AuditAnnexureMasterService {
           data.annexure_id,
         );
 
+        const jsonOptions = data.column_type_id === 3 && data.options?.length
+          ? JSON.stringify(data.options.map(opt => ({ option_label: opt.trim(), column_option: opt.trim() })))
+          : '[]';
+
         await client.query(
           `
         UPDATE annexure_columns
         SET
           name = $1,
           column_type_id = $2,
+          column_options = $3,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = $3
+        WHERE id = $4
         `,
           [
             data.name,
             data.column_type_id,
+            jsonOptions,
             id,
           ],
         );
-
-        await client.query(
-          `
-        UPDATE annexure_column_options
-        SET deleted_at = CURRENT_TIMESTAMP
-        WHERE annexure_column_id = $1
-        `,
-          [id],
-        );
-
-        if (
-          data.column_type_id === 3 &&
-          data.options?.length
-        ) {
-          for (const option of data.options) {
-            await client.query(
-              `
-              INSERT INTO annexure_column_options (
-                annexure_column_id,
-                option_label,
-                admin_id
-              )
-              VALUES ($1, $2, $3)
-              `,
-              [id, option, data.admin_id || 1],
-            );
-          }
-        }
 
         return {
           message: 'Column updated successfully',
@@ -654,19 +605,10 @@ export class AuditAnnexureMasterService {
       const result = await this.db.query(
         `
       UPDATE annexure_columns
-      SET deleted_at = CURRENT_TIMESTAMP
+      SET deleted_at = CURRENT_TIMESTAMP, column_options = '[]'
       WHERE id = $1
       AND deleted_at IS NULL
       RETURNING *
-      `,
-        [id],
-      );
-
-      await this.db.query(
-        `
-      UPDATE annexure_column_options
-      SET deleted_at = CURRENT_TIMESTAMP
-      WHERE annexure_column_id = $1
       `,
         [id],
       );

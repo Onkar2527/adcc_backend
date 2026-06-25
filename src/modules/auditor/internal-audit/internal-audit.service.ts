@@ -6069,25 +6069,17 @@ export class InternalAuditService {
                         'id', ac.id,
                         'name', ac.name,
                         'column_type_id', ac.column_type_id,
-                        'options', COALESCE(aco.options_json, '[]'::jsonb)
+                        'options', COALESCE(
+                            CASE 
+                                WHEN ac.column_options IS NULL OR BTRIM(ac.column_options) = '' OR BTRIM(ac.column_options) = '[]' THEN '[]'::jsonb
+                                ELSE ac.column_options::jsonb
+                            END, 
+                            '[]'::jsonb
+                        )
                     )
                     ORDER BY ac.id
                 ) AS columns_json
             FROM annexure_columns ac
-            LEFT JOIN (
-                SELECT
-                    annexure_column_id,
-                    jsonb_agg(
-                        jsonb_build_object(
-                            'id', id,
-                            'option_label', option_label
-                        )
-                        ORDER BY id
-                    ) AS options_json
-                FROM annexure_column_options
-                WHERE deleted_at IS NULL
-                GROUP BY annexure_column_id
-            ) aco ON aco.annexure_column_id = ac.id
             WHERE ac.deleted_at IS NULL
             GROUP BY ac.annexure_id
         ) ac ON ac.annexure_id = qm.annexure_id
@@ -7384,32 +7376,7 @@ ORDER BY id DESC;
               qm.question,
               qm.question_type_id,
               qm.option_id,
-              COALESCE(
-                  NULLIF(NULLIF(BTRIM(qm.parameters), ''), '[]'),
-                  (
-                      SELECT jsonb_agg(
-                          jsonb_build_object(
-                              'rt', qrm.risk_type,
-                              'br', CASE UPPER(BTRIM(qrm.business_risk))
-                                  WHEN 'HIGH RISK' THEN 1
-                                  WHEN 'MEDIUM RISK' THEN 2
-                                  WHEN 'LOW RISK' THEN 3
-                                  ELSE 4
-                              END,
-                              'cr', CASE UPPER(BTRIM(qrm.control_risk))
-                                  WHEN 'HIGH RISK' THEN 1
-                                  WHEN 'MEDIUM RISK' THEN 2
-                                  WHEN 'LOW RISK' THEN 3
-                                  ELSE 4
-                              END
-                          )
-                          ORDER BY qrm.id
-                      )::text
-                      FROM question_risk_mapping qrm
-                      WHERE qrm.question_id = qm.id
-                          AND qrm.deleted_at IS NULL
-                  )
-              ) AS parameters,
+               (CASE WHEN qm.parameters IS NULL OR BTRIM(qm.parameters) = '' OR BTRIM(qm.parameters) = '[]' THEN '[]'::jsonb ELSE qm.parameters::jsonb END) AS parameters,
               qm.risk_category_id,
               qm.annexure_id,
               qm.subset_multi_id,
@@ -7463,26 +7430,11 @@ ORDER BY id DESC;
                           'id', ac.id,
                           'name', ac.name,
                           'column_type_id', ac.column_type_id,
-                          'options', COALESCE(aco.options_json, '[]'::jsonb)
+                          'options', COALESCE(CASE WHEN ac.column_options IS NULL OR BTRIM(ac.column_options) = '' OR BTRIM(ac.column_options) = '[]' THEN '[]'::jsonb ELSE ac.column_options::jsonb END, '[]'::jsonb)
                       )
                       ORDER BY ac.id
                   ) AS columns_json
               FROM annexure_columns ac
-              LEFT JOIN (
-                  SELECT
-                      annexure_column_id,
-                      jsonb_agg(
-                          jsonb_build_object(
-                              'id', id,
-                              'option_label', option_label
-                          )
-                          ORDER BY id
-                      ) AS options_json
-                  FROM annexure_column_options
-                  WHERE deleted_at IS NULL
-                  GROUP BY annexure_column_id
-              ) aco
-                  ON aco.annexure_column_id = ac.id
               WHERE ac.deleted_at IS NULL
               GROUP BY ac.annexure_id
           ) ac
@@ -7555,32 +7507,7 @@ ORDER BY id DESC;
               qm.question,
               qm.question_type_id,
               qm.option_id,
-              COALESCE(
-                  NULLIF(NULLIF(BTRIM(qm.parameters), ''), '[]'),
-                  (
-                      SELECT jsonb_agg(
-                          jsonb_build_object(
-                              'rt', qrm.risk_type,
-                              'br', CASE UPPER(BTRIM(qrm.business_risk))
-                                  WHEN 'HIGH RISK' THEN 1
-                                  WHEN 'MEDIUM RISK' THEN 2
-                                  WHEN 'LOW RISK' THEN 3
-                                  ELSE 4
-                              END,
-                              'cr', CASE UPPER(BTRIM(qrm.control_risk))
-                                  WHEN 'HIGH RISK' THEN 1
-                                  WHEN 'MEDIUM RISK' THEN 2
-                                  WHEN 'LOW RISK' THEN 3
-                                  ELSE 4
-                              END
-                          )
-                          ORDER BY qrm.id
-                      )::text
-                      FROM question_risk_mapping qrm
-                      WHERE qrm.question_id = qm.id
-                          AND qrm.deleted_at IS NULL
-                  )
-              ) AS parameters,
+               (CASE WHEN qm.parameters IS NULL OR BTRIM(qm.parameters) = '' OR BTRIM(qm.parameters) = '[]' THEN '[]'::jsonb ELSE qm.parameters::jsonb END) AS parameters,
               qm.risk_category_id,
               qm.annexure_id,
               qm.subset_multi_id,
@@ -7634,26 +7561,11 @@ ORDER BY id DESC;
                           'id', ac.id,
                           'name', ac.name,
                           'column_type_id', ac.column_type_id,
-                          'options', COALESCE(aco.options_json, '[]'::jsonb)
+                          'options', COALESCE(CASE WHEN ac.column_options IS NULL OR BTRIM(ac.column_options) = '' OR BTRIM(ac.column_options) = '[]' THEN '[]'::jsonb ELSE ac.column_options::jsonb END, '[]'::jsonb)
                       )
                       ORDER BY ac.id
                   ) AS columns_json
               FROM annexure_columns ac
-              LEFT JOIN (
-                  SELECT
-                      annexure_column_id,
-                      jsonb_agg(
-                          jsonb_build_object(
-                              'id', id,
-                              'option_label', option_label
-                          )
-                          ORDER BY id
-                      ) AS options_json
-                  FROM annexure_column_options
-                  WHERE deleted_at IS NULL
-                  GROUP BY annexure_column_id
-              ) aco
-                  ON aco.annexure_column_id = ac.id
               WHERE ac.deleted_at IS NULL
               GROUP BY ac.annexure_id
           ) ac
@@ -7909,7 +7821,7 @@ ORDER BY id DESC;
         qm.question,
         qm.question_type_id,
         qm.option_id,
-        qm.parameters,
+        (CASE WHEN qm.parameters IS NULL OR BTRIM(qm.parameters) = '' OR BTRIM(qm.parameters) = '[]' THEN '[]'::jsonb ELSE qm.parameters::jsonb END) AS parameters,
         qm.risk_category_id,
         qm.annexure_id,
         qm.subset_multi_id,
@@ -7955,26 +7867,11 @@ ORDER BY id DESC;
                     'id', ac.id,
                     'name', ac.name,
                     'column_type_id', ac.column_type_id,
-                    'options', COALESCE(aco.options_json, '[]'::jsonb)
+                    'options', COALESCE(CASE WHEN ac.column_options IS NULL OR BTRIM(ac.column_options) = '' OR BTRIM(ac.column_options) = '[]' THEN '[]'::jsonb ELSE ac.column_options::jsonb END, '[]'::jsonb)
                 )
                 ORDER BY ac.id
             ) AS columns_json
         FROM annexure_columns ac
-        LEFT JOIN (
-            SELECT
-                annexure_column_id,
-                jsonb_agg(
-                    jsonb_build_object(
-                        'id', id,
-                        'option_label', option_label
-                    )
-                    ORDER BY id
-                ) AS options_json
-            FROM annexure_column_options
-            WHERE deleted_at IS NULL
-            GROUP BY annexure_column_id
-        ) aco
-            ON aco.annexure_column_id = ac.id
         WHERE ac.deleted_at IS NULL
         GROUP BY ac.annexure_id
     ) ac
@@ -8396,7 +8293,7 @@ ORDER BY id DESC;
         qm.question,
         qm.question_type_id,
         qm.option_id,
-        qm.parameters,
+        (CASE WHEN qm.parameters IS NULL OR BTRIM(qm.parameters) = '' OR BTRIM(qm.parameters) = '[]' THEN '[]'::jsonb ELSE qm.parameters::jsonb END) AS parameters,
         qm.risk_category_id,
         qm.annexure_id,
         qm.subset_multi_id,

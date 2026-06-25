@@ -872,7 +872,7 @@ export class AuditQuestionMasterService {
     async findQuestionsByHeader(
         headerId: number,
     ) {
-        return this.queryRows(
+        const rows = await this.queryRows(
             `
     SELECT
       qm.*,
@@ -936,10 +936,18 @@ export class AuditQuestionMasterService {
     `,
             [headerId],
         );
+
+        rows.forEach((row: any) => {
+            if (row) {
+                row.parameters = typeof row.parameters === 'string' ? JSON.parse(row.parameters || '[]') : (row.parameters || []);
+            }
+        });
+
+        return rows;
     }
 
     async findOneQuestion(id: number) {
-        const row = await this.queryOne(
+        const row: any = await this.queryOne(
             `
     SELECT *
     FROM question_master
@@ -954,6 +962,8 @@ export class AuditQuestionMasterService {
                 'Question not found',
             );
         }
+
+        row.parameters = typeof row.parameters === 'string' ? JSON.parse(row.parameters || '[]') : (row.parameters || []);
 
         return row;
     }
@@ -1416,190 +1426,147 @@ export class AuditQuestionMasterService {
     async findRiskMappings(
         questionId: number,
     ) {
-        return this.queryRows(
+        const qm: any = await this.queryOne(
             `
-    SELECT
-      qrm.*,
-
-      qm.question
-
-    FROM question_risk_mapping qrm
-
-    LEFT JOIN question_master qm
-      ON qm.id = qrm.question_id
-
-    WHERE qrm.question_id = $1
-    AND qrm.deleted_at IS NULL
-
-    ORDER BY qrm.id DESC
-    `,
+            SELECT question, parameters
+            FROM question_master
+            WHERE id = $1 AND deleted_at IS NULL
+            `,
             [questionId],
         );
+
+        if (!qm) {
+            return [];
+        }
+
+        let params: any[] = [];
+        try {
+            params = typeof qm.parameters === 'string' ? JSON.parse(qm.parameters || '[]') : (qm.parameters || []);
+        } catch (e) {
+            params = [];
+        }
+
+        if (!Array.isArray(params)) {
+            params = [];
+        }
+
+        const brMap = { '1': 'HIGH RISK', '2': 'MEDIUM RISK', '3': 'LOW RISK', '4': 'NO RISK' };
+        const crMap = { '1': 'HIGH RISK', '2': 'MEDIUM RISK', '3': 'LOW RISK', '4': 'NO RISK' };
+
+        return params.map((p: any, idx: number) => ({
+            id: questionId * 1000 + idx,
+            question_id: questionId,
+            risk_type: p.rt || '',
+            business_risk: brMap[String(p.br)] || 'NO RISK',
+            control_risk: crMap[String(p.cr)] || 'NO RISK',
+            admin_id: 1,
+            question: qm.question,
+        }));
     }
 
     async createRiskMapping(
         data: CreateQuestionRiskMappingDto,
     ) {
-        await this.validateRiskMapping(
-            data,
-        );
+        const qm: any = await this.findOneQuestion(data.question_id);
 
-        const row = await this.queryOne(
-            `
-    INSERT INTO question_risk_mapping (
-      question_id,
-      risk_type,
-      business_risk,
-      control_risk,
-      admin_id
-    )
-    VALUES (
-      $1,
-      $2,
-      $3,
-      $4,
-      $5
-    )
+        let params: any[] = qm.parameters || [];
+        if (!Array.isArray(params)) {
+            params = [];
+        }
 
-    RETURNING *
-    `,
-            [
-                data.question_id,
-
-                data.risk_type,
-
-                data.business_risk,
-
-                data.control_risk,
-
-                data.admin_id ?? 1,
-            ],
-        );
-
-        if (!row) {
+        if (params.some((p: any) => String(p.rt).toLowerCase().trim() === String(data.risk_type).toLowerCase().trim())) {
             throw new BadRequestException(
-                'Unable to create risk mapping',
+                'Risk mapping for this risk type already exists',
             );
         }
 
-        await this.syncQuestionParameters(
-            data.question_id,
+        const brMapInverse = { 'HIGH RISK': 1, 'MEDIUM RISK': 2, 'LOW RISK': 3, 'NO RISK': 4 };
+        const crMapInverse = { 'HIGH RISK': 1, 'MEDIUM RISK': 2, 'LOW RISK': 3, 'NO RISK': 4 };
+
+        const newParam = {
+            rt: data.risk_type.trim(),
+            br: String(brMapInverse[data.business_risk] || 4),
+            cr: String(crMapInverse[data.control_risk] || 4),
+        };
+
+        params.push(newParam);
+
+        await this.queryOne(
+            `
+            UPDATE question_master
+            SET parameters = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING id
+            `,
+            [JSON.stringify(params), data.question_id],
         );
 
-        return row;
+        const newIndex = params.length - 1;
+
+        return {
+            id: data.question_id * 1000 + newIndex,
+            question_id: data.question_id,
+            risk_type: data.risk_type,
+            business_risk: data.business_risk,
+            control_risk: data.control_risk,
+            admin_id: data.admin_id ?? 1,
+            question: qm.question,
+        };
     }
 
     async removeRiskMapping(
         id: number,
     ) {
-        const existing: {
-            id: number;
-            question_id: number;
-        } | null =
-            await this.queryOne(
-                `
-      SELECT id, question_id
-      FROM question_risk_mapping
-      WHERE id = $1
-      AND deleted_at IS NULL
-      `,
-                [id],
-            );
+        const questionId = Math.floor(id / 1000);
+        const index = id % 1000;
 
-        if (!existing) {
+        const qm: any = await this.findOneQuestion(questionId);
+
+        let params: any[] = qm.parameters || [];
+        if (!Array.isArray(params)) {
+            params = [];
+        }
+
+        if (index < 0 || index >= params.length) {
             throw new NotFoundException(
                 'Risk mapping not found',
             );
         }
 
-        const row = await this.queryOne(
+        const removed = params.splice(index, 1)[0];
+
+        await this.queryOne(
             `
-    UPDATE question_risk_mapping
-
-    SET
-      deleted_at = CURRENT_TIMESTAMP,
-
-      updated_at = CURRENT_TIMESTAMP
-
-    WHERE id = $1
-
-    RETURNING *
-    `,
-            [id],
+            UPDATE question_master
+            SET parameters = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING id
+            `,
+            [JSON.stringify(params), questionId],
         );
 
-        if (!row) {
-            throw new BadRequestException(
-                'Unable to delete risk mapping',
-            );
-        }
+        const brMap = { '1': 'HIGH RISK', '2': 'MEDIUM RISK', '3': 'LOW RISK', '4': 'NO RISK' };
+        const crMap = { '1': 'HIGH RISK', '2': 'MEDIUM RISK', '3': 'LOW RISK', '4': 'NO RISK' };
 
-        await this.syncQuestionParameters(
-            Number(existing.question_id),
-        );
-
-        return row;
+        return {
+            id: id,
+            question_id: questionId,
+            risk_type: removed.rt || '',
+            business_risk: brMap[String(removed.br)] || 'NO RISK',
+            control_risk: crMap[String(removed.cr)] || 'NO RISK',
+            admin_id: 1,
+            question: qm.question,
+        };
     }
 
     private async syncQuestionParameters(
         questionId: number,
     ) {
-        await this.queryOne(
-            `
-            UPDATE question_master qm
-            SET
-                parameters = COALESCE(
-                    (
-                        SELECT jsonb_agg(
-                            jsonb_build_object(
-                                'rt', qrm.risk_type,
-                                'br', CASE UPPER(BTRIM(qrm.business_risk))
-                                    WHEN 'HIGH RISK' THEN 1
-                                    WHEN 'MEDIUM RISK' THEN 2
-                                    WHEN 'LOW RISK' THEN 3
-                                    ELSE 4
-                                END,
-                                'cr', CASE UPPER(BTRIM(qrm.control_risk))
-                                    WHEN 'HIGH RISK' THEN 1
-                                    WHEN 'MEDIUM RISK' THEN 2
-                                    WHEN 'LOW RISK' THEN 3
-                                    ELSE 4
-                                END
-                            )
-                            ORDER BY qrm.id
-                        )::text
-                        FROM question_risk_mapping qrm
-                        WHERE qrm.question_id = qm.id
-                            AND qrm.deleted_at IS NULL
-                    ),
-                    ''
-                ),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE qm.id = $1
-            RETURNING qm.id;
-            `,
-            [questionId],
-        );
+        return { id: questionId };
     }
 
     private async validateRiskMapping(
         data: CreateQuestionRiskMappingDto,
     ) {
-        const question =
-            await this.queryOne(
-                `
-      SELECT id
-      FROM question_master
-      WHERE id = $1
-      AND deleted_at IS NULL
-      `,
-                [data.question_id],
-            );
-
-        if (!question) {
-            throw new BadRequestException(
-                'Question not found',
-            );
-        }
     }
 }
