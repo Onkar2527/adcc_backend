@@ -48,6 +48,10 @@ export class ReportsService {
 
   constructor(private readonly db: DatabaseService) { }
 
+  private getBankName(defaultName = 'Pune Cantonment Sahakari Bank'): string {
+    return process.env.BANK_NAME || defaultName;
+  }
+
   // Special Audit Filter
   private normalizeAuditType(query: any) {
     const value = String(query?.audit_type_id || 'all').trim();
@@ -185,7 +189,7 @@ export class ReportsService {
       fileName: 'audit-status-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
@@ -294,7 +298,7 @@ export class ReportsService {
       fileName: 'carry-forward-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
@@ -356,7 +360,7 @@ export class ReportsService {
       fileName: 'partially-pass-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
@@ -418,7 +422,7 @@ export class ReportsService {
       fileName: 'audit-status-expired-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
@@ -521,7 +525,7 @@ export class ReportsService {
       fileName: 'assesment-timeline-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         reportAuditUnit: '',
@@ -591,7 +595,7 @@ export class ReportsService {
       fileName: 'assement-not-started-yet-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
@@ -640,7 +644,7 @@ export class ReportsService {
       fileName: 'audit-complete-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         reportAuditUnit: '',
@@ -723,7 +727,7 @@ export class ReportsService {
       fileName: 'audit-observations-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         reportAuditUnit: '',
@@ -802,7 +806,7 @@ export class ReportsService {
       fileName: 'compliance-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         reportAuditUnit: '',
@@ -885,7 +889,7 @@ export class ReportsService {
       fileName: 'compliance-summary-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         reportAuditUnit: '',
@@ -968,7 +972,7 @@ export class ReportsService {
       fileName: 'risk-weightage-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         selectSearchTypeFilter: '3',
@@ -1116,7 +1120,7 @@ export class ReportsService {
       fileName: 'risk-wise-audit-units-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         selectSearchTypeFilter: '1',
@@ -1217,7 +1221,7 @@ export class ReportsService {
       fileName: 'risk-npa-wise-audit-units-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         selectSearchTypeFilter: '1',
@@ -1356,7 +1360,7 @@ export class ReportsService {
       fileName: 'rbia-performance-risk-weightage-report-all-units',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         selectSearchTypeFilter: '1',
@@ -1459,7 +1463,7 @@ export class ReportsService {
       fileName: 'performance-risk-weightage-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         selectSearchTypeFilter: '3',
@@ -1604,7 +1608,7 @@ export class ReportsService {
       fileName: 'performance-risk-weightage-report-category-wise',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         selectSearchTypeFilter: '3',
@@ -1749,7 +1753,7 @@ export class ReportsService {
       fileName: 'audit-committee-board-report-1',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
@@ -1880,7 +1884,7 @@ export class ReportsService {
       fileName: 'broader-areawise-scoring-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         selectSearchTypeFilter: '3',
@@ -2075,7 +2079,7 @@ export class ReportsService {
       fileName: 'question-wise-scoring-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         selectSearchTypeFilter: '3',
@@ -2148,7 +2152,7 @@ export class ReportsService {
       fileName: 'audit-observation-count-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         reportAuditUnit: 'all_branches',
@@ -2218,7 +2222,7 @@ export class ReportsService {
       fileName: 'pending-compliance-detail-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         selectSearchTypeFilter: '3',
@@ -5459,7 +5463,7 @@ export class ReportsService {
           positionDataByBranch.set(auditUnitId, []);
         }
         positionDataByBranch.get(auditUnitId)!.push(row);
-        
+
         if (String(row.type_id).toUpperCase().endsWith('_NPA')) {
           totalAllBranchPosition += Number(row.amount || 0);
         }
@@ -5650,12 +5654,12 @@ export class ReportsService {
       });
 
       row.total_score = this.formatDecimal(totalScore, 2);
-      
+
       const totalScoreAllBranch = Math.min(
         totalAllScore > 0 ? (totalScore * 100) / totalAllScore : 0,
         100,
       );
-      
+
       row.total_score_all_percent = this.formatDecimal(totalScoreAllBranch, 2);
 
       row.branch_rating = this.matchBranchRiskRatingByPercent(
@@ -5762,7 +5766,7 @@ export class ReportsService {
 
   private financialYearDateRange(year: any) {
     const yearStr = String(year || '').trim();
-    
+
     // Check for dual-year like 2024-2025 or 2024-25
     const dualMatch = yearStr.match(/(\d{4})\D+(\d{2,4})/);
     if (dualMatch) {
@@ -10474,7 +10478,7 @@ export class ReportsService {
       fileName,
       brand: {
         logoUrl: '/assets/images/logos/kredpool_logo.png',
-        bankName: 'The Kurla Nagrik Sahakari Bank Ltd',
+        bankName: this.getBankName('The Kurla Nagrik Sahakari Bank Ltd'),
       },
       defaultFilters: {
         reportAuditUnit: '',
@@ -10791,7 +10795,7 @@ export class ReportsService {
       fileName: 'internal-assesment-report',
       brand: {
         logoUrl: '/assets/images/logos/auditpro-logo.png',
-        bankName: 'Kredpool Co-Op Bank Ltd., Sangli',
+        bankName: this.getBankName(),
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
