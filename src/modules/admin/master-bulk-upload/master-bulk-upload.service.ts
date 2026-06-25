@@ -72,9 +72,6 @@ export class MasterBulkUploadService {
         if (!password) issues.push('Password is required');
         if (existingCodes.has(normalizedCode) || batchCodes.has(normalizedCode)) issues.push('Employee code already exists');
         if (existingEmails.has(normalizedEmail) || batchEmails.has(normalizedEmail)) issues.push('Email already exists');
-        if ([2, 4].includes(userTypeId) && (!Array.isArray(row?.unit_ids) || !row.unit_ids.length)) {
-          issues.push('Authorized audit units are required for auditor/reviewer');
-        }
         if (userTypeId === 6 && !String(row?.region_name || '').trim()) {
           issues.push('Assigned region is required for division user');
         }
@@ -107,7 +104,7 @@ export class MasterBulkUploadService {
           passwordHash,
           Number(row.is_active ?? 1),
           1,
-          Array.isArray(row.unit_ids) ? row.unit_ids.join(',') : (row.audit_unit_authority ?? ''),
+          '',
           Number(row.admin_id ?? 1),
           row.region_name ?? null,
         ];
