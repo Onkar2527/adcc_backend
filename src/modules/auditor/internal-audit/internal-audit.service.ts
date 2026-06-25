@@ -12990,12 +12990,12 @@ ORDER BY id DESC;
           aam.audit_end_date,
           aam.audit_due_date,
           aam.is_limit_blocked,
-          aam.menu_ids,
-          aam.cat_ids,
-          aam.header_ids,
-          aam.question_ids,
-          aam.advances_scheme_ids,
-          aam.deposits_scheme_ids,
+          COALESCE(aam.menu_ids, mlcm.menu_ids) AS menu_ids,
+          COALESCE(aam.cat_ids, mlcm.cat_ids) AS cat_ids,
+          COALESCE(aam.header_ids, mlcm.header_ids) AS header_ids,
+          COALESCE(aam.question_ids, mlcm.question_ids) AS question_ids,
+          COALESCE(aam.advances_scheme_ids, mlcm.advances_scheme_ids) AS advances_scheme_ids,
+          COALESCE(aam.deposits_scheme_ids, mlcm.deposits_scheme_ids) AS deposits_scheme_ids,
           aam.batch_key,
           ym.year,
           au.name AS audit_unit_name,
@@ -13010,8 +13010,11 @@ ORDER BY id DESC;
       LEFT JOIN special_audit_master sam
           ON sam.assessment_id = aam.id
           AND sam.deleted_at IS NULL
+      LEFT JOIN multi_level_control_master mlcm
+          ON mlcm.id = sam.control_master_id
+          AND mlcm.deleted_at IS NULL
       LEFT JOIN audit_section_master asm
-          ON asm.id = au.section_type_id
+          ON asm.id = COALESCE(mlcm.section_type_id, au.section_type_id)
       WHERE aam.id = $1
           AND aam.deleted_at IS NULL
       LIMIT 1;
