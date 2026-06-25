@@ -462,6 +462,105 @@ ORDER BY
         });
     }
 
+    async syncAllBranches(id: number) {
+        const source = await this.db.findOne(
+            `SELECT * FROM multi_level_control_master WHERE id = $1 AND deleted_at IS NULL`,
+            [id]
+        );
+
+        if (!source) {
+            throw new BadRequestException('Periodwise Questions Master not found');
+        }
+
+        if (Number(source.section_type_id) !== 1) {
+            throw new BadRequestException('Sync is only allowed for branch setups (section type id = 1)');
+        }
+
+        // Fetch the mapped audit types for this source record
+        const auditTypesRes = await this.db.query(
+            `SELECT audit_type_id FROM audit_type_question_setup_mapping WHERE control_master_id = $1 AND is_active = 1 AND deleted_at IS NULL`,
+            [id]
+        );
+        const auditTypeIds = auditTypesRes.rows.map((row: any) => Number(row.audit_type_id));
+
+        // Find other active branch records with the same year_id, start_month_year, and end_month_year
+        const targetsRes = await this.db.query(
+            `SELECT id FROM multi_level_control_master 
+             WHERE section_type_id = 1 
+               AND year_id = $1 
+               AND start_month_year = $2 
+               AND end_month_year = $3 
+               AND id != $4 
+               AND deleted_at IS NULL`,
+            [source.year_id, source.start_month_year, source.end_month_year, id]
+        );
+
+        const targetIds = targetsRes.rows.map((row: any) => Number(row.id));
+
+        if (targetIds.length === 0) {
+            return { message: 'No other branch setups found for this period to update.', updatedCount: 0 };
+        }
+
+        await this.db.transaction(async (client) => {
+            // Update multi_level_control_master for all target records
+            await client.query(
+                `UPDATE multi_level_control_master
+                 SET menu_ids = $1,
+                     cat_ids = $2,
+                     header_ids = $3,
+                     question_ids = $4,
+                     advances_scheme_ids = $5,
+                     deposits_scheme_ids = $6,
+                     is_multiple_auditors = $7,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ANY($8::bigint[])`,
+                [
+                    source.menu_ids,
+                    source.cat_ids,
+                    source.header_ids,
+                    source.question_ids,
+                    source.advances_scheme_ids,
+                    source.deposits_scheme_ids,
+                    source.is_multiple_auditors,
+                    targetIds
+                ]
+            );
+
+            // Update audit_type_question_setup_mapping for all target records
+            await client.query(
+                `UPDATE audit_type_question_setup_mapping
+                 SET is_active = 0,
+                     deleted_at = CURRENT_TIMESTAMP,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE control_master_id = ANY($1::bigint[])
+                   AND deleted_at IS NULL`,
+                [targetIds]
+            );
+
+            if (auditTypeIds.length > 0) {
+                for (const targetId of targetIds) {
+                    for (const auditTypeId of auditTypeIds) {
+                        await client.query(
+                            `INSERT INTO audit_type_question_setup_mapping (
+                                 audit_type_id,
+                                 control_master_id,
+                                 is_active
+                             )
+                             VALUES ($1, $2, 1)`,
+                            [auditTypeId, targetId]
+                        );
+                    }
+                }
+            }
+        });
+
+        return {
+            success: true,
+            message: `Configurations synced successfully to all ${targetIds.length} other branches.`,
+            updatedCount: targetIds.length
+        };
+    }
+
     async softDelete(id: number) {
         return this.db.query(
             `

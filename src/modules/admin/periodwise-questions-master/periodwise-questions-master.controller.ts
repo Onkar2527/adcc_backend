@@ -75,6 +75,11 @@ export class PeriodwiseQuestionsMastersController {
         return this.service.assignCategories(Number(id), body.assignments);
     }
 
+    @Post(':id/sync-all-branches')
+    syncAllBranches(@Param('id') id: string) {
+        return this.service.syncAllBranches(Number(id));
+    }
+
     @Delete(':id')
     delete(@Param('id') id: string) {
         return this.service.softDelete(Number(id))
