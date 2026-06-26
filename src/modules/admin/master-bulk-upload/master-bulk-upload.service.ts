@@ -259,8 +259,7 @@ export class MasterBulkUploadService {
         if (!sectionIds.has(sectionTypeId)) issues.push('Audit section is invalid');
         if (!code) issues.push('Audit unit code is required');
         if (!name) issues.push('Audit unit name is required');
-        if (!employeeIds.has(branchHeadId)) issues.push('Head of audit unit is invalid');
-        if (branchSubheadId !== null && !employeeIds.has(branchSubheadId)) issues.push('Assistant to head is invalid');
+       
         if (branchSubheadId !== null && branchSubheadId === branchHeadId) issues.push('Head and assistant cannot be the same');
         if (![1, 3, 6, 12].includes(frequency)) issues.push('Audit frequency is invalid');
         if (!/^\d{4}-\d{2}-\d{2}$/.test(lastAuditDate)) issues.push('Last audit date must be in YYYY-MM-DD format');

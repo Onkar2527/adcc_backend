@@ -10690,7 +10690,7 @@ export class ReportsService {
                         CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
                 END AS category_id
             FROM executive_summary_branch_position bp
-            INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(bp.type_id, '_NPA', '')
+            INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(bp.type_id::text, '_NPA', '')
             LEFT JOIN category_master cm ON cm.id = sm.category_id
             WHERE bp.assesment_id = $1 AND bp.deleted_at IS NULL
             UNION ALL
@@ -10705,7 +10705,7 @@ export class ReportsService {
                         CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
                 END AS category_id
             FROM executive_summary_fresh_accounts fa
-            INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(fa.type_id, '_NPA', '')
+            INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(fa.type_id::text, '_NPA', '')
             LEFT JOIN category_master cm ON cm.id = sm.category_id
             WHERE fa.assesment_id = $1 AND fa.deleted_at IS NULL
         ) x

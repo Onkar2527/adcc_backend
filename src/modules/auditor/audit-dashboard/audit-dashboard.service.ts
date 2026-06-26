@@ -1122,7 +1122,7 @@ LIMIT 1;
                 SELECT id 
                 FROM executive_summary_branch_position 
                 WHERE assesment_id = $1 
-                  AND LENGTH(TRIM(type_id)) <= 2
+                  AND LENGTH(TRIM(type_id::text)) <= 2
                   AND deleted_at IS NULL
                 LIMIT 1;
                 `,
@@ -2509,7 +2509,7 @@ FROM (
         0 AS total_accounts,
         0 AS total_amount
     FROM executive_summary_branch_position bp
-    INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(bp.type_id, '_NPA', '')
+    INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(bp.type_id::text, '_NPA', '')
     LEFT JOIN category_master cm ON cm.id = sm.category_id
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
@@ -2538,7 +2538,7 @@ FROM (
         0 AS total_accounts,
         0 AS total_amount
     FROM executive_summary_fresh_accounts fa
-    INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(fa.type_id, '_NPA', '')
+    INNER JOIN scheme_master sm ON sm.scheme_code = REPLACE(fa.type_id::text, '_NPA', '')
     LEFT JOIN category_master cm ON cm.id = sm.category_id
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
