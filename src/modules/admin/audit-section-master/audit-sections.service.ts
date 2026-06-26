@@ -19,7 +19,7 @@ export class AuditSectionService {
                         WHERE audit_type.deleted_at IS NULL
                             AND audit_type.id::text = ANY(
                                 string_to_array(
-                                    COALESCE(section.audit_type_id, ''),
+                                    COALESCE(section.audit_type_id::text, ''),
                                     ','
                                 )
                             )

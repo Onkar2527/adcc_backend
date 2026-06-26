@@ -6747,6 +6747,69 @@ ORDER BY id DESC;
     }
   }
 
+  async deleteComplianceEvidence(
+    assessmentId: number,
+    evidenceId: number,
+    employeeId: number,
+  ) {
+    await this.assertComplianceAuthority(
+      assessmentId,
+      employeeId,
+    );
+
+    const result = await this.db.query(
+      `
+        SELECT file_name
+        FROM evidence_master
+        WHERE id = $1
+            AND assesment_id = $2
+            AND deleted_at IS NULL;
+      `,
+      [
+        evidenceId,
+        assessmentId,
+      ],
+    );
+
+    const evidence = result.rows[0];
+    if (!evidence) {
+      return {
+        success: false,
+        message: 'Compliance evidence not found.',
+      };
+    }
+
+    await this.db.query(
+      `
+        UPDATE evidence_master
+        SET
+            deleted_by_emp_id = $1,
+            deleted_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $2
+            AND deleted_at IS NULL;
+      `,
+      [
+        employeeId,
+        evidenceId,
+      ],
+    );
+
+    const filePath = this.getEvidenceStoragePath(
+      assessmentId,
+      evidence.file_name,
+    );
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    return {
+      success: true,
+      message: 'Compliance evidence removed successfully.',
+    };
+  }
+
   async saveComplianceResponse(
     assessmentId: number,
     targetType: string,
@@ -7324,13 +7387,10 @@ ORDER BY id DESC;
         Number(category.linked_table_id),
       )
     ) {
-      const candidates = await this.getSamplingCandidates(
+      unsampledAccountCount = await this.getUnsampledAccountCount(
         category,
         overview,
       );
-      unsampledAccountCount = (candidates?.accounts || [])
-        .filter((acc: any) => Number(acc.sampling_filter) === 0)
-        .length;
     }
 
     if (
@@ -12370,6 +12430,59 @@ ORDER BY id DESC;
     };
   }
 
+  private async getUnsampledAccountCount(
+    category: any,
+    overview: any,
+  ): Promise<number> {
+    const linkedTableId = Number(category.linked_table_id);
+    if (![1, 2].includes(linkedTableId)) {
+      return 0;
+    }
+
+    const table = linkedTableId === 1 ? 'dump_deposits' : 'dump_advances';
+    const periodCondition =
+      linkedTableId === 1
+        ? 'd.account_opening_date BETWEEN $3 AND $4'
+        : '(d.account_opening_date BETWEEN $3 AND $4 OR d.renewal_date BETWEEN $3 AND $4)';
+
+    const schemeIds =
+      linkedTableId === 1
+        ? overview.deposits_scheme_ids || ''
+        : overview.advances_scheme_ids || '';
+
+    if (!String(schemeIds).trim()) {
+      return 0;
+    }
+
+    const result = await this.db.findOne(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM ${table} d
+      INNER JOIN scheme_master sm
+          ON sm.id = d.scheme_id
+          AND sm.scheme_type_id = $1
+          AND sm.category_id = $2
+          AND sm.is_active = 1
+          AND sm.deleted_at IS NULL
+      WHERE d.branch_id = $5
+          AND d.scheme_id::text = ANY(string_to_array($6, ','))
+          AND ${periodCondition}
+          AND COALESCE(d.sampling_filter, 0) = 0
+          AND d.deleted_at IS NULL;
+      `,
+      [
+        linkedTableId,
+        category.id,
+        overview.assesment_period_from,
+        overview.assesment_period_to,
+        overview.audit_unit_id,
+        String(schemeIds),
+      ],
+    );
+
+    return Number(result?.count || 0);
+  }
+
   private async getSamplingCandidates(
     category: any,
     overview: any,
@@ -12558,7 +12671,7 @@ ORDER BY id DESC;
             sm.scheme_code,
             COALESCE(d.sampling_filter, 0) AS sampling_filter,
             CASE
-                WHEN d.assesment_period_id = $7 THEN true
+                WHEN COALESCE(d.sampling_filter, 0) = 1 AND d.assesment_period_id = $7 THEN true
                 ELSE false
             END AS is_completed,
             EXISTS (
@@ -12990,12 +13103,12 @@ ORDER BY id DESC;
           aam.audit_end_date,
           aam.audit_due_date,
           aam.is_limit_blocked,
-          aam.menu_ids,
-          aam.cat_ids,
-          aam.header_ids,
-          aam.question_ids,
-          aam.advances_scheme_ids,
-          aam.deposits_scheme_ids,
+          COALESCE(aam.menu_ids, mlcm.menu_ids) AS menu_ids,
+          COALESCE(aam.cat_ids, mlcm.cat_ids) AS cat_ids,
+          COALESCE(aam.header_ids, mlcm.header_ids) AS header_ids,
+          COALESCE(aam.question_ids, mlcm.question_ids) AS question_ids,
+          COALESCE(aam.advances_scheme_ids, mlcm.advances_scheme_ids) AS advances_scheme_ids,
+          COALESCE(aam.deposits_scheme_ids, mlcm.deposits_scheme_ids) AS deposits_scheme_ids,
           aam.batch_key,
           ym.year,
           au.name AS audit_unit_name,
@@ -13010,8 +13123,11 @@ ORDER BY id DESC;
       LEFT JOIN special_audit_master sam
           ON sam.assessment_id = aam.id
           AND sam.deleted_at IS NULL
+      LEFT JOIN multi_level_control_master mlcm
+          ON mlcm.id = sam.control_master_id
+          AND mlcm.deleted_at IS NULL
       LEFT JOIN audit_section_master asm
-          ON asm.id = au.section_type_id
+          ON asm.id = COALESCE(mlcm.section_type_id, au.section_type_id)
       WHERE aam.id = $1
           AND aam.deleted_at IS NULL
       LIMIT 1;
