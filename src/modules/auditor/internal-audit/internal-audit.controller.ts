@@ -382,6 +382,24 @@ export class InternalAuditController {
     );
   }
 
+  @Post('compliance/:assessmentId/evidence/:evidenceId/delete')
+  deleteComplianceEvidence(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('evidenceId', ParseIntPipe)
+    evidenceId: number,
+
+    @Body()
+    body: any,
+  ) {
+    return this.service.deleteComplianceEvidence(
+      assessmentId,
+      evidenceId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
   @Post('compliance/:assessmentId/observation/:targetType/:observationId/response')
   saveComplianceResponse(
     @Param('assessmentId', ParseIntPipe)
