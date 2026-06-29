@@ -37,6 +37,7 @@ export class EmployeesService {
 
   async create(data: CreateEmployeeDto) {
     let passwordHash = '';
+    
     if (data.password) {
       passwordHash = await bcrypt.hash(data.password, 10);
     } else {
@@ -64,7 +65,7 @@ export class EmployeesService {
       data.gender,
       passwordHash,
       data.is_active ?? 1,
-      1, // password_policy = 1 initially
+      0, // password_policy = 0 initially (new user, needs reset)
       data.unit_ids
         ? data.unit_ids.join(',')
         : (data.audit_unit_authority ?? ''),
@@ -113,7 +114,7 @@ export class EmployeesService {
     if (data.password) {
       const hash = await bcrypt.hash(data.password, 10);
       addUpdate('password', hash);
-      addUpdate('password_policy', 0); // reset policy if manually changed
+      addUpdate('password_policy', 0); // mark as compliant if manually changed
     }
 
     if (updates.length === 0) {

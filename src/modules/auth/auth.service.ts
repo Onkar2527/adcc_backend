@@ -1,9 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
 import { AuditLogService } from '../audit-logs/audit-log.service';
 import { EmailService } from '../../core/email/email.service';
+import { DatabaseService } from '../../core/database/database.service';
+import { PasswordPolicyService } from '../admin/password-policy/password-policy.service';
 
 @Injectable()
 export class AuthService {
@@ -17,6 +19,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly auditLogService: AuditLogService,
     private readonly emailService: EmailService,
+    private readonly db: DatabaseService,
+    private readonly passwordPolicyService: PasswordPolicyService,
   ) {}
 
   async validateUser(username: string, pass: string): Promise<any> {
@@ -172,8 +176,31 @@ export class AuthService {
         emp_code: user.emp_code,
         designation: user.designation,
         audit_unit_authority: user.audit_unit_authority || user.audit_unit_ids,
+        password_policy: user.password_policy === null ? 0 : Number(user.password_policy),
       },
     };
+  }
+
+  async resetPassword(username: string, newPassword: string) {
+    const user = await this.usersService.findByUsername(username);
+    if (!user) {
+      throw new NotFoundException(`User with employee code "${username}" not found`);
+    }
+
+    const policy = await this.passwordPolicyService.getPolicy();
+    const validation = this.passwordPolicyService.validatePasswordAgainstPolicy(newPassword, policy);
+    if (!validation.isValid) {
+      throw new BadRequestException(validation.message);
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    const query = `
+      UPDATE employee_master 
+      SET password = $1, password_policy = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `;
+    await this.db.query(query, [hash, user.id]);
+    return { success: true };
   }
 
   async logout(employeeId: number, ipAddress?: string) {

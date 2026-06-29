@@ -21,3 +21,4 @@ export class UpdatePasswordPolicyDto {
   @Min(0)
   symbol_cnt: number;
 }
+

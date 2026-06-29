@@ -3,10 +3,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
+import { PasswordPolicyModule } from '../admin/password-policy/password-policy.module';
 
 @Module({
   imports: [
     UsersModule,
+    PasswordPolicyModule,
     JwtModule.register({
       global: true,
       secret: 'loanpro-secret-key-2026',
@@ -18,3 +20,4 @@ import { UsersModule } from '../users/users.module';
   exports: [AuthService],
 })
 export class AuthModule {}
+

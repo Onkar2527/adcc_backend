@@ -19,6 +19,12 @@ export class AuthController {
     return this.authService.verify2fa(body.username, body.code, ipAddress);
   }
 
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() body: any) {
+    return this.authService.resetPassword(body.username, body.newPassword);
+  }
+
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(@Body() body: any, @Req() req: any) {
@@ -27,3 +33,4 @@ export class AuthController {
     return { success: true };
   }
 }
+
