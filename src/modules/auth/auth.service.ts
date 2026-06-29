@@ -14,6 +14,11 @@ export class AuthService {
     { code: string; expires: number }
   >();
 
+  private readonly resetOtpStore = new Map<
+    string,
+    { code: string; expires: number }
+  >();
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -200,6 +205,126 @@ export class AuthService {
       WHERE id = $2
     `;
     await this.db.query(query, [hash, user.id]);
+    return { success: true };
+  }
+
+  async sendResetPasswordOtp(username: string) {
+    console.log(`[AuthService] Reset password OTP request for user: "${username}"`);
+    const user = await this.usersService.findByUsername(username);
+    if (!user) {
+      throw new NotFoundException(`Employee code "${username}" not found`);
+    }
+
+    const email = user.email;
+    if (!email) {
+      throw new BadRequestException('No email address registered for this account');
+    }
+
+    // Generate 6-digit OTP
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = Date.now() + 5 * 60 * 1000; // 5 minutes expiration
+    this.resetOtpStore.set(username, { code, expires });
+    console.log(`[AuthService] Generated Reset OTP: "${code}" for user: "${username}"`);
+
+    // Send the email
+    const mailHtml = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+        <h2 style="color: #333;">AuditPro Password Reset Verification</h2>
+        <p>You requested a password reset for AuditPro. Use the following verification code to complete your password reset:</p>
+        <div style="font-size: 24px; font-weight: bold; background-color: #f7f7f7; padding: 10px 20px; border-radius: 4px; display: inline-block; letter-spacing: 2px; color: #4F46E5;">
+          ${code}
+        </div>
+        <p style="margin-top: 20px; color: #666; font-size: 12px;">This code will expire in 5 minutes. If you did not request this, you can safely ignore this email.</p>
+      </div>
+    `;
+    await this.emailService.sendMail(
+      email,
+      'Your Password Reset Verification Code',
+      `Your verification code is: ${code}. It will expire in 5 minutes.`,
+      mailHtml,
+    );
+
+    return {
+      success: true,
+      emailMasked: this.maskEmail(email),
+    };
+  }
+
+  async verifyResetPasswordOtpAndReset(username: string, code: string, newPassword: string) {
+    const entry = this.resetOtpStore.get(username);
+    if (!entry) {
+      throw new BadRequestException('No active password reset verification code found');
+    }
+
+    if (Date.now() > entry.expires) {
+      this.resetOtpStore.delete(username);
+      throw new BadRequestException('Verification code has expired');
+    }
+
+    if (entry.code !== code) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    const user = await this.usersService.findByUsername(username);
+    if (!user) {
+      throw new NotFoundException(`Employee code "${username}" not found`);
+    }
+
+    const policy = await this.passwordPolicyService.getPolicy();
+    const validation = this.passwordPolicyService.validatePasswordAgainstPolicy(newPassword, policy);
+    if (!validation.isValid) {
+      throw new BadRequestException(validation.message);
+    }
+
+    this.resetOtpStore.delete(username);
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    const query = `
+      UPDATE employee_master 
+      SET password = $1, password_policy = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `;
+    await this.db.query(query, [hash, user.id]);
+
+    return { success: true };
+  }
+
+  async resetPasswordByLastPassword(username: string, lastPassword: string, newPassword: string) {
+    const user = await this.usersService.findByUsername(username);
+    if (!user) {
+      throw new NotFoundException(`Employee code "${username}" not found`);
+    }
+
+    let isValid = false;
+    if (
+      user.password &&
+      (user.password.startsWith('$2a$') ||
+        user.password.startsWith('$2b$') ||
+        user.password.startsWith('$2y$'))
+    ) {
+      isValid = await bcrypt.compare(lastPassword, user.password);
+    } else {
+      isValid = lastPassword === user.password;
+    }
+
+    if (!isValid) {
+      throw new BadRequestException('Invalid last password');
+    }
+
+    const policy = await this.passwordPolicyService.getPolicy();
+    const validation = this.passwordPolicyService.validatePasswordAgainstPolicy(newPassword, policy);
+    if (!validation.isValid) {
+      throw new BadRequestException(validation.message);
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    const query = `
+      UPDATE employee_master 
+      SET password = $1, password_policy = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `;
+    await this.db.query(query, [hash, user.id]);
+
     return { success: true };
   }
 
