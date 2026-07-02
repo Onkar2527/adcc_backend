@@ -8,6 +8,7 @@ import {
     Patch,
     Post,
     Req,
+    Query,
 } from '@nestjs/common';
 import { Request } from 'express';
 
@@ -150,6 +151,24 @@ export class AuditQuestionMasterController {
     @Get('lookups')
     getQuestionLookups() {
         return this.service.getQuestionLookups();
+    }
+
+    @Get('download-lookups')
+    getDownloadLookups() {
+        return this.service.getDownloadLookups();
+    }
+
+    @Get('download-data')
+    getDownloadData(
+        @Query('section_id') section_id: number,
+        @Query('risk_category_ids') risk_category_ids?: string,
+        @Query('risk_levels') risk_levels?: string,
+    ) {
+        return this.service.getDownloadData({
+            section_id,
+            risk_category_ids,
+            risk_levels,
+        });
     }
 
     @Get('questions/:headerId')

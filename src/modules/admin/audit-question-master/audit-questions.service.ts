@@ -283,6 +283,407 @@ export class AuditQuestionMasterService {
         }
     }
 
+    async getDownloadLookups() {
+        const sections = await this.queryRows<any>(
+            `
+            SELECT id, name
+            FROM audit_section_master
+            WHERE is_active = 1 AND deleted_at IS NULL
+            ORDER BY id ASC
+            `
+        );
+
+        const riskCategories = await this.queryRows<any>(
+            `
+            SELECT id, risk_category
+            FROM risk_category_master
+            WHERE is_active = 1 AND deleted_at IS NULL
+            ORDER BY id ASC
+            `
+        );
+
+        return {
+            sections,
+            riskCategories
+        };
+    }
+
+    async getDownloadData(params: {
+        section_id: number;
+        risk_category_ids?: string;
+        risk_levels?: string;
+    }) {
+        const sectionId = Number(params.section_id);
+        const riskCategoryIds = params.risk_category_ids
+            ? params.risk_category_ids.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id))
+            : [];
+        const riskLevels = params.risk_levels
+            ? params.risk_levels.split(',').map(lvl => lvl.trim()).filter(lvl => lvl)
+            : [];
+
+        // 1. Fetch Year
+        const yearRow = await this.queryOne<any>(
+            `
+            SELECT id FROM year_master
+            WHERE deleted_at IS NULL
+            ORDER BY id DESC
+            LIMIT 1
+            `
+        );
+        const yearId = yearRow ? Number(yearRow.id) : 1;
+
+        // 2. Fetch Risk Matrix for score lookup
+        const riskMatrixRows = await this.queryRows<any>(
+            `
+            SELECT risk_parameter, business_risk_score, control_risk_score
+            FROM risk_matrix
+            WHERE year_id = $1 AND deleted_at IS NULL
+            `,
+            [yearId]
+        );
+
+        const businessRiskScores = new Map<number, number>();
+        const controlRiskScores = new Map<number, number>();
+        for (const rm of riskMatrixRows) {
+            const p = Number(rm.risk_parameter);
+            businessRiskScores.set(p, Number(rm.business_risk_score || 0));
+            controlRiskScores.set(p, Number(rm.control_risk_score || 0));
+        }
+
+        // 3. Fetch Menus
+        let menuQuery = `
+            SELECT id, name
+            FROM menu_master
+            WHERE section_type_id = $1 AND deleted_at IS NULL
+            ORDER BY name ASC
+        `;
+        let menuParams: any[] = [sectionId];
+        if (sectionId === -999) {
+            menuQuery = `
+                SELECT id, name
+                FROM menu_master
+                WHERE section_type_id != 1 AND deleted_at IS NULL
+                ORDER BY name ASC
+            `;
+            menuParams = [];
+        }
+
+        const menus = await this.queryRows<any>(menuQuery, menuParams);
+
+        if (!menus.length) {
+            return [];
+        }
+
+        const menuIds = menus.map(m => Number(m.id));
+
+        // 4. Fetch Categories
+        const categories = await this.queryRows<any>(
+            `
+            SELECT id, menu_id, name, question_set_ids, is_active
+            FROM category_master
+            WHERE menu_id = ANY($1::int[]) AND deleted_at IS NULL AND is_active = 1
+            ORDER BY name ASC
+            `,
+            [menuIds]
+        );
+
+        if (!categories.length) {
+            return [];
+        }
+
+        // Parse unique Set IDs
+        const setIdsSet = new Set<number>();
+        for (const cat of categories) {
+            const ids = String(cat.question_set_ids || '')
+                .split(',')
+                .map(id => Number(id.trim()))
+                .filter(id => !isNaN(id) && id > 0);
+            ids.forEach(id => setIdsSet.add(id));
+        }
+        const setIds = Array.from(setIdsSet);
+
+        if (!setIds.length) {
+            return [];
+        }
+
+        // 5. Fetch Sets & Headers
+        const setsAndHeaders = await this.queryRows<any>(
+            `
+            SELECT qsm.id AS set_id, qsm.name AS set_name,
+                   qhm.id AS header_id, qhm.name AS header_name
+            FROM question_set_master qsm
+            JOIN question_header_master qhm ON qsm.id = qhm.question_set_id
+            WHERE qsm.id = ANY($1::int[])
+              AND qsm.deleted_at IS NULL
+              AND qhm.deleted_at IS NULL
+            `,
+            [setIds]
+        );
+
+        if (!setsAndHeaders.length) {
+            return [];
+        }
+
+        const headerIds = setsAndHeaders.map(sh => Number(sh.header_id));
+
+        // 6. Fetch Questions
+        let riskCategoryFilterClause = '';
+        const queryParams: any[] = [yearId, headerIds, setIds];
+        if (riskCategoryIds.length > 0) {
+            queryParams.push(riskCategoryIds);
+            riskCategoryFilterClause = `AND qm.risk_category_id = ANY($4::int[])`;
+        }
+
+        const questions = await this.queryRows<any>(
+            `
+            SELECT qm.id, qm.header_id, qm.set_id, qm.question, qm.parameters,
+                   qm.risk_category_id, qm.area_of_audit_id, qm.option_id,
+                   qm.annexure_id, qm.subset_multi_id, qm.applicable_id,
+                   qm.control_risk_id, qm.key_aspect_id, qm.residual_risk_id,
+                   qm.show_instances, qm.audit_ev_upload, qm.compliance_ev_upload,
+                   qm.question_type_id,
+                   aam.name AS audit_area_name,
+                   rcm.risk_category AS risk_category_name,
+                   COALESCE(rcw.risk_weight, 0) AS risk_weight,
+                   anm.name AS annexure_name,
+                   (
+                       SELECT string_agg(name, ';')
+                       FROM question_set_master
+                       WHERE id::text = ANY(string_to_array(COALESCE(qm.subset_multi_id, ''), ','))
+                         AND deleted_at IS NULL
+                   ) AS subset_name
+            FROM question_master qm
+            LEFT JOIN audit_area_master aam ON aam.id = qm.area_of_audit_id AND aam.deleted_at IS NULL
+            LEFT JOIN risk_category_master rcm ON rcm.id = qm.risk_category_id AND rcm.deleted_at IS NULL
+            LEFT JOIN risk_category_weights rcw ON rcw.risk_category_id = qm.risk_category_id AND rcw.year_id = $1 AND rcw.deleted_at IS NULL
+            LEFT JOIN annexure_master anm ON anm.id = qm.annexure_id AND anm.deleted_at IS NULL
+            WHERE qm.header_id = ANY($2::int[])
+              AND qm.set_id = ANY($3::int[])
+              AND qm.deleted_at IS NULL
+              ${riskCategoryFilterClause}
+            `,
+            queryParams
+        );
+
+        // Group structures and maps
+        const inputTypeMap = {
+            1: 'MULTIPLE - OPTION SELECT',
+            2: 'YES / NO TYPE - OPTION SELECT',
+            3: 'GENERAL QUESTION - ONLY TEXTAREA',
+            4: 'ANNEXURE',
+            5: 'SUBSET',
+        };
+
+        const getRiskLabel = (val: any) => {
+            switch (String(val)) {
+                case '1': return 'HIGH RISK';
+                case '2': return 'MEDIUM RISK';
+                case '3': return 'LOW RISK';
+                case '4': return 'NO RISK';
+                default: return 'NO RISK';
+            }
+        };
+
+        const getControlRiskLabel = (val: any) => {
+            switch (Number(val)) {
+                case 1: return 'INTERNAL CONTROL RISK';
+                case 2: return 'COMPLIANCE RISK';
+                case 3: return 'IT RISK';
+                default: return '';
+            }
+        };
+
+        const getApplicableLabel = (val: any) => {
+            switch (Number(val)) {
+                case 0: return 'ALL';
+                case 1: return 'GENERAL';
+                case 2: return 'INDIVIDUAL';
+                case 3: return 'NON-INDIVIDUAL';
+                case 4: return 'INDIVIDUAL / NON-INDIVIDUAL';
+                default: return '';
+            }
+        };
+
+        const getKeyAspectLabel = (val: any) => {
+            const map = {
+                1: 'Internal Control by HO',
+                2: 'Internal Control by BM',
+                3: 'Internal Control by Branch',
+                4: 'Compliance of Internal Guidelines',
+                5: 'Compliance with Bank Policy',
+                6: 'Statutory Compliance',
+                7: 'Regulatory Compliance',
+                8: 'Logical Access Control',
+                9: 'Physical Access Control',
+                10: 'Business Continuity Plan',
+                11: 'Configuration Controls',
+                12: 'Cyber Security Controls',
+                13: 'Networking Controls'
+            };
+            return map[Number(val)] || '';
+        };
+
+        // Filter and map questions
+        const filteredQuestions: any[] = [];
+        for (const q of questions) {
+            let paramsArray: any[] = [];
+            try {
+                paramsArray = typeof q.parameters === 'string' ? JSON.parse(q.parameters || '[]') : (q.parameters || []);
+            } catch (e) {
+                paramsArray = [];
+            }
+            if (!Array.isArray(paramsArray)) {
+                paramsArray = [];
+            }
+
+            // Filter parameter rows by risk level if selected
+            if (riskLevels.length > 0) {
+                paramsArray = paramsArray.filter(p => {
+                    return riskLevels.includes(String(p.br)) || riskLevels.includes(String(p.cr));
+                });
+                // If question has no parameters matching the risk level filter, exclude the question
+                if (paramsArray.length === 0) {
+                    continue;
+                }
+            }
+
+            // If paramsArray is empty and there's no risk level filter, we represent as one empty row element
+            const normalizedParams = paramsArray.length > 0 ? paramsArray : [{}];
+
+            const questionRiskRows = normalizedParams.map(p => {
+                const brVal = p.br ? Number(p.br) : null;
+                const crVal = p.cr ? Number(p.cr) : null;
+                const brScore = brVal ? (businessRiskScores.get(brVal) || 0) : 0;
+                const crScore = crVal ? (controlRiskScores.get(crVal) || 0) : 0;
+                const totalScore = brScore + crScore;
+                const totalWeightScore = totalScore * Number(q.risk_weight || 0);
+
+                return {
+                    rt: p.rt || '-',
+                    brLabel: getRiskLabel(p.br),
+                    crLabel: getRiskLabel(p.cr),
+                    brScore,
+                    crScore,
+                    totalScore,
+                    totalWeightScore
+                };
+            });
+
+            filteredQuestions.push({
+                id: q.id,
+                header_id: q.header_id,
+                set_id: q.set_id,
+                question: q.question,
+                risk_category_name: q.risk_category_name || '-',
+                audit_area_name: q.audit_area_name || '-',
+                inputType: inputTypeMap[q.option_id] || '-',
+                risk_weight: Number(q.risk_weight || 0),
+                risk_rows: questionRiskRows,
+
+                // Template formatting extra fields
+                annexure_name: q.annexure_name || '',
+                subset_name: q.subset_name || '',
+                question_type: q.question_type_id === 1 ? 'Qualitative' : (q.question_type_id === 2 ? 'Quantitative' : ''),
+                applicable_to: getApplicableLabel(q.applicable_id),
+                control_risk_category: getControlRiskLabel(q.control_risk_id),
+                key_aspect: getKeyAspectLabel(q.key_aspect_id),
+                residual_risk: getRiskLabel(q.residual_risk_id),
+                show_instances: q.show_instances !== null ? String(q.show_instances) : '0',
+                auditor_evidence: q.audit_ev_upload === 1 ? 'Yes' : 'No',
+                compliance_evidence: q.compliance_ev_upload === 1 ? 'Yes' : 'No',
+                raw_parameters: paramsArray
+            });
+        }
+
+        // Now build the tree structure like PHP
+        const structuredData: any[] = [];
+
+        for (const menu of menus) {
+            const menuCategories = categories.filter(c => Number(c.menu_id) === Number(menu.id));
+            const categoryList: any[] = [];
+            let menuTotalQuestions = 0;
+
+            for (const cat of menuCategories) {
+                const catSetIds = String(cat.question_set_ids || '')
+                    .split(',')
+                    .map(id => Number(id.trim()))
+                    .filter(id => !isNaN(id) && id > 0);
+
+                const setList: any[] = [];
+                let catTotalQuestions = 0;
+
+                // Find sets and headers matching this category's set IDs
+                const catSetsAndHeaders = setsAndHeaders.filter(sh => catSetIds.includes(Number(sh.set_id)));
+
+                // Group by set_id
+                const setGroups = new Map<number, { set_name: string; headers: any[] }>();
+                for (const sh of catSetsAndHeaders) {
+                    const sid = Number(sh.set_id);
+                    if (!setGroups.has(sid)) {
+                        setGroups.set(sid, { set_name: sh.set_name, headers: [] });
+                    }
+                    setGroups.get(sid)!.headers.push({
+                        header_id: Number(sh.header_id),
+                        header_name: sh.header_name
+                    });
+                }
+
+                for (const [sid, setGroup] of setGroups.entries()) {
+                    const headerList: any[] = [];
+                    let setTotalQuestions = 0;
+
+                    for (const header of setGroup.headers) {
+                        const headerQuestions = filteredQuestions.filter(q => Number(q.header_id) === header.header_id && Number(q.set_id) === sid);
+                        if (headerQuestions.length === 0) {
+                            continue;
+                        }
+
+                        const count = headerQuestions.length;
+                        setTotalQuestions += count;
+
+                        headerList.push({
+                            header_id: header.header_id,
+                            header_name: header.header_name,
+                            questions: headerQuestions,
+                            question_count: count
+                        });
+                    }
+
+                    if (headerList.length > 0) {
+                        catTotalQuestions += setTotalQuestions;
+                        setList.push({
+                            set_id: sid,
+                            set_name: setGroup.set_name,
+                            headers: headerList,
+                            question_count: setTotalQuestions
+                        });
+                    }
+                }
+
+                if (setList.length > 0) {
+                    menuTotalQuestions += catTotalQuestions;
+                    categoryList.push({
+                        category_id: cat.id,
+                        category_name: cat.name,
+                        sets: setList,
+                        total_questions: catTotalQuestions
+                    });
+                }
+            }
+
+            if (categoryList.length > 0) {
+                structuredData.push({
+                    menu_id: menu.id,
+                    menu_name: menu.name,
+                    categories: categoryList,
+                    total_questions: menuTotalQuestions
+                });
+            }
+        }
+
+        return structuredData;
+    }
+
     private async queryRows<T>(
         query: string,
         params: any[] = [],
@@ -1192,6 +1593,11 @@ export class AuditQuestionMasterService {
         compliance_ev_upload
         ),
 
+        parameters = COALESCE(
+        $20,
+        parameters
+        ),
+
       updated_at = CURRENT_TIMESTAMP
 
     WHERE id = $1
@@ -1236,6 +1642,8 @@ export class AuditQuestionMasterService {
                 data.audit_ev_upload,
 
                 data.compliance_ev_upload,
+
+                data.parameters,
             ]
         );
 
