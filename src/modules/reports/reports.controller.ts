@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Header } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 
 @Controller('reports')
@@ -16,6 +16,7 @@ export class ReportsController {
   }
 
   @Get(':reportSlug/definition')
+  @Header('Cache-Control', 'no-store')
   getReportDefinition(
     @Param('reportSlug') reportSlug: string,
     @Query('freeFlow') freeFlow?: string,
@@ -25,6 +26,7 @@ export class ReportsController {
   }
 
   @Get(':reportSlug/data')
+  @Header('Cache-Control', 'no-store')
   getReportData(
     @Param('reportSlug') reportSlug: string,
     @Query() query: any,

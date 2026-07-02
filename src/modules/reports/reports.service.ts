@@ -2059,12 +2059,427 @@ export class ReportsService {
   }
 
   private async getQuestionWiseBroaderAreaDefinition(isFreeFlow = false) {
-    const definition = await this.getBroaderAreaWiseScoringDefinition(isFreeFlow);
+    const lookups = await this.getAuditCompleteLookups(isFreeFlow);
+
     return {
-      ...definition,
       slug: 'questionwsie-broader-areawise-report',
       title: 'Question Wise BroaderArea Report',
+      category: 'Advanced Reports',
+      page: 'A4L',
       fileName: 'question-wise-broader-area-report',
+      brand: {
+        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        bankName: this.getBankName(),
+      },
+      defaultFilters: {
+        selectSearchTypeFilter: '3',
+        reportAuditUnit: '',
+        financial_year: 'all',
+        reportAuditAssesment: '',
+        startDate: '',
+        endDate: '',
+        rmv_pending_assesments: [],
+      },
+      filters: [
+        {
+          key: 'selectSearchTypeFilter',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '1', label: 'All Branches' },
+            { value: '2', label: 'All Head Of Departments' },
+            { value: '3', label: 'Single Branch (Assessment Wise)' },
+            { value: '4', label: 'Single Department (Assessment Wise)' },
+            { value: '5', label: 'Single Branch Wise' },
+            { value: '6', label: 'Single Head Of Department Wise' },
+          ],
+        },
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Branch / Department',
+          type: 'select',
+          required: false,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: false,
+          options: lookups.years,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Select Assessment',
+          type: 'select',
+          required: false,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+        {
+          key: 'startDate',
+          label: 'Start Date',
+          type: 'date',
+          required: false,
+        },
+        {
+          key: 'endDate',
+          label: 'End Date',
+          type: 'date',
+          required: false,
+        },
+        {
+          key: 'rmv_pending_assesments',
+          label: 'Remove Pending Assessments',
+          type: 'checkbox',
+          options: [{ value: '1', label: 'Remove Pending Assessments' }],
+        },
+      ],
+      columns: [
+        { key: 'audit_unit_code', label: 'Audit Unit Code' },
+        { key: 'qcat', label: 'QCAT' },
+        { key: 'branch_name', label: 'Branch' },
+        { key: 'risk_type', label: 'Risk Type' },
+        { key: 'broader_area', label: 'Broader Area of Audit Non-Compliance' },
+        { key: 'menu_category', label: 'Menu & Category' },
+        { key: 'question', label: 'Question' },
+        { key: 'total_avg_score', label: 'Total Avg Score', align: 'right' },
+        { key: 'no_of_audits', label: 'No. of Audits', align: 'right' },
+        { key: 'avg_score_per_audit', label: 'Avg Score / Audit', align: 'right' },
+        { key: 'risk_weight', label: 'Risk Weight', align: 'right' },
+        { key: 'weighted_score', label: 'Weighted Score', align: 'right' },
+        { key: 'total_ba_weighted_score', label: 'Total BA Weighted Score', align: 'right' },
+      ],
+    };
+  }
+
+  async getQuestionWiseBroaderAreaReport(query: any) {
+    const searchType = String(query.selectSearchTypeFilter || '3').trim();
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+    const startDate = query.startDate ? String(query.startDate).trim() : null;
+    const endDate = query.endDate ? String(query.endDate).trim() : null;
+    const removePending = Array.isArray(query.rmv_pending_assesments)
+      ? query.rmv_pending_assesments.includes('1')
+      : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
+
+    // Step 1: Find matching assessments
+    let assessments: any[] = [];
+    
+    // Status condition
+    const statusCondition = removePending
+      ? (isFreeFlow ? 'AND aam.audit_status_id >= 4' : 'AND aam.audit_status_id > 4')
+      : (isFreeFlow ? 'AND aam.audit_status_id >= 1' : 'AND aam.audit_status_id > 1');
+
+    if (searchType === '3' || searchType === '4') {
+      if (!auditUnitId || !assessmentId) {
+        throw new BadRequestException('Audit unit and assessment are required');
+      }
+      const result = await this.db.query(
+        `
+        SELECT aam.id, aam.year_id, aam.audit_unit_id, aam.assesment_period_from, aam.assesment_period_to, aam.frequency, aum.name as branch_name, aum.audit_unit_code
+        FROM audit_assesment_master aam
+        INNER JOIN audit_unit_master aum ON aam.audit_unit_id = aum.id
+        WHERE aam.id = $1
+          AND aam.audit_unit_id = $2
+          AND aam.deleted_at IS NULL
+          AND aum.deleted_at IS NULL
+        `,
+        [assessmentId, auditUnitId],
+      );
+      assessments = result.rows;
+    } else if (searchType === '5' || searchType === '6') {
+      if (!auditUnitId || !startDate || !endDate) {
+        throw new BadRequestException('Audit unit and date range are required');
+      }
+      const result = await this.db.query(
+        `
+        SELECT aam.id, aam.year_id, aam.audit_unit_id, aam.assesment_period_from, aam.assesment_period_to, aam.frequency, aum.name as branch_name, aum.audit_unit_code
+        FROM audit_assesment_master aam
+        INNER JOIN audit_unit_master aum ON aam.audit_unit_id = aum.id
+        WHERE aam.audit_unit_id = $1
+          AND aam.assesment_period_from >= $2
+          AND aam.assesment_period_to <= $3
+          ${statusCondition}
+          AND aam.deleted_at IS NULL
+          AND aum.deleted_at IS NULL
+        ORDER BY aam.id ASC
+        `,
+        [auditUnitId, startDate, endDate],
+      );
+      assessments = result.rows;
+    } else if (searchType === '1' || searchType === '2') {
+      if (!startDate || !endDate) {
+        throw new BadRequestException('Date range is required');
+      }
+      const unitTypeId = searchType === '2' ? 2 : 1; // 2 for departments, 1 for branches
+      const result = await this.db.query(
+        `
+        SELECT aam.id, aam.year_id, aam.audit_unit_id, aam.assesment_period_from, aam.assesment_period_to, aam.frequency, aum.name as branch_name, aum.audit_unit_code
+        FROM audit_assesment_master aam
+        INNER JOIN audit_unit_master aum ON aam.audit_unit_id = aum.id
+        WHERE aum.section_type_id = $1
+          AND aam.assesment_period_from >= $2
+          AND aam.assesment_period_to <= $3
+          ${statusCondition}
+          AND aam.deleted_at IS NULL
+          AND aum.deleted_at IS NULL
+        ORDER BY aam.id ASC
+        `,
+        [unitTypeId, startDate, endDate],
+      );
+      assessments = result.rows;
+    }
+
+    if (!assessments.length) {
+      throw new BadRequestException('No assessments found for selected filters.');
+    }
+
+    const assessmentIds = assessments.map((a) => Number(a.id));
+    const firstYearId = Number(assessments[0].year_id);
+
+    // Fetch Risk Matrix for score calculation
+    const riskMatrixResult = await this.db.query(
+      `
+      SELECT risk_parameter, business_risk_score, control_risk_score
+      FROM risk_matrix
+      WHERE year_id = $1
+        AND deleted_at IS NULL
+      `,
+      [firstYearId],
+    );
+
+    // Fetch Risk Category Weights
+    const riskCategoriesResult = await this.db.query(
+      `
+      SELECT
+        rcm.id,
+        COALESCE(rcw.risk_weight, 0) AS risk_weight
+      FROM risk_category_master rcm
+      LEFT JOIN risk_category_weights rcw
+        ON rcw.risk_category_id = rcm.id
+        AND rcw.year_id = $1
+        AND rcw.is_active = 1
+        AND rcw.deleted_at IS NULL
+      WHERE rcm.is_active = 1
+        AND rcm.deleted_at IS NULL
+      `,
+      [firstYearId],
+    );
+    const riskWeightsMap = new Map<number, number>();
+    riskCategoriesResult.rows.forEach((row: any) => {
+      riskWeightsMap.set(Number(row.id), Number(row.risk_weight || 0));
+    });
+
+    const businessRiskScores = new Map<number, number>();
+    const controlRiskScores = new Map<number, number>();
+    riskMatrixResult.rows.forEach((row: any) => {
+      const parameter = Number(row.risk_parameter);
+      businessRiskScores.set(parameter, Number(row.business_risk_score || 0));
+      controlRiskScores.set(parameter, Number(row.control_risk_score || 0));
+    });
+
+    const matrixScore = (businessRisk: any, controlRisk: any) => {
+      const businessRiskId = Number(businessRisk);
+      const controlRiskId = Number(controlRisk);
+      if (
+        !businessRiskId ||
+        !controlRiskId ||
+        businessRiskId < 1 ||
+        businessRiskId > 4 ||
+        controlRiskId < 1 ||
+        controlRiskId > 4
+      ) {
+        return 0;
+      }
+      return (
+        Number(businessRiskScores.get(businessRiskId) || 0) +
+        Number(controlRiskScores.get(controlRiskId) || 0)
+      );
+    };
+
+    // Step 2: Fetch all answers for the selected assessments
+    const answersResult = await this.db.query(
+      `
+      SELECT 
+        ad.id AS answer_id,
+        ad.assesment_id,
+        ad.question_id,
+        ad.dump_id,
+        ad.answer_given,
+        ad.business_risk,
+        ad.control_risk,
+        ad.category_id,
+        ad.menu_id,
+        qm.question,
+        qm.risk_category_id,
+        rcm.risk_category AS risk_type_name,
+        qm.area_of_audit_id,
+        aam.name AS broader_area_name,
+        cm.name AS category_name,
+        cm.linked_table_id,
+        mm.name AS menu_name,
+        aum.audit_unit_code,
+        aum.name AS branch_name
+      FROM answers_data ad
+      INNER JOIN question_master qm ON ad.question_id = qm.id
+      INNER JOIN audit_assesment_master asm ON ad.assesment_id = asm.id
+      INNER JOIN audit_unit_master aum ON asm.audit_unit_id = aum.id
+      LEFT JOIN risk_category_master rcm ON qm.risk_category_id = rcm.id
+      LEFT JOIN audit_area_master aam ON qm.area_of_audit_id = aam.id
+      LEFT JOIN category_master cm ON ad.category_id = cm.id
+      LEFT JOIN menu_master mm ON ad.menu_id = mm.id
+      WHERE ad.assesment_id = ANY($1::int[])
+        AND ad.deleted_at IS NULL
+        AND qm.deleted_at IS NULL
+        AND asm.deleted_at IS NULL
+      `,
+      [assessmentIds],
+    );
+
+    const answerIds = answersResult.rows.map((row: any) => Number(row.answer_id));
+
+    // Fetch all annexure row answers for these answers
+    const annexuresResult = answerIds.length
+      ? await this.db.query(
+          `
+          SELECT
+            answer_id,
+            business_risk,
+            control_risk
+          FROM answers_data_annexure
+          WHERE answer_id = ANY($1::int[])
+            AND deleted_at IS NULL
+          `,
+          [answerIds],
+        )
+      : { rows: [] };
+
+    const annexuresMap = new Map<number, any[]>();
+    annexuresResult.rows.forEach((annRow: any) => {
+      const answerId = Number(annRow.answer_id);
+      if (!annexuresMap.has(answerId)) {
+        annexuresMap.set(answerId, []);
+      }
+      annexuresMap.get(answerId)!.push(annRow);
+    });
+
+    // Group answers by: assessment_id and question_id (to calculate average score per question per assessment)
+    // Map structure: question_id -> Map(assessment_id -> array of scores)
+    const questionAssessmentScores = new Map<number, Map<number, number[]>>();
+    const questionDetails = new Map<number, any>();
+
+    answersResult.rows.forEach((row: any) => {
+      const qId = Number(row.question_id);
+      const assesId = Number(row.assesment_id);
+
+      if (!questionDetails.has(qId)) {
+        const riskWeight = riskWeightsMap.get(Number(row.risk_category_id)) || 0;
+        questionDetails.set(qId, {
+          audit_unit_code: row.audit_unit_code || '-',
+          branch_name: row.branch_name || '-',
+          qcat: !row.linked_table_id ? 'GENERAL' : (Number(row.linked_table_id) === 1 ? 'DEPOSITS' : 'ADVANCES'),
+          risk_type: row.risk_type_name || '-',
+          broader_area: row.broader_area_name || '-',
+          menu_category: `Menu: ${row.menu_name || '-'}\nCategory: ${row.category_name || '-'}`,
+          question: `QUESTION: ${row.question || '-'}`,
+          risk_weight: riskWeight,
+        });
+      }
+
+      if (!questionAssessmentScores.has(qId)) {
+        questionAssessmentScores.set(qId, new Map<number, number[]>());
+      }
+
+      const assesMap = questionAssessmentScores.get(qId)!;
+      if (!assesMap.has(assesId)) {
+        assesMap.set(assesId, []);
+      }
+
+      const annexData = annexuresMap.get(Number(row.answer_id)) || [];
+      if (annexData.length > 0) {
+        // Annexure question: score is calculated from annexure rows
+        annexData.forEach((ann: any) => {
+          const score = matrixScore(ann.business_risk, ann.control_risk);
+          assesMap.get(assesId)!.push(score);
+        });
+      } else {
+        // Regular question
+        if (String(row.answer_given).toUpperCase() !== 'NOT APPLICABLE') {
+          const score = matrixScore(row.business_risk, row.control_risk);
+          assesMap.get(assesId)!.push(score);
+        }
+      }
+    });
+
+    // Now build the final rows by aggregating across all assessments
+    const flatRows: any[] = [];
+
+    questionAssessmentScores.forEach((assesMap, qId) => {
+      const details = questionDetails.get(qId);
+      let totalAvgScore = 0;
+      let noOfAudits = 0;
+
+      assesMap.forEach((scores) => {
+        if (scores.length > 0) {
+          const avgScoreForAssessment = scores.reduce((sum, s) => sum + s, 0) / scores.length;
+          totalAvgScore += avgScoreForAssessment;
+          noOfAudits += 1;
+        }
+      });
+
+      if (noOfAudits > 0) {
+        const avgScorePerAudit = totalAvgScore / noOfAudits;
+
+        const weightedScore = avgScorePerAudit * details.risk_weight;
+        const totalBaWeightedScore = (Math.ceil((weightedScore / 12) * 100) / 100).toFixed(2);
+
+        flatRows.push({
+          audit_unit_code: details.audit_unit_code,
+          qcat: details.qcat,
+          branch_name: details.branch_name,
+          risk_type: details.risk_type,
+          broader_area: details.broader_area,
+          menu_category: details.menu_category,
+          question: details.question,
+          total_avg_score: Number(totalAvgScore.toFixed(3)),
+          no_of_audits: Number(noOfAudits.toFixed(3)),
+          avg_score_per_audit: Number(avgScorePerAudit.toFixed(3)),
+          risk_weight: Number(details.risk_weight.toFixed(3)),
+          weighted_score: Number(weightedScore.toFixed(3)),
+          total_ba_weighted_score: totalBaWeightedScore,
+        });
+      }
+    });
+
+    // Sort by audit_unit_code, qcat, broader_area, question
+    flatRows.sort((a, b) => {
+      const cmpCode = String(a.audit_unit_code).localeCompare(String(b.audit_unit_code));
+      if (cmpCode !== 0) return cmpCode;
+      
+      const cmpQcat = String(a.qcat).localeCompare(String(b.qcat));
+      if (cmpQcat !== 0) return cmpQcat;
+
+      const cmpArea = String(a.broader_area).localeCompare(String(b.broader_area));
+      if (cmpArea !== 0) return cmpArea;
+
+      return String(a.question).localeCompare(String(b.question));
+    });
+
+    return {
+      filters: {
+        selectSearchTypeFilter: searchType,
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: String(assessmentId),
+        startDate: startDate || '',
+        endDate: endDate || '',
+      },
+      total: flatRows.length,
+      generatedAt: new Date().toISOString(),
+      rows: flatRows,
     };
   }
 
@@ -2361,7 +2776,7 @@ export class ReportsService {
     }
 
     if (reportSlug === 'questionwsie-broader-areawise-report') {
-      return this.getBroaderAreaWiseScoringReport(query);
+      return this.getQuestionWiseBroaderAreaReport(query);
     }
 
     if (reportSlug === 'question-wise-scoring-report') {
