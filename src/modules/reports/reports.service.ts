@@ -905,7 +905,11 @@ export class ReportsService {
           label: 'Audit Unit',
           type: 'select',
           required: true,
-          options: lookups.auditUnits,
+          options: [
+            { value: '', label: 'Please select audit unit' },
+            { value: 'all_branches', label: 'All Branches' },
+            ...lookups.auditUnits.filter((opt: any) => opt.value !== ''),
+          ],
         },
         {
           key: 'financial_year',
@@ -3704,30 +3708,45 @@ export class ReportsService {
   }
 
   async getComplianceSummaryReport(query: any) {
-    const auditUnitId = Number(query.reportAuditUnit || 0);
-    const assessmentId = Number(query.reportAuditAssesment || 0);
+    const isAllBranches = query.reportAuditUnit === 'all_branches';
+    const auditUnitId = isAllBranches ? null : Number(query.reportAuditUnit || 0);
+    const assessmentId = isAllBranches ? null : Number(query.reportAuditAssesment || 0);
     const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
-    if (!auditUnitId) {
+    if (!isAllBranches && !auditUnitId) {
       throw new BadRequestException('Audit unit is required');
     }
 
-    if (!assessmentId) {
+    if (!isAllBranches && !assessmentId) {
       throw new BadRequestException('Audit assessment is required');
     }
 
     const riskCategoryIds = this.toNumberArray(query.risk_category_arr);
     const businessRiskIds = this.toNumberArray(query.business_risk_arr);
     const controlRiskIds = this.toNumberArray(query.control_risk_arr);
-    const params: any[] = [assessmentId, auditUnitId];
+    const params: any[] = [];
     const where = [
-      'ad.assesment_id = $1',
-      'aam.audit_unit_id = $2',
       isFreeFlow ? 'aam.audit_status_id >= 1' : 'aam.audit_status_id > 1',
       'ad.deleted_at IS NULL',
       'qm.deleted_at IS NULL',
       'ad.is_compliance = 1',
     ];
+
+    if (isAllBranches) {
+      where.push(
+        'aam.audit_unit_id IN (SELECT id FROM audit_unit_master WHERE section_type_id = 1 AND deleted_at IS NULL)',
+      );
+      const financialYear = query.financial_year;
+      if (financialYear && financialYear !== 'all') {
+        params.push(Number(financialYear));
+        where.push(`aam.year_id = $${params.length}`);
+      }
+    } else {
+      params.push(assessmentId);
+      where.push(`ad.assesment_id = $${params.length}`);
+      params.push(auditUnitId);
+      where.push(`aam.audit_unit_id = $${params.length}`);
+    }
 
     this.applyAssessmentAuditTypeFilter(where, params, query, 'aam.audit_type_id');
 
@@ -3793,7 +3812,12 @@ export class ReportsService {
         au.name AS account_branch_name,
         au.audit_unit_code AS account_branch_code,
         sm.name AS scheme_name,
-        sm.scheme_code
+        sm.scheme_code,
+        ad.assesment_id,
+        aam.assesment_period_from,
+        aam.assesment_period_to,
+        aum_assesment.name AS assessment_unit_name,
+        aum_assesment.audit_unit_code AS assessment_unit_code
       FROM answers_data ad
       INNER JOIN audit_assesment_master aam
         ON aam.id = ad.assesment_id
@@ -3839,8 +3863,11 @@ export class ReportsService {
         AND au.deleted_at IS NULL
       LEFT JOIN employee_master auditor
         ON auditor.id = ad.audit_emp_id
+      LEFT JOIN audit_unit_master aum_assesment
+        ON aum_assesment.id = aam.audit_unit_id
+        AND aum_assesment.deleted_at IS NULL
       WHERE ${where.join(' AND ')}
-      ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
+      ORDER BY ad.assesment_id, ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
       `,
       params,
     );
@@ -3848,8 +3875,17 @@ export class ReportsService {
     const answerIds = result.rows
       .map((row: any) => Number(row.id))
       .filter(Boolean);
-    const annexureRowsByAnswer = await this.getAuditCompleteAnnexureRows(
-      assessmentId,
+
+    const assessmentIds = Array.from(
+      new Set(
+        result.rows
+          .map((row: any) => Number(row.assesment_id))
+          .filter(Boolean),
+      ),
+    );
+
+    const annexureRowsByAnswer = await this.getAuditCompleteAnnexureRowsForAssessments(
+      assessmentIds,
       answerIds,
     );
 
@@ -3865,6 +3901,7 @@ export class ReportsService {
       risk_category: row.risk_category || '-',
       business_risk_label: this.riskParameterLabel(row.business_risk),
       control_risk_label: this.riskParameterLabel(row.control_risk),
+      __assessment_label: `${row.assessment_unit_code || ''} - ${row.assessment_unit_name || ''} (${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)})`,
       __account_key: this.accountDetailKey(row),
       __account_details: this.accountDetailRows(row),
       __is_vouching: this.isVouchingTransactionRow(row),
@@ -3877,14 +3914,24 @@ export class ReportsService {
         row.annexure_columns || [],
       ),
     }));
-    const rows = this.buildAuditCompleteGroupedRows(questionRows);
 
-    const assessment = await this.getAssessmentHeader(assessmentId);
+    const rows = isAllBranches
+      ? this.buildAuditCompleteGroupedRowsWithAssessments(questionRows)
+      : this.buildAuditCompleteGroupedRows(questionRows);
+
+    const assessment = isAllBranches
+      ? {
+          assessmentPeriod: 'All Periods',
+          auditUnit: 'All Branches',
+          frequency: '-',
+          isMultipleAuditors: false,
+        }
+      : await this.getAssessmentHeader(assessmentId);
 
     return {
       filters: {
-        reportAuditUnit: String(auditUnitId),
-        reportAuditAssesment: String(assessmentId),
+        reportAuditUnit: isAllBranches ? 'all_branches' : String(auditUnitId || ''),
+        reportAuditAssesment: isAllBranches ? '' : String(assessmentId || ''),
         audit_type_id: String(query.audit_type_id || 'all').trim(),
         risk_category_arr: riskCategoryIds,
         business_risk_arr: businessRiskIds,
