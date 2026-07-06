@@ -37,6 +37,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { MasterBulkUploadModule } from './modules/admin/master-bulk-upload/master-bulk-upload.module';
 import { AuditTypeModule } from './modules/admin/audit-type-master/audit-type.module';
 import { IncidentManagementModule } from './modules/incident-management/incident-management.module';
+import { TranslationModule } from './modules/translation/translation.module';
 
 
 @Module({
@@ -70,6 +71,7 @@ import { IncidentManagementModule } from './modules/incident-management/incident
     UsersModule,
     AuthModule,
     ReportsModule,
+    TranslationModule,
     PolicyDocumentsModule,
     AuditCalendarModule,
     RegionMasterModule,
