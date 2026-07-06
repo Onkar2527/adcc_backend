@@ -48,7 +48,7 @@ export class ReportsService {
 
   constructor(private readonly db: DatabaseService) { }
 
-  private getBankName(defaultName = 'Pune Cantonment Sahakari Bank'): string {
+  private getBankName(defaultName = 'KREDPOOL SOLUTIONS PVT LTD.'): string {
     return process.env.BANK_NAME || defaultName;
   }
 
@@ -2168,7 +2168,7 @@ export class ReportsService {
 
     // Step 1: Find matching assessments
     let assessments: any[] = [];
-    
+
     // Status condition
     const statusCondition = removePending
       ? (isFreeFlow ? 'AND aam.audit_status_id >= 4' : 'AND aam.audit_status_id > 4')
@@ -2345,7 +2345,7 @@ export class ReportsService {
     // Fetch all annexure row answers for these answers
     const annexuresResult = answerIds.length
       ? await this.db.query(
-          `
+        `
           SELECT
             answer_id,
             business_risk,
@@ -2354,8 +2354,8 @@ export class ReportsService {
           WHERE answer_id = ANY($1::int[])
             AND deleted_at IS NULL
           `,
-          [answerIds],
-        )
+        [answerIds],
+      )
       : { rows: [] };
 
     const annexuresMap = new Map<number, any[]>();
@@ -2459,7 +2459,7 @@ export class ReportsService {
     flatRows.sort((a, b) => {
       const cmpCode = String(a.audit_unit_code).localeCompare(String(b.audit_unit_code));
       if (cmpCode !== 0) return cmpCode;
-      
+
       const cmpQcat = String(a.qcat).localeCompare(String(b.qcat));
       if (cmpQcat !== 0) return cmpQcat;
 
