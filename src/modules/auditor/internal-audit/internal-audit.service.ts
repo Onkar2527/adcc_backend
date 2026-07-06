@@ -10,6 +10,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { AuditLogService } from '../../audit-logs/audit-log.service';
 import { AuditTypeService } from '../../admin/audit-type-master/audit-type.service';
+import { EmailService } from '../../../core/email/email.service';
 
 const AUDITOR_STATUS_IDS = [1, 3];
 const REMARK_TYPES: Record<number, string> = {
@@ -177,6 +178,8 @@ export class InternalAuditService {
       AuditLogService,
     private readonly auditTypeService:
       AuditTypeService,
+    private readonly emailService:
+      EmailService,
   ) { }
 
   private isLiveComplianceSettledStatus(
@@ -1047,7 +1050,7 @@ export class InternalAuditService {
         batchKey,
     };
 
-    return this.db.transaction(
+    const result = await this.db.transaction(
       async (client) => {
 
         const assessmentResult =
@@ -1231,6 +1234,12 @@ export class InternalAuditService {
         };
       },
     );
+
+    this.emailService.sendAuditStartedEmail(result.assessment_id).catch((err) => {
+      console.error(`Failed to send audit started email for assessment ${result.assessment_id}: ${err.message}`);
+    });
+
+    return result;
   }
 
   private async createCarryForwardPoints(
@@ -3127,6 +3136,14 @@ export class InternalAuditService {
       console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
     }
 
+    const targetStatus = liveManagerCompliance
+      ? Number(preview.live_next_status || 7)
+      : 2;
+
+    this.emailService.sendAuditSubmittedEmail(assessmentId, liveManagerCompliance, targetStatus).catch((err) => {
+      console.error(`Failed to send audit submitted email for assessment ${assessmentId}: ${err.message}`);
+    });
+
     return {
       success:
         true,
@@ -4727,6 +4744,10 @@ export class InternalAuditService {
         );
       }
 
+      this.emailService.sendComplianceReviewCompletedEmail(assessmentId, 7).catch((err) => {
+        console.error(`Failed to send compliance review completed email for assessment ${assessmentId}: ${err.message}`);
+      });
+
       return {
         success:
           true,
@@ -5004,6 +5025,10 @@ export class InternalAuditService {
         console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
       }
     }
+
+    this.emailService.sendComplianceReviewCompletedEmail(assessmentId, result.nextStatus).catch((err) => {
+      console.error(`Failed to send compliance review completed email for assessment ${assessmentId}: ${err.message}`);
+    });
 
     return {
       success:
@@ -5670,6 +5695,10 @@ export class InternalAuditService {
       console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
     }
 
+    this.emailService.sendReviewCompletedEmail(assessmentId, result.nextStatus).catch((err) => {
+      console.error(`Failed to send reviewer completed email for assessment ${assessmentId}: ${err.message}`);
+    });
+
     return {
       success:
         true,
@@ -5756,7 +5785,24 @@ export class InternalAuditService {
               AND ad.deleted_at IS NULL
           WHERE aam.audit_status_id IN (1, 3, 4, 5)
               AND aam.deleted_at IS NULL
-              AND aam.branch_head_id = $1
+              AND (
+                  aam.branch_head_id = $1
+                  OR aam.branch_subhead_id = $1
+                  OR au.branch_head_id = $1
+                  OR au.branch_subhead_id = $1
+                  OR $1::text = ANY(
+                      regexp_split_to_array(
+                          COALESCE(aam.multi_compliance_ids, ''),
+                          '\s*,\s*'
+                      )
+                  )
+                  OR $1::text = ANY(
+                      regexp_split_to_array(
+                          COALESCE(au.multi_compliance_ids, ''),
+                          '\s*,\s*'
+                      )
+                  )
+              )
           GROUP BY
               aam.id,
               au.audit_unit_code,
@@ -5881,7 +5927,24 @@ export class InternalAuditService {
             AND aa.deleted_at IS NULL
         WHERE aam.audit_status_id IN (4, 6)
             AND aam.deleted_at IS NULL
-            AND aam.branch_head_id = $1
+            AND (
+                aam.branch_head_id = $1
+                OR aam.branch_subhead_id = $1
+                OR au.branch_head_id = $1
+                OR au.branch_subhead_id = $1
+                OR $1::text = ANY(
+                    regexp_split_to_array(
+                        COALESCE(aam.multi_compliance_ids, ''),
+                        '\s*,\s*'
+                    )
+                )
+                OR $1::text = ANY(
+                    regexp_split_to_array(
+                        COALESCE(au.multi_compliance_ids, ''),
+                        '\s*,\s*'
+                    )
+                )
+            )
         GROUP BY
             aam.id,
             au.audit_unit_code,
@@ -5916,7 +5979,24 @@ export class InternalAuditService {
           AND au.deleted_at IS NULL
       WHERE aam.id = $1
           AND aam.deleted_at IS NULL
-          AND aam.branch_head_id = $2
+          AND (
+              aam.branch_head_id = $2
+              OR aam.branch_subhead_id = $2
+              OR au.branch_head_id = $2
+              OR au.branch_subhead_id = $2
+              OR $2::text = ANY(
+                  regexp_split_to_array(
+                      COALESCE(aam.multi_compliance_ids, ''),
+                      '\s*,\s*'
+                  )
+              )
+              OR $2::text = ANY(
+                  regexp_split_to_array(
+                      COALESCE(au.multi_compliance_ids, ''),
+                      '\s*,\s*'
+                  )
+              )
+          )
       LIMIT 1;
       `,
         [
@@ -7192,6 +7272,10 @@ ORDER BY id DESC;
         ],
       );
 
+      this.emailService.sendComplianceSubmittedEmail(assessmentId).catch((err) => {
+        console.error(`Failed to send compliance submitted email for assessment ${assessmentId}: ${err.message}`);
+      });
+
       return {
         success:
           true,
@@ -7282,6 +7366,10 @@ ORDER BY id DESC;
     } catch (err) {
       console.error(`Failed to sync assessment scoring for assessment ${assessmentId}:`, err);
     }
+
+    this.emailService.sendComplianceSubmittedEmail(assessmentId).catch((err) => {
+      console.error(`Failed to send compliance submitted email for assessment ${assessmentId}: ${err.message}`);
+    });
 
     return {
       success:
@@ -8209,8 +8297,8 @@ ORDER BY id DESC;
                   compliance_status_id = CASE
                       WHEN $10::boolean = true AND $4::int = 1 THEN
                           CASE
-                              WHEN COALESCE(compliance_status_id, 0) IN (2, 5) THEN compliance_status_id
-                              ELSE 4
+                              WHEN COALESCE(compliance_status_id, 0) = 0 THEN 4
+                              ELSE compliance_status_id
                           END
                       WHEN $10::boolean = true AND $4::int = 0 THEN 0
                       ELSE compliance_status_id
