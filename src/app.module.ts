@@ -24,6 +24,7 @@ import { BranchRatingModule } from './modules/admin/risk-masters/risk-branch-rat
 import { PeriodwiseQuestionsMasterModule } from './modules/admin/periodwise-questions-master/periodwise-questions-master.module';
 import { AuditDashboardModule } from './modules/auditor/audit-dashboard/audit-dashboard.module';
 import { InternalAuditModule } from './modules/auditor/internal-audit/internal-audit.module';
+import { QuestionDataModule } from './modules/auditor/question-data/question-data.module';
 import { DepositAccountsModule } from './modules/admin/manage-accounts/deposit-accounts/deposit-accounts.module';
 import { AdvanceAccountsModule } from './modules/admin/manage-accounts/advance-accounts/advance-accounts.module';
 import { UsersModule } from './modules/users/users.module';
@@ -66,6 +67,7 @@ import { TranslationModule } from './modules/translation/translation.module';
     PeriodwiseQuestionsMasterModule,
     AuditDashboardModule,
     InternalAuditModule,
+    QuestionDataModule,
     DepositAccountsModule,
     AdvanceAccountsModule,
     UsersModule,

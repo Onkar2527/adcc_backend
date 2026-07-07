@@ -15,6 +15,7 @@ export class QuestionDataService {
 
     async getQuestionData(
         assessment_id: number,
+        language_id?: number,
     ) {
 
         const result = await this.db.query(
@@ -80,7 +81,11 @@ export class QuestionDataService {
                         json_build_object(
 
                             'question_id', qm.id,
-                            'question', qm.question,
+                            'question', CASE 
+                                WHEN (SELECT code FROM language_master WHERE id = $2) = 'mr' 
+                                THEN COALESCE(qm.mr_question, qm.question)
+                                ELSE qm.question 
+                            END,
                             'question_type_id', qm.question_type_id,
                             'option_id', qm.option_id,
 
@@ -91,6 +96,13 @@ export class QuestionDataService {
                                      OR qm.parameters = ''
                                 THEN '[]'::json
                                 ELSE qm.parameters::json
+                            END,
+
+                            'suggestions',
+                            CASE 
+                                WHEN (SELECT code FROM language_master WHERE id = $2) = 'mr' 
+                                THEN COALESCE(qm.mr_suggestions, qm.suggestions)
+                                ELSE qm.suggestions 
                             END,
 
                             'risk_category_id', qm.risk_category_id,
@@ -181,15 +193,112 @@ export class QuestionDataService {
 
             `,
 
-            [assessment_id],
+            [assessment_id, language_id || null],
 
         );
 
-        return result.rows;
+        const rows = result.rows;
+        for (const row of rows) {
+          if (row.questions && Array.isArray(row.questions)) {
+            for (const q of row.questions) {
+              if (q.suggestions) {
+                q.suggestions = this.normalizeSuggestions(q.suggestions);
+              }
+            }
+          }
+        }
+
+        return rows;
 
     }
 
-    
+    private normalizeSuggestions(suggestionsStr: string): string | null {
+      if (!suggestionsStr) return null;
+      try {
+        const parsed = this.repairJson(suggestionsStr);
+        if (!parsed) return suggestionsStr;
+        
+        let langKey = 'english';
+        if (parsed.marathi) {
+          langKey = 'marathi';
+        } else if (parsed.english) {
+          langKey = 'english';
+        } else {
+          const opts = parsed.suggestions || parsed.options || [];
+          return JSON.stringify({
+            default: parsed.default || '',
+            suggestions: Array.isArray(opts) ? opts : []
+          });
+        }
+        
+        const langData = parsed[langKey] || {};
+        const opts = langData.suggestions || langData.options || [];
+        return JSON.stringify({
+          default: langData.default || '',
+          suggestions: Array.isArray(opts) ? opts : []
+        });
+      } catch (e) {
+        return suggestionsStr;
+      }
+    }
 
+    private repairJson(jsonStr: string): any {
+      if (!jsonStr) return null;
+      let cleanStr = jsonStr.trim();
+      
+      try {
+        return JSON.parse(cleanStr);
+      } catch (e) {
+        // repair
+      }
+
+      let hasOpenQuote = false;
+      let bracketStack: string[] = [];
+      
+      let i = 0;
+      let repaired = '';
+      while (i < cleanStr.length) {
+        const char = cleanStr[i];
+        if (char === '\\' && i + 1 < cleanStr.length) {
+          repaired += cleanStr.substring(i, i + 2);
+          i += 2;
+          continue;
+        }
+        if (char === '"') {
+          hasOpenQuote = !hasOpenQuote;
+        }
+        if (!hasOpenQuote) {
+          if (char === '{' || char === '[') {
+            bracketStack.push(char === '{' ? '}' : ']');
+          } else if (char === '}' || char === ']') {
+            if (bracketStack.length > 0 && bracketStack[bracketStack.length - 1] === char) {
+              bracketStack.pop();
+            }
+          }
+        }
+        repaired += char;
+        i++;
+      }
+      
+      if (hasOpenQuote) {
+        repaired += '"';
+      }
+      while (bracketStack.length > 0) {
+        repaired += bracketStack.pop();
+      }
+      
+      try {
+        return JSON.parse(repaired);
+      } catch (err) {
+        const matchDefault = jsonStr.match(/"default"\s*:\s*"([^"]*)/);
+        if (matchDefault) {
+          return {
+            default: matchDefault[1],
+            suggestions: []
+          };
+        }
+        return null;
+      }
+    }
 
 }

@@ -3,6 +3,7 @@ import {
     Get,
     Param,
     ParseIntPipe,
+    Query,
 } from '@nestjs/common';
 
 import { QuestionDataService }
@@ -22,10 +23,13 @@ export class QuestionDataController {
             ParseIntPipe,
         )
         assessment_id: number,
+        @Query('language_id')
+        language_id?: string,
     ) {
 
         return this.service.getQuestionData(
             assessment_id,
+            language_id ? Number(language_id) : undefined,
         );
 
     }

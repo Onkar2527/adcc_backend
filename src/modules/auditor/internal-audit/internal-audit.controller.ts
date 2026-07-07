@@ -683,6 +683,9 @@ export class InternalAuditController {
 
     @Query('dump_id')
     dumpId?: string,
+
+    @Query('language_id')
+    languageId?: string,
   ) {
     return this.service.getCategorySubsetSet(
       assessmentId,
@@ -690,6 +693,7 @@ export class InternalAuditController {
       subsetSetId,
       Number(employeeId || 0),
       Number(dumpId || 0),
+      languageId ? Number(languageId) : undefined,
     );
   }
 
@@ -706,6 +710,9 @@ export class InternalAuditController {
 
     @Query('dump_id')
     dumpId?: string,
+
+    @Query('language_id')
+    languageId?: string,
   ) {
 
     return this.service.getCategory(
@@ -714,6 +721,7 @@ export class InternalAuditController {
       Number(employeeId || 0),
       Number(dumpId || 0),
       true,
+      languageId ? Number(languageId) : undefined,
     );
   }
 

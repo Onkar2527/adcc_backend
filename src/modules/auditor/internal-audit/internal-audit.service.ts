@@ -7391,6 +7391,7 @@ ORDER BY id DESC;
     employeeId: number,
     dumpId = 0,
     allowLocked = false,
+    languageId?: number,
   ) {
 
     const overview =
@@ -7521,7 +7522,11 @@ ORDER BY id DESC;
               qhm.id AS header_id,
               qhm.name AS header_name,
               qm.id AS question_id,
-              qm.question,
+              CASE 
+                  WHEN (SELECT code FROM language_master WHERE id = $8) = 'mr' 
+                  THEN COALESCE(qm.mr_question, qm.question)
+                  ELSE qm.question 
+              END AS question,
               qm.question_type_id,
               qm.option_id,
                (CASE WHEN qm.parameters IS NULL OR BTRIM(qm.parameters) = '' OR BTRIM(qm.parameters) = '[]' THEN '[]'::jsonb ELSE qm.parameters::jsonb END) AS parameters,
@@ -7530,7 +7535,11 @@ ORDER BY id DESC;
               qm.subset_multi_id,
               qm.audit_ev_upload,
               qm.show_instances,
-              qm.suggestions,
+              CASE 
+                  WHEN (SELECT code FROM language_master WHERE id = $8) = 'mr' 
+                  THEN COALESCE(qm.mr_suggestions, qm.suggestions)
+                  ELSE qm.suggestions 
+              END AS suggestions,
               rcm.risk_category AS risk_category_name,
               am.name AS annexure_name,
               am.risk_defination_id AS annexure_risk_defination_id,
@@ -7616,6 +7625,7 @@ ORDER BY id DESC;
           assessmentId,
           categoryId,
           dumpId,
+          languageId || null,
         ],
       );
 
@@ -7914,6 +7924,7 @@ ORDER BY id DESC;
     subsetSetId: number,
     employeeId: number,
     dumpId = 0,
+    languageId?: number,
   ) {
     const detail =
       await this.getCategory(
@@ -7921,6 +7932,8 @@ ORDER BY id DESC;
         categoryId,
         employeeId,
         dumpId,
+        false,
+        languageId,
       );
 
     this.assertAccountSelection(
@@ -7966,7 +7979,11 @@ ORDER BY id DESC;
         qhm.id AS header_id,
         qhm.name AS header_name,
         qm.id AS question_id,
-        qm.question,
+        CASE 
+            WHEN (SELECT code FROM language_master WHERE id = $5) = 'mr' 
+            THEN COALESCE(qm.mr_question, qm.question)
+            ELSE qm.question 
+        END AS question,
         qm.question_type_id,
         qm.option_id,
         (CASE WHEN qm.parameters IS NULL OR BTRIM(qm.parameters) = '' OR BTRIM(qm.parameters) = '[]' THEN '[]'::jsonb ELSE qm.parameters::jsonb END) AS parameters,
@@ -7975,7 +7992,11 @@ ORDER BY id DESC;
         qm.subset_multi_id,
         qm.audit_ev_upload,
         qm.show_instances,
-        qm.suggestions,
+        CASE 
+            WHEN (SELECT code FROM language_master WHERE id = $5) = 'mr' 
+            THEN COALESCE(qm.mr_suggestions, qm.suggestions)
+            ELSE qm.suggestions 
+        END AS suggestions,
         rcm.risk_category AS risk_category_name,
         am.name AS annexure_name,
         am.risk_defination_id AS annexure_risk_defination_id,
@@ -8044,6 +8065,7 @@ ORDER BY id DESC;
         assessmentId,
         categoryId,
         dumpId,
+        languageId || null,
       ],
     );
 
@@ -9446,6 +9468,95 @@ ORDER BY id DESC;
     };
   }
 
+  private normalizeSuggestions(suggestionsStr: string): string | null {
+    if (!suggestionsStr) return null;
+    try {
+      const parsed = this.repairJson(suggestionsStr);
+      if (!parsed) return suggestionsStr;
+      
+      let langKey = 'english';
+      if (parsed.marathi) {
+        langKey = 'marathi';
+      } else if (parsed.english) {
+        langKey = 'english';
+      } else {
+        const opts = parsed.suggestions || parsed.options || [];
+        return JSON.stringify({
+          default: parsed.default || '',
+          suggestions: Array.isArray(opts) ? opts : []
+        });
+      }
+      
+      const langData = parsed[langKey] || {};
+      const opts = langData.suggestions || langData.options || [];
+      return JSON.stringify({
+        default: langData.default || '',
+        suggestions: Array.isArray(opts) ? opts : []
+      });
+    } catch (e) {
+      return suggestionsStr;
+    }
+  }
+
+  private repairJson(jsonStr: string): any {
+    if (!jsonStr) return null;
+    let cleanStr = jsonStr.trim();
+    
+    try {
+      return JSON.parse(cleanStr);
+    } catch (e) {
+      // repair
+    }
+
+    let hasOpenQuote = false;
+    let bracketStack: string[] = [];
+    
+    let i = 0;
+    let repaired = '';
+    while (i < cleanStr.length) {
+      const char = cleanStr[i];
+      if (char === '\\' && i + 1 < cleanStr.length) {
+        repaired += cleanStr.substring(i, i + 2);
+        i += 2;
+        continue;
+      }
+      if (char === '"') {
+        hasOpenQuote = !hasOpenQuote;
+      }
+      if (!hasOpenQuote) {
+        if (char === '{' || char === '[') {
+          bracketStack.push(char === '{' ? '}' : ']');
+        } else if (char === '}' || char === ']') {
+          if (bracketStack.length > 0 && bracketStack[bracketStack.length - 1] === char) {
+            bracketStack.pop();
+          }
+        }
+      }
+      repaired += char;
+      i++;
+    }
+    
+    if (hasOpenQuote) {
+      repaired += '"';
+    }
+    while (bracketStack.length > 0) {
+      repaired += bracketStack.pop();
+    }
+    
+    try {
+      return JSON.parse(repaired);
+    } catch (err) {
+      const matchDefault = jsonStr.match(/"default"\s*:\s*"([^"]*)/);
+      if (matchDefault) {
+        return {
+          default: matchDefault[1],
+          suggestions: []
+        };
+      }
+      return null;
+    }
+  }
+
   private groupCategoryQuestions(
     rows: any[],
   ) {
@@ -9549,7 +9660,7 @@ ORDER BY id DESC;
         show_instances:
           row.show_instances,
         suggestions:
-          row.suggestions,
+          this.normalizeSuggestions(row.suggestions),
         answer:
           row.answer_id
             ? {
