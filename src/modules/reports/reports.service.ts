@@ -188,7 +188,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'audit-status-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -297,7 +297,7 @@ export class ReportsService {
       page: 'A4',
       fileName: 'carry-forward-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -359,7 +359,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'partially-pass-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -421,7 +421,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'audit-status-expired-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -524,7 +524,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'assesment-timeline-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -594,7 +594,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'assement-not-started-yet-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -643,7 +643,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'audit-complete-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -726,7 +726,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'audit-observations-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -805,7 +805,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'compliance-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -888,7 +888,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'compliance-summary-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -975,7 +975,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'risk-weightage-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -1123,7 +1123,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'risk-wise-audit-units-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -1224,7 +1224,7 @@ export class ReportsService {
       page: 'A5L',
       fileName: 'risk-npa-wise-audit-units-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -1363,7 +1363,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'rbia-performance-risk-weightage-report-all-units',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -1466,7 +1466,7 @@ export class ReportsService {
       page: 'A4',
       fileName: 'performance-risk-weightage-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -1611,7 +1611,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'performance-risk-weightage-report-category-wise',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -1756,7 +1756,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'audit-committee-board-report-1',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -1887,7 +1887,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'broader-areawise-scoring-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -2072,7 +2072,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'question-wise-broader-area-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -2497,7 +2497,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'question-wise-scoring-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -2570,7 +2570,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'audit-observation-count-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -2640,7 +2640,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'pending-compliance-detail-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
@@ -11256,7 +11256,7 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'internal-assesment-report',
       brand: {
-        logoUrl: '/assets/images/logos/auditpro-logo.png',
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
         bankName: this.getBankName(),
       },
       defaultFilters: {
