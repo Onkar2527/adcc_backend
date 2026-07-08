@@ -22,7 +22,6 @@ export class CreateAuditSchemeDto {
 
   @IsNotEmpty()
   @IsString()
-  @Matches(/^[a-zA-Z0-9 ]+$/)
   name!: string;
 
   @IsOptional()
@@ -51,7 +50,6 @@ export class UpdateSchemeDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^[a-zA-Z0-9 ]+$/)
   name?: string;
 
   @IsOptional()
