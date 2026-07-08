@@ -561,6 +561,53 @@ ORDER BY
         };
     }
 
+    async syncAllBranchesCurrentAssessment(id: number) {
+        const source = await this.db.findOne(
+            `SELECT * FROM multi_level_control_master WHERE id = $1 AND deleted_at IS NULL`,
+            [id]
+        );
+
+        if (!source) {
+            throw new BadRequestException('Periodwise Questions Master not found');
+        }
+
+        if (Number(source.section_type_id) !== 1) {
+            throw new BadRequestException('Sync is only allowed for branch setups (section type id = 1)');
+        }
+
+        const result = await this.db.query(
+            `UPDATE audit_assesment_master asm
+             SET menu_ids = mlcm.menu_ids,
+                 cat_ids = mlcm.cat_ids,
+                 header_ids = mlcm.header_ids,
+                 question_ids = mlcm.question_ids,
+                 advances_scheme_ids = mlcm.advances_scheme_ids,
+                 deposits_scheme_ids = mlcm.deposits_scheme_ids,
+                 is_multiple_auditors = mlcm.is_multiple_auditors,
+                 updated_at = CURRENT_TIMESTAMP
+             FROM multi_level_control_master mlcm, audit_unit_master aum
+             WHERE asm.audit_unit_id = mlcm.audit_unit_id
+               AND aum.id = mlcm.audit_unit_id
+               AND aum.section_type_id = 1
+               AND mlcm.year_id = $1
+               AND mlcm.start_month_year = $2
+               AND mlcm.end_month_year = $3
+               AND asm.audit_status_id = 1
+               AND asm.deleted_at IS NULL
+               AND mlcm.deleted_at IS NULL
+             RETURNING asm.id`,
+            [source.year_id, source.start_month_year, source.end_month_year]
+        );
+
+        const updatedIds = result.rows.map((row: any) => Number(row.id));
+
+        return {
+            success: true,
+            message: `Current assessment configuration synced successfully to all ${updatedIds.length} branch assessments for this period.`,
+            updatedCount: updatedIds.length
+        };
+    }
+
     async softDelete(id: number) {
         return this.db.query(
             `
