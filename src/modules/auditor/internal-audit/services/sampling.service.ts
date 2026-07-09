@@ -158,7 +158,7 @@ export class SamplingService {
       filter_types: filterTypes,
       npa_options: npaOptions,
       kyc_options: kycOptions,
-      accounts: candidateData.accounts.map((row: any) => ({
+      candidates: candidateData.accounts.map((row: any) => ({
         id: row.id,
         account_no: row.account_no,
         account_holder_name: row.account_holder_name,
@@ -176,6 +176,7 @@ export class SamplingService {
       })),
       matching_count: candidateData.matching_count,
     };
+
   }
 
   async applyAccountSampling(
