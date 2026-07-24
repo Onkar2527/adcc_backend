@@ -8837,25 +8837,6 @@ ORDER BY id DESC;
     }));
   }
 
-  private assertAccountSelection(
-    detail: any,
-  ) {
-
-    if (
-      [1, 2].includes(
-        Number(
-          detail?.category?.linked_table_id,
-        ),
-      )
-      &&
-      !detail?.selected_account
-    ) {
-      throw new BadRequestException(
-        'Select a sampled account before saving audit data.',
-      );
-    }
-  }
-
   private assertSamplingAllowed(
     detail: any,
   ) {
@@ -9071,7 +9052,7 @@ ORDER BY id DESC;
     };
   }
 
-  private async findAssessment(
+  /** @internal */ async findAssessment(
     assessmentId: number,
   ) {
 
