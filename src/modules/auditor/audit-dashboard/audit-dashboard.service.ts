@@ -12,41 +12,41 @@ import {
     OpenAssessmentDto,
 } from './dto/audit-dashboard.dto';
 
-const EXECUTIVE_BRANCH_POSITION_LINES = [
-    { type_id: 1, group: 'Deposits', name: 'CASA Deposit' },
-    { type_id: 2, group: 'Deposits', name: 'Term Deposit' },
-    { type_id: 3, group: 'Advances', name: 'Clean Loan' },
-    { type_id: 4, group: 'Advances', name: 'Vehicle Loan' },
-    { type_id: 5, group: 'Advances', name: 'Gold Loan' },
-    { type_id: 6, group: 'Advances', name: 'Other Term Loan' },
-    { type_id: 7, group: 'Advances', name: 'Cash Credit Loan' },
-    { type_id: 8, group: 'Advances', name: 'Decreed Loan' },
-    { type_id: 9, group: 'NPA', name: 'Clean Loan' },
-    { type_id: 10, group: 'NPA', name: 'Vehicle Loan' },
-    { type_id: 11, group: 'NPA', name: 'Gold Loan' },
-    { type_id: 12, group: 'NPA', name: 'Other Term Loan' },
-    { type_id: 13, group: 'NPA', name: 'Cash Credit Loan' },
-    { type_id: 14, group: 'NPA', name: 'Decreed Loan' },
-];
+// const EXECUTIVE_BRANCH_POSITION_LINES = [
+//     { type_id: 1, group: 'Deposits', name: 'CASA Deposit' },
+//     { type_id: 2, group: 'Deposits', name: 'Term Deposit' },
+//     { type_id: 3, group: 'Advances', name: 'Clean Loan' },
+//     { type_id: 4, group: 'Advances', name: 'Vehicle Loan' },
+//     { type_id: 5, group: 'Advances', name: 'Gold Loan' },
+//     { type_id: 6, group: 'Advances', name: 'Other Term Loan' },
+//     { type_id: 7, group: 'Advances', name: 'Cash Credit Loan' },
+//     { type_id: 8, group: 'Advances', name: 'Decreed Loan' },
+//     { type_id: 9, group: 'NPA', name: 'Clean Loan' },
+//     { type_id: 10, group: 'NPA', name: 'Vehicle Loan' },
+//     { type_id: 11, group: 'NPA', name: 'Gold Loan' },
+//     { type_id: 12, group: 'NPA', name: 'Other Term Loan' },
+//     { type_id: 13, group: 'NPA', name: 'Cash Credit Loan' },
+//     { type_id: 14, group: 'NPA', name: 'Decreed Loan' },
+// ];
 
-const EXECUTIVE_FRESH_ACCOUNT_LINES = [
-    { type_id: 1, group: 'Deposits', name: 'CASA Deposit' },
-    { type_id: 2, group: 'Deposits', name: 'Term Deposit (New)' },
-    { type_id: 3, group: 'Deposits', name: 'Term Deposits (Through Auto-Renewals)' },
-    { type_id: 4, group: 'Advances', name: 'Clean Loan' },
-    { type_id: 5, group: 'Advances', name: 'Vehicle Loan' },
-    { type_id: 6, group: 'Advances', name: 'Gold Loan' },
-    { type_id: 7, group: 'Advances', name: 'Loan Against Fixed Deposits' },
-    { type_id: 8, group: 'Advances', name: 'Other Term Loan' },
-    { type_id: 9, group: 'Advances', name: 'Cash Credit Loans (New)' },
-    { type_id: 10, group: 'Advances', name: 'Cash Credit Loans (Renewals)' },
-    { type_id: 11, group: 'NPA', name: 'Clean Loan' },
-    { type_id: 12, group: 'NPA', name: 'Vehicle Loan' },
-    { type_id: 13, group: 'NPA', name: 'Gold Loan' },
-    { type_id: 14, group: 'NPA', name: 'Other Term Loan' },
-    { type_id: 15, group: 'NPA', name: 'Cash Credit Loan' },
-    { type_id: 16, group: 'NPA', name: 'Decreed Accounts' },
-];
+// const EXECUTIVE_FRESH_ACCOUNT_LINES = [
+//     { type_id: 1, group: 'Deposits', name: 'CASA Deposit' },
+//     { type_id: 2, group: 'Deposits', name: 'Term Deposit (New)' },
+//     { type_id: 3, group: 'Deposits', name: 'Term Deposits (Through Auto-Renewals)' },
+//     { type_id: 4, group: 'Advances', name: 'Clean Loan' },
+//     { type_id: 5, group: 'Advances', name: 'Vehicle Loan' },
+//     { type_id: 6, group: 'Advances', name: 'Gold Loan' },
+//     { type_id: 7, group: 'Advances', name: 'Loan Against Fixed Deposits' },
+//     { type_id: 8, group: 'Advances', name: 'Other Term Loan' },
+//     { type_id: 9, group: 'Advances', name: 'Cash Credit Loans (New)' },
+//     { type_id: 10, group: 'Advances', name: 'Cash Credit Loans (Renewals)' },
+//     { type_id: 11, group: 'NPA', name: 'Clean Loan' },
+//     { type_id: 12, group: 'NPA', name: 'Vehicle Loan' },
+//     { type_id: 13, group: 'NPA', name: 'Gold Loan' },
+//     { type_id: 14, group: 'NPA', name: 'Other Term Loan' },
+//     { type_id: 15, group: 'NPA', name: 'Cash Credit Loan' },
+//     { type_id: 16, group: 'NPA', name: 'Decreed Accounts' },
+// ];
 
 @Injectable()
 export class AuditDashboardService {
@@ -198,11 +198,12 @@ export class AuditDashboardService {
 
         if (Number(emp.user_type_id) === 1 || Number(emp.user_type_id) === 9 || Number(emp.user_type_id) === 5) {
             const query = `
-                SELECT DISTINCT au.id, au.audit_unit_code, au.name, au.frequency, au.last_audit_date
+                SELECT DISTINCT au.id, au.audit_unit_code, au.name, au.frequency, au.last_audit_date,
+                       NULLIF(regexp_replace(au.audit_unit_code, '\\D', '', 'g'), '')::int AS code_num
                 FROM audit_unit_master au
                 WHERE au.is_active = 1
                   AND au.deleted_at IS NULL
-                ORDER BY au.audit_unit_code;
+                ORDER BY code_num ASC, au.audit_unit_code ASC;
             `;
             const result = await this.db.query(query);
             return result.rows;
@@ -216,13 +217,14 @@ export class AuditDashboardService {
                     WHERE LOWER(TRIM(region_name)) = LOWER(TRIM($1))
                       AND deleted_at IS NULL
                 )
-                SELECT DISTINCT au.id, au.audit_unit_code, au.name, au.frequency, au.last_audit_date
+                SELECT DISTINCT au.id, au.audit_unit_code, au.name, au.frequency, au.last_audit_date,
+                       NULLIF(regexp_replace(au.audit_unit_code, '\\D', '', 'g'), '')::int AS code_num
                 FROM audit_unit_master au
                 CROSS JOIN region_units ru
                 WHERE au.is_active = 1
                   AND au.deleted_at IS NULL
                   AND au.id = ANY(ru.unit_ids)
-                ORDER BY au.audit_unit_code;
+                ORDER BY code_num ASC, au.audit_unit_code ASC;
             `;
             const result = await this.db.query(query, [emp.region_name || '']);
             return result.rows;
@@ -243,7 +245,8 @@ export class AuditDashboardService {
             au.audit_unit_code,
             au.name,
             au.frequency,
-            au.last_audit_date
+            au.last_audit_date,
+            NULLIF(regexp_replace(au.audit_unit_code, '\\D', '', 'g'), '')::int AS code_num
         FROM audit_unit_master au
         LEFT JOIN employee_units eu ON TRUE
         WHERE
@@ -255,7 +258,7 @@ export class AuditDashboardService {
                 OR au.branch_subhead_id = $1
             )
         ORDER BY
-            au.audit_unit_code;
+            code_num ASC, au.audit_unit_code ASC;
         `;
 
         const result =
@@ -1117,19 +1120,33 @@ LIMIT 1;
 
         let hasLegacy = false;
         if (data.esb_id) {
-            const legacyCheck = await this.db.findOne(
+            const hasDynamicData = await this.db.findOne(
                 `
-                SELECT id 
-                FROM executive_summary_branch_position 
-                WHERE assesment_id = $1 
-                  AND LENGTH(TRIM(type_id::text)) <= 2
-                  AND deleted_at IS NULL
+                SELECT bp.id 
+                FROM executive_summary_branch_position bp
+                INNER JOIN scheme_master sm 
+                  ON sm.scheme_code = REPLACE(bp.type_id::text, '_NPA', '')
+                  AND sm.deleted_at IS NULL
+                WHERE bp.assesment_id = $1 
+                  AND bp.deleted_at IS NULL
                 LIMIT 1;
                 `,
                 [assessment_id]
             );
-            if (legacyCheck) {
-                hasLegacy = true;
+            if (!hasDynamicData) {
+                const hasAnyData = await this.db.findOne(
+                    `
+                    SELECT id 
+                    FROM executive_summary_branch_position 
+                    WHERE assesment_id = $1 
+                      AND deleted_at IS NULL
+                    LIMIT 1;
+                    `,
+                    [assessment_id]
+                );
+                if (hasAnyData) {
+                    hasLegacy = true;
+                }
             }
         }
 
@@ -1235,7 +1252,8 @@ GROUP BY sm.scheme_code, da.npa_status;
                 const code = String(row.scheme_code || '').trim();
                 if (!code) continue;
                 const isNpa = !['STD', 'SB_STD', 'N'].includes(String(row.npa_status || '').trim().toUpperCase());
-                const dbTypeId = isNpa ? `${code}_NPA` : code;
+                if (isNpa) continue;
+                const dbTypeId = code;
                 const existing = advanceSchemes.get(dbTypeId) || { balance: 0, accounts: 0 };
                 existing.balance += Number(row.total_balance || 0);
                 advanceSchemes.set(dbTypeId, existing);
@@ -1244,7 +1262,8 @@ GROUP BY sm.scheme_code, da.npa_status;
                 const code = String(row.scheme_code || '').trim();
                 if (!code) continue;
                 const isNpa = !['STD', 'SB_STD', 'N'].includes(String(row.npa_status || '').trim().toUpperCase());
-                const dbTypeId = isNpa ? `${code}_NPA` : code;
+                if (isNpa) continue;
+                const dbTypeId = code;
                 const existing = advanceSchemes.get(dbTypeId) || { balance: 0, accounts: 0 };
                 existing.accounts += Number(row.total_accounts || 0);
                 advanceSchemes.set(dbTypeId, existing);
@@ -1757,6 +1776,15 @@ VALUES ($1, $2, $3, $4, $5, $6, NOW());
         body: any,
         admin_id: number,
     ) {
+        try {
+            require('fs').writeFileSync(
+                'C:\\Users\\Flowenol\\.gemini\\antigravity-ide\\brain\\2259f749-91a2-405e-8433-6f04a9833f92\\scratch\\save_payload.json',
+                JSON.stringify({ body, admin_id }, null, 2)
+            );
+        } catch (e) {
+            console.error('Failed to write debug file:', e);
+        }
+
         const assessmentId = Number(body?.assessment_id || 0);
 
         const assessment = await this.db.findOne(
@@ -2438,6 +2466,7 @@ LIMIT 1;
             `
 SELECT
     scheme_type,
+    scheme_id,
     scheme_code,
     scheme_name,
     category_id,
@@ -2447,63 +2476,92 @@ SELECT
 FROM (
     SELECT
         'DEPOSITS' AS scheme_type,
+        sm.id AS scheme_id,
         sm.scheme_code,
         sm.name AS scheme_name,
-        CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END AS category_id,
+        CASE WHEN LOWER(cm.name) LIKE '%saving%' OR LOWER(cm.name) LIKE '%casa%' OR sm.category_id IN (63, 9129) THEN 1 ELSE 2 END AS category_id,
         es.march_position,
         COUNT(CASE WHEN dd.account_opening_date BETWEEN $4 AND $5 THEN dd.account_no END) AS total_accounts,
         SUM(CASE WHEN dd.account_opening_date BETWEEN $4 AND $5 THEN COALESCE(dd.principal_amount::numeric, 0) ELSE 0 END) AS total_amount
-    FROM dump_deposits dd
-    LEFT JOIN scheme_master sm
-        ON sm.id = dd.scheme_id
-    LEFT JOIN exe_summary es
-        ON es.audit_unit_id = dd.branch_id
-        AND es.year_id = $2
-        AND es.gl_type_id = CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
-    WHERE
-        dd.branch_id = $1
+    FROM scheme_master sm
+    LEFT JOIN category_master cm ON cm.id = sm.category_id
+    LEFT JOIN dump_deposits dd
+        ON dd.scheme_id = sm.id
+        AND dd.branch_id = $1
         AND dd.deleted_at IS NULL
+    LEFT JOIN exe_summary es
+        ON es.audit_unit_id = $1
+        AND es.year_id = $2
+        AND es.gl_type_id = sm.id
+    WHERE
+        sm.scheme_type_id = 1
+        AND sm.deleted_at IS NULL
     GROUP BY
+        sm.id,
         sm.scheme_code,
         sm.name,
         sm.category_id,
+        cm.name,
         es.march_position
+
     UNION ALL
+
     SELECT
         'ADVANCES' AS scheme_type,
+        sm.id AS scheme_id,
         sm.scheme_code,
         sm.name AS scheme_name,
-        CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END AS category_id,
+        CASE 
+            WHEN LOWER(cm.name) LIKE '%gold%' OR sm.category_id IN (58, 59, 9118, 9119, 9120) THEN 5
+            WHEN LOWER(cm.name) LIKE '%vehicle%' OR sm.category_id IN (52, 9113) THEN 4
+            WHEN LOWER(cm.name) LIKE '%cash credit%' OR LOWER(cm.name) LIKE '%overdraft%' OR LOWER(cm.name) LIKE '% cc%' OR sm.category_id IN (51, 60, 9111, 9120) THEN 7
+            WHEN LOWER(cm.name) LIKE '%personal%' OR LOWER(cm.name) LIKE '%clean%' OR sm.category_id IN (44, 9102) THEN 3
+            WHEN LOWER(cm.name) LIKE '%decreed%' OR LOWER(cm.name) LIKE '%suit%' OR sm.category_id IN (8, 15, 2004) THEN 8
+            ELSE 6
+        END AS category_id,
         es.march_position,
         COUNT(CASE WHEN da.account_opening_date BETWEEN $4 AND $5 THEN da.account_no END) AS total_accounts,
         SUM(CASE WHEN da.account_opening_date BETWEEN $4 AND $5 THEN COALESCE(da.sanction_amount::numeric, 0) ELSE 0 END) AS total_amount
-    FROM dump_advances da
-    LEFT JOIN scheme_master sm
-        ON sm.id = da.scheme_id
-    LEFT JOIN exe_summary es
-        ON es.audit_unit_id = da.branch_id
-        AND es.year_id = $2
-        AND es.gl_type_id = CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
-    WHERE
-        da.branch_id = $1
+    FROM scheme_master sm
+    LEFT JOIN category_master cm ON cm.id = sm.category_id
+    LEFT JOIN dump_advances da
+        ON da.scheme_id = sm.id
+        AND da.branch_id = $1
         AND da.deleted_at IS NULL
+    LEFT JOIN exe_summary es
+        ON es.audit_unit_id = $1
+        AND es.year_id = $2
+        AND es.gl_type_id = sm.id
+    WHERE
+        sm.scheme_type_id = 2
+        AND sm.deleted_at IS NULL
     GROUP BY
+        sm.id,
         sm.scheme_code,
         sm.name,
         sm.category_id,
+        cm.name,
         es.march_position
-        
+
     UNION ALL
     
     SELECT
         CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+        sm.id AS scheme_id,
         sm.scheme_code,
         sm.name AS scheme_name,
         CASE 
             WHEN cm.linked_table_id = 1 THEN
-                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+                CASE WHEN LOWER(cm.name) LIKE '%saving%' OR LOWER(cm.name) LIKE '%casa%' OR sm.category_id IN (63, 9129) THEN 1 ELSE 2 END
             ELSE
-                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+                CASE 
+                    WHEN LOWER(cm.name) LIKE '%gold%' OR sm.category_id IN (58, 59, 9118, 9119, 9120) THEN 5
+                    WHEN LOWER(cm.name) LIKE '%vehicle%' OR sm.category_id IN (52, 9113) THEN 4
+                    WHEN LOWER(cm.name) LIKE '%cash credit%' OR LOWER(cm.name) LIKE '%overdraft%' OR LOWER(cm.name) LIKE '% cc%' OR sm.category_id IN (51, 60, 9111, 9120) THEN 7
+                    WHEN LOWER(cm.name) LIKE '%personal%' OR LOWER(cm.name) LIKE '%clean%' OR sm.category_id IN (44, 9102) THEN 3
+                    WHEN LOWER(cm.name) LIKE '%decreed%' OR LOWER(cm.name) LIKE '%suit%' OR sm.category_id IN (8, 15, 2004) THEN 8
+                    ELSE 6
+                END
         END AS category_id,
         es.march_position,
         0 AS total_accounts,
@@ -2514,25 +2572,28 @@ FROM (
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
         AND es.year_id = $2
-        AND es.gl_type_id = CASE 
-            WHEN cm.linked_table_id = 1 THEN
-                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
-            ELSE
-                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
-        END
+        AND es.gl_type_id = sm.id
     WHERE bp.assesment_id = $3 AND bp.deleted_at IS NULL
     
     UNION ALL
     
     SELECT
         CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+        sm.id AS scheme_id,
         sm.scheme_code,
         sm.name AS scheme_name,
         CASE 
             WHEN cm.linked_table_id = 1 THEN
-                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
+                CASE WHEN LOWER(cm.name) LIKE '%saving%' OR LOWER(cm.name) LIKE '%casa%' OR sm.category_id IN (63, 9129) THEN 1 ELSE 2 END
             ELSE
-                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
+                CASE 
+                    WHEN LOWER(cm.name) LIKE '%gold%' OR sm.category_id IN (58, 59, 9118, 9119, 9120) THEN 5
+                    WHEN LOWER(cm.name) LIKE '%vehicle%' OR sm.category_id IN (52, 9113) THEN 4
+                    WHEN LOWER(cm.name) LIKE '%cash credit%' OR LOWER(cm.name) LIKE '%overdraft%' OR LOWER(cm.name) LIKE '% cc%' OR sm.category_id IN (51, 60, 9111, 9120) THEN 7
+                    WHEN LOWER(cm.name) LIKE '%personal%' OR LOWER(cm.name) LIKE '%clean%' OR sm.category_id IN (44, 9102) THEN 3
+                    WHEN LOWER(cm.name) LIKE '%decreed%' OR LOWER(cm.name) LIKE '%suit%' OR sm.category_id IN (8, 15, 2004) THEN 8
+                    ELSE 6
+                END
         END AS category_id,
         es.march_position,
         0 AS total_accounts,
@@ -2543,16 +2604,12 @@ FROM (
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
         AND es.year_id = $2
-        AND es.gl_type_id = CASE 
-            WHEN cm.linked_table_id = 1 THEN
-                CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END
-            ELSE
-                CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END
-        END
+        AND es.gl_type_id = sm.id
     WHERE fa.assesment_id = $3 AND fa.deleted_at IS NULL
 ) x
 GROUP BY
     scheme_type,
+    scheme_id,
     scheme_code,
     scheme_name,
     category_id
@@ -2724,13 +2781,13 @@ ORDER BY
         const total_expired_audit = Number(summary.total_expired_audit || 0);
         const total_expired_compliance = Number(summary.total_expired_compliance || 0);
 
-        const total_audit_count = total_pending_audit + 
-            total_completed_audit + 
-            total_completed_compliance + 
-            total_blocked_assesment + 
-            total_expired_audit + 
-            total_expired_compliance + 
-            totalNotStartedBranchesCount + 
+        const total_audit_count = total_pending_audit +
+            total_completed_audit +
+            total_completed_compliance +
+            total_blocked_assesment +
+            total_expired_audit +
+            total_expired_compliance +
+            totalNotStartedBranchesCount +
             totalNotStartedHoCount;
 
         const data_array_chart = [
@@ -2871,11 +2928,11 @@ ORDER BY
             if (!assessmentsByYear.has(yId)) {
                 assessmentsByYear.set(yId, []);
             }
-            const fromStr = ass.assesment_period_from instanceof Date 
-                ? ass.assesment_period_from.toISOString().split('T')[0] 
+            const fromStr = ass.assesment_period_from instanceof Date
+                ? ass.assesment_period_from.toISOString().split('T')[0]
                 : String(ass.assesment_period_from).split('T')[0];
-            const toStr = ass.assesment_period_to instanceof Date 
-                ? ass.assesment_period_to.toISOString().split('T')[0] 
+            const toStr = ass.assesment_period_to instanceof Date
+                ? ass.assesment_period_to.toISOString().split('T')[0]
                 : String(ass.assesment_period_to).split('T')[0];
 
             assessmentsByYear.get(yId)!.push({
@@ -2884,10 +2941,10 @@ ORDER BY
                 assesment_period_to: toStr,
                 frequency: ass.frequency,
                 audit_status_id: Number(ass.audit_status_id),
-                audit_due_date: ass.audit_due_date 
+                audit_due_date: ass.audit_due_date
                     ? (ass.audit_due_date instanceof Date ? ass.audit_due_date.toISOString().split('T')[0] : String(ass.audit_due_date).split('T')[0])
                     : null,
-                compliance_due_date: ass.compliance_due_date 
+                compliance_due_date: ass.compliance_due_date
                     ? (ass.compliance_due_date instanceof Date ? ass.compliance_due_date.toISOString().split('T')[0] : String(ass.compliance_due_date).split('T')[0])
                     : null,
                 is_limit_blocked: Number(ass.is_limit_blocked || 0),
@@ -2918,7 +2975,7 @@ ORDER BY
 
         for (const ass of assessments) {
             const statusId = Number(ass.audit_status_id || 0);
-            
+
             if ([4, 6].includes(statusId)) {
                 if (ass.compliance_due_date && new Date(ass.compliance_due_date) < currentDate) {
                     complianceExpCount++;
@@ -2967,9 +3024,9 @@ ORDER BY
                        AND deleted_at IS NULL
                      ORDER BY assesment_period_from ASC`,
                     [authUnitIds]
-                  )
+                )
                 : { rows: [] }
-              )
+            )
             : await this.db.query(
                 `SELECT id, assesment_id, assesment_period_from, assesment_period_to, weighted_score, risk_data
                  FROM report_scoring_master
@@ -2979,7 +3036,7 @@ ORDER BY
                  ORDER BY assesment_period_from ASC`,
                 [auditUnitId]
             );
-        
+
         let completedAssessments = completedRes.rows;
 
         if (isAllBranches && completedAssessments.length > 0) {
@@ -3000,7 +3057,7 @@ ORDER BY
                 if (row.risk_data) {
                     try {
                         group.riskDataList.push(typeof row.risk_data === 'string' ? JSON.parse(row.risk_data) : row.risk_data);
-                    } catch(e) {}
+                    } catch (e) { }
                 }
             });
 
@@ -3012,13 +3069,13 @@ ORDER BY
                         Object.keys(rd).forEach((catId) => {
                             if (!mergedRiskData[catId]) {
                                 mergedRiskData[catId] = { avg_sc: 0, '1': 0, '2': 0, '3': 0 };
-                             }
-                             const target = mergedRiskData[catId];
-                             const source = rd[catId];
-                             target['1'] += Number(source['1'] || 0);
-                             target['2'] += Number(source['2'] || 0);
-                             target['3'] += Number(source['3'] || 0);
-                             target.avg_sc = 1; 
+                            }
+                            const target = mergedRiskData[catId];
+                            const source = rd[catId];
+                            target['1'] += Number(source['1'] || 0);
+                            target['2'] += Number(source['2'] || 0);
+                            target['3'] += Number(source['3'] || 0);
+                            target.avg_sc = 1;
                         });
                     }
                 });
@@ -3149,17 +3206,17 @@ ORDER BY
 
         if (assessmentId === 'all') {
             const res = isAllBranches
-                ? (unitIds.length > 0 
+                ? (unitIds.length > 0
                     ? await this.db.query(
                         `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = ANY($1) AND audit_status_id > 3 AND deleted_at IS NULL`,
                         [unitIds]
-                      )
+                    )
                     : { rows: [] }
-                  )
+                )
                 : await this.db.query(
                     `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = $1 AND audit_status_id > 3 AND deleted_at IS NULL`,
                     [auditUnitId]
-                  );
+                );
             riskDataRows = res.rows;
 
             const heatRes = isAllBranches
@@ -3204,9 +3261,9 @@ ORDER BY
                          ) combined
                          GROUP BY business_risk, control_risk`,
                         [unitIds]
-                      )
+                    )
                     : { rows: [] }
-                  )
+                )
                 : await this.db.query(
                     `SELECT business_risk, control_risk, COUNT(*)::int AS count
                      FROM (
@@ -3247,7 +3304,7 @@ ORDER BY
                      ) combined
                      GROUP BY business_risk, control_risk`,
                     [auditUnitId]
-                  );
+                );
             heatmapRows = heatRes.rows;
         } else if (isRange) {
             const [fromStr, toStr] = assessmentId.split('_');
@@ -3257,14 +3314,14 @@ ORDER BY
                         `SELECT risk_data FROM report_scoring_master 
                          WHERE audit_unit_id = ANY($1) AND assesment_period_from = $2 AND assesment_period_to = $3 AND audit_status_id > 3 AND deleted_at IS NULL`,
                         [unitIds, fromStr, toStr]
-                      )
+                    )
                     : { rows: [] }
-                  )
+                )
                 : await this.db.query(
                     `SELECT risk_data FROM report_scoring_master 
                      WHERE audit_unit_id = $1 AND assesment_period_from = $2 AND assesment_period_to = $3 AND audit_status_id > 3 AND deleted_at IS NULL`,
                     [auditUnitId, fromStr, toStr]
-                  );
+                );
             riskDataRows = res.rows;
 
             const heatRes = await this.db.query(
@@ -3316,11 +3373,11 @@ ORDER BY
                 ? await this.db.query(
                     `SELECT risk_data FROM report_scoring_master WHERE assesment_id = $1 AND audit_status_id > 3 AND deleted_at IS NULL`,
                     [Number(assessmentId)]
-                  )
+                )
                 : await this.db.query(
                     `SELECT risk_data FROM report_scoring_master WHERE audit_unit_id = $1 AND assesment_id = $2 AND audit_status_id > 3 AND deleted_at IS NULL`,
                     [auditUnitId, Number(assessmentId)]
-                  );
+                );
             riskDataRows = res.rows;
 
             const heatRes = await this.db.query(
@@ -3374,7 +3431,7 @@ ORDER BY
                     for (const catIdStr of Object.keys(riskDataObj)) {
                         const catId = Number(catIdStr);
                         const catData = riskDataObj[catIdStr];
-                        
+
                         const wgSc = Number(catData.wg_sc || 0);
                         riskTypeWiseScoreMap.set(catId, (riskTypeWiseScoreMap.get(catId) || 0) + wgSc);
                         riskTypeWiseCountMap.set(catId, (riskTypeWiseCountMap.get(catId) || 0) + 1);
@@ -3507,7 +3564,7 @@ ORDER BY
         const branchesRiskBarData = branchesRiskRes.rows.map((row: any) => {
             const score = Number(row.weighted_score || 0);
             const uId = Number(row.audit_unit_id);
-            
+
             let color = 'rgba(34,139,34)'; // Green (low)
             const unitRatings = ratingsMap.get(uId) || [];
             if (unitRatings.length > 0) {

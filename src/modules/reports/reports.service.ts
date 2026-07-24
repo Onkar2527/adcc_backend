@@ -7068,7 +7068,7 @@ export class ReportsService {
       SELECT aum.id, aum.audit_unit_code, aum.name
       FROM audit_unit_master aum
       WHERE ${unitWhere.join(' AND ')}
-      ORDER BY aum.audit_unit_code ASC, aum.name ASC
+      ORDER BY NULLIF(regexp_replace(aum.audit_unit_code, '\D', '', 'g'), '')::int ASC, aum.audit_unit_code ASC
       `,
       unitParams,
     );

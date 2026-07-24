@@ -1058,6 +1058,7 @@ export class AdvanceAccountsService {
                 branch_id,
                 scheme_id,
                 account_no,
+                ucic,
                 account_opening_date,
                 renewal_date
             FROM dump_advances
@@ -1075,6 +1076,7 @@ export class AdvanceAccountsService {
                             Number(x.branch_id || 0),
                             Number(x.scheme_id || 0),
                             String(x.account_no || '').trim(),
+                            String(x.ucic || '').trim().toUpperCase(),
                             this.formatCsvDate(x.account_opening_date),
                             this.formatCsvDate(x.renewal_date),
                         ].join('|'),
@@ -1347,11 +1349,16 @@ export class AdvanceAccountsService {
                     String(
                         row.account_no,
                     ).trim();
+                const ucic =
+                    String(
+                        row.ucic,
+                    ).trim().toUpperCase();
                 const accountKey =
                     [
                         Number(branchId),
                         Number(schemeId),
                         accountNo,
+                        ucic,
                         this.formatCsvDate(row.account_opening_date),
                         this.formatCsvDate(row.renewal_date),
                     ].join('|');

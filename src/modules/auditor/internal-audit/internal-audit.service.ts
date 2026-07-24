@@ -2984,8 +2984,8 @@ export class InternalAuditService {
 
     const liveNextStatus =
       Number(overview.audit_status_id) !== 4
-      &&
-      Number(liveStageResult?.manager_pending_count || 0) > 0
+        &&
+        Number(liveStageResult?.manager_pending_count || 0) > 0
         ? 4
         : 5;
 
@@ -3164,9 +3164,9 @@ export class InternalAuditService {
           : 2,
       status:
         STATUS_LABELS[
-          liveManagerCompliance
-            ? Number(preview.live_next_status || 7)
-            : 2
+        liveManagerCompliance
+          ? Number(preview.live_next_status || 7)
+          : 2
         ],
     };
   }
@@ -9473,7 +9473,7 @@ ORDER BY id DESC;
     try {
       const parsed = this.repairJson(suggestionsStr);
       if (!parsed) return suggestionsStr;
-      
+
       let langKey = 'english';
       if (parsed.marathi) {
         langKey = 'marathi';
@@ -9486,7 +9486,7 @@ ORDER BY id DESC;
           suggestions: Array.isArray(opts) ? opts : []
         });
       }
-      
+
       const langData = parsed[langKey] || {};
       const opts = langData.suggestions || langData.options || [];
       return JSON.stringify({
@@ -9501,7 +9501,7 @@ ORDER BY id DESC;
   private repairJson(jsonStr: string): any {
     if (!jsonStr) return null;
     let cleanStr = jsonStr.trim();
-    
+
     try {
       return JSON.parse(cleanStr);
     } catch (e) {
@@ -9510,7 +9510,7 @@ ORDER BY id DESC;
 
     let hasOpenQuote = false;
     let bracketStack: string[] = [];
-    
+
     let i = 0;
     let repaired = '';
     while (i < cleanStr.length) {
@@ -9535,14 +9535,14 @@ ORDER BY id DESC;
       repaired += char;
       i++;
     }
-    
+
     if (hasOpenQuote) {
       repaired += '"';
     }
     while (bracketStack.length > 0) {
       repaired += bracketStack.pop();
     }
-    
+
     try {
       return JSON.parse(repaired);
     } catch (err) {
@@ -12309,7 +12309,7 @@ ORDER BY id DESC;
             detail.overview.audit_unit_id,
             String(schemeIds)
           ]);
-          
+
           const mapped = npaRes.rows.map(r => standardizeNpa(r.npa_classification)).filter(Boolean);
           npaOptions = Array.from(new Set(mapped)).sort();
         }

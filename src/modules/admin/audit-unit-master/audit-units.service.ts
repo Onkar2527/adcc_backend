@@ -83,7 +83,7 @@ export class AuditUnitsService {
       LEFT JOIN employee_master head ON head.id = au.branch_head_id
       LEFT JOIN employee_master subhead ON subhead.id = au.branch_subhead_id
       WHERE au.deleted_at IS NULL
-      ORDER BY au.id DESC
+      ORDER BY NULLIF(regexp_replace(au.audit_unit_code, '\D', '', 'g'), '')::int ASC, au.audit_unit_code ASC
     `);
   }
 
@@ -137,7 +137,7 @@ export class AuditUnitsService {
         section_type_id
       FROM audit_unit_master
       WHERE deleted_at IS NULL
-      ORDER BY name ASC
+      ORDER BY NULLIF(regexp_replace(audit_unit_code, '\D', '', 'g'), '')::int ASC, audit_unit_code ASC
     `);
 
     return {
@@ -301,7 +301,7 @@ export class AuditUnitsService {
       WHERE is_active = 1
         AND deleted_at IS NULL
         AND COALESCE(frequency, 0) != 0
-      ORDER BY name ASC
+      ORDER BY NULLIF(regexp_replace(audit_unit_code, '\D', '', 'g'), '')::int ASC, audit_unit_code ASC
     `);
   }
 

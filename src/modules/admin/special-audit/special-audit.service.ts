@@ -95,10 +95,10 @@ export class SpecialAuditService {
         ORDER BY id DESC;
       `),
       this.db.query(`
-        SELECT id, CONCAT(name, ' (', audit_unit_code, ')') AS label
+        SELECT id, CONCAT('(', audit_unit_code, ') ', name) AS label
         FROM audit_unit_master
         WHERE deleted_at IS NULL
-        ORDER BY name ASC;
+        ORDER BY NULLIF(regexp_replace(audit_unit_code, '\D', '', 'g'), '')::int ASC, audit_unit_code ASC;
       `),
       this.db.query(`
         SELECT id, CONCAT(name, ' (', emp_code, ')') AS label

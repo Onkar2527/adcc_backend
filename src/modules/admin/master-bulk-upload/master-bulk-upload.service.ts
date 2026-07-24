@@ -4,7 +4,7 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class MasterBulkUploadService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly db: DatabaseService) { }
 
   async upload(masterKey: string, rows: any[]) {
     const key = String(masterKey || '').trim().toLowerCase();
@@ -24,6 +24,8 @@ export class MasterBulkUploadService {
         return this.bulkUploadBroaderAreas(rows);
       case 'frequencies':
         return this.bulkUploadFrequencies(rows);
+      case 'executivesummary':
+        return this.bulkUploadExecutiveSummary(rows);
       default:
         throw new BadRequestException(`Bulk upload is not configured for master: ${masterKey}`);
     }
@@ -259,7 +261,7 @@ export class MasterBulkUploadService {
         if (!sectionIds.has(sectionTypeId)) issues.push('Audit section is invalid');
         if (!code) issues.push('Audit unit code is required');
         if (!name) issues.push('Audit unit name is required');
-       
+
         if (branchSubheadId !== null && branchSubheadId === branchHeadId) issues.push('Head and assistant cannot be the same');
         if (![1, 3, 6, 12].includes(frequency)) issues.push('Audit frequency is invalid');
         if (!/^\d{4}-\d{2}-\d{2}$/.test(lastAuditDate)) issues.push('Last audit date must be in YYYY-MM-DD format');
@@ -480,6 +482,132 @@ export class MasterBulkUploadService {
     });
 
     return { successCount: rows.length, errors: [], data: [] };
+  }
+
+  private async bulkUploadExecutiveSummary(rows: any[]) {
+    if (!Array.isArray(rows) || !rows.length) {
+      throw new BadRequestException('At least one row is required.');
+    }
+
+    const unitsRes = await this.db.query(`SELECT id, audit_unit_code FROM audit_unit_master WHERE deleted_at IS NULL`);
+    const schemesRes = await this.db.query(`SELECT id, scheme_code FROM scheme_master WHERE deleted_at IS NULL`);
+    const yearsRes = await this.db.query(`SELECT id FROM year_master WHERE deleted_at IS NULL`);
+
+    const unitMap = new Map<string, number>(
+      unitsRes.rows.map((u: any) => [String(u.audit_unit_code).trim().toLowerCase(), Number(u.id)])
+    );
+    const schemeMap = new Map<string, number>(
+      schemesRes.rows.map((s: any) => [String(s.scheme_code).trim().toLowerCase(), Number(s.id)])
+    );
+    const yearSet = new Set<number>(
+      yearsRes.rows.map((y: any) => Number(y.id))
+    );
+
+    const errors: string[] = [];
+    const consolidatedMap = new Map<string, any>();
+
+    rows.forEach((row, index) => {
+      const rowNumber = index + 1;
+      const issues: string[] = [];
+
+      const yearId = Number(row?.year_id || 0);
+      const auditUnitCodeRaw = String(row?.audit_unit_code || '').trim();
+      const glCodeRaw = String(row?.gl_code || '').trim();
+      const marchPositionRaw = String(row?.march_position || '').trim();
+
+      if (!yearId) {
+        issues.push('Year is required');
+      } else if (!yearSet.has(yearId)) {
+        issues.push(`Year ID '${yearId}' is invalid`);
+      }
+
+      let unitId: number | undefined;
+      if (!auditUnitCodeRaw) {
+        issues.push('Audit Unit Code is required');
+      } else {
+        unitId = unitMap.get(auditUnitCodeRaw.toLowerCase());
+        if (unitId === undefined) {
+          issues.push(`Audit Unit Code '${auditUnitCodeRaw}' not found in master`);
+        }
+      }
+
+      let glTypeId: number | undefined;
+      if (!glCodeRaw) {
+        issues.push('GL Code is required');
+      } else {
+        glTypeId = schemeMap.get(glCodeRaw.toLowerCase());
+        if (glTypeId === undefined) {
+          issues.push(`GL Code '${glCodeRaw}' not found in master`);
+        }
+      }
+
+      if (marchPositionRaw === '') {
+        issues.push('March Position is required');
+      } else if (isNaN(Number(marchPositionRaw))) {
+        issues.push('March Position must be a numeric value');
+      }
+
+      if (issues.length) {
+        errors.push(`Row ${rowNumber}: ${issues.join('; ')}`);
+        return;
+      }
+
+      const key = `${yearId}-${unitId}-${glTypeId}`;
+      if (consolidatedMap.has(key)) {
+        const existing = consolidatedMap.get(key);
+        existing.march_position = Number(existing.march_position) + Number(marchPositionRaw);
+      } else {
+        consolidatedMap.set(key, {
+          year_id: yearId,
+          audit_unit_id: unitId,
+          gl_type_id: glTypeId,
+          march_position: Number(marchPositionRaw),
+          admin_id: Number(row.admin_id || 1)
+        });
+      }
+    });
+
+    if (errors.length) {
+      throw new BadRequestException({ message: 'Bulk Executive Summary validation failed.', errors });
+    }
+
+    const finalValidRows = Array.from(consolidatedMap.values());
+
+    return this.db.transaction(async (client) => {
+      const data: any[] = [];
+      for (const row of finalValidRows) {
+        const checkRes = await client.query(
+          `SELECT id FROM exe_summary 
+           WHERE year_id = $1 AND audit_unit_id = $2 AND gl_type_id = $3 AND deleted_at IS NULL`,
+          [row.year_id, row.audit_unit_id, row.gl_type_id]
+        );
+
+        if (checkRes.rows.length) {
+          const existingId = checkRes.rows[0].id;
+          const updateRes = await client.query(
+            `UPDATE exe_summary 
+             SET march_position = $1, updated_at = CURRENT_TIMESTAMP 
+             WHERE id = $2
+             RETURNING *`,
+            [row.march_position, existingId]
+          );
+          data.push(updateRes.rows[0]);
+        } else {
+          const insertRes = await client.query(
+            `INSERT INTO exe_summary (
+              year_id, audit_unit_id, gl_type_id, march_position,
+              m_4, m_5, m_6, m_7, m_8, m_9, m_10, m_11, m_12, m_1, m_2, m_3,
+              admin_id, created_at, updated_at
+            )
+            VALUES ($1, $2, $3, $4, '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING *`,
+            [row.year_id, row.audit_unit_id, row.gl_type_id, row.march_position, row.admin_id]
+          );
+          data.push(insertRes.rows[0]);
+        }
+      }
+      return { successCount: finalValidRows.length, errors: [], data };
+    });
   }
 
   private async bulkSimpleInsert(config: {

@@ -1071,6 +1071,7 @@ export class DepositAccountsService {
                 branch_id,
                 scheme_id,
                 account_no,
+                ucic,
                 account_opening_date
             FROM dump_deposits
             WHERE deleted_at IS NULL
@@ -1087,6 +1088,7 @@ export class DepositAccountsService {
                             Number(x.branch_id || 0),
                             Number(x.scheme_id || 0),
                             String(x.account_no || '').trim(),
+                            String(x.ucic || '').trim().toUpperCase(),
                             this.formatCsvDate(x.account_opening_date),
                         ].join('|'),
                 ),
@@ -1333,11 +1335,16 @@ export class DepositAccountsService {
                     String(
                         row.account_no,
                     ).trim();
+                const ucic =
+                    String(
+                        row.ucic,
+                    ).trim().toUpperCase();
                 const accountKey =
                     [
                         Number(branchId),
                         Number(schemeId),
                         accountNo,
+                        ucic,
                         this.formatCsvDate(row.account_opening_date),
                     ].join('|');
 
