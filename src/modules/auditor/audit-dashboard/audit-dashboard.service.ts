@@ -1176,12 +1176,18 @@ LIMIT 1;
                     `
 SELECT 
   sm.scheme_code,
-  SUM(CASE WHEN dd.account_opening_date BETWEEN $2 AND $3 THEN COALESCE(dd.principal_amount::numeric, 0) ELSE 0 END) AS total_balance
-FROM dump_deposits dd
-LEFT JOIN scheme_master sm ON sm.id = dd.scheme_id
-WHERE dd.branch_id = $1 
-  AND dd.deleted_at IS NULL
-GROUP BY sm.scheme_code;
+  COALESCE(dd_agg.total_balance, 0) AS total_balance
+FROM scheme_master sm
+INNER JOIN (
+    SELECT 
+        scheme_id,
+        SUM(CASE WHEN account_opening_date BETWEEN $2 AND $3 THEN COALESCE(principal_amount::numeric, 0) ELSE 0 END) AS total_balance
+    FROM dump_deposits
+    WHERE branch_id = $1 
+      AND deleted_at IS NULL
+    GROUP BY scheme_id
+) dd_agg ON dd_agg.scheme_id = sm.id
+WHERE sm.deleted_at IS NULL;
                     `,
                     [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
                 ),
@@ -1190,13 +1196,20 @@ GROUP BY sm.scheme_code;
                     `
 SELECT 
   sm.scheme_code,
-  da.npa_status,
-  SUM(CASE WHEN da.account_opening_date BETWEEN $2 AND $3 THEN COALESCE(da.sanction_amount::numeric, 0) ELSE 0 END) AS total_balance
-FROM dump_advances da
-LEFT JOIN scheme_master sm ON sm.id = da.scheme_id
-WHERE da.branch_id = $1 
-  AND da.deleted_at IS NULL
-GROUP BY sm.scheme_code, da.npa_status;
+  da_agg.npa_status,
+  COALESCE(da_agg.total_balance, 0) AS total_balance
+FROM scheme_master sm
+INNER JOIN (
+    SELECT 
+        scheme_id,
+        npa_status,
+        SUM(CASE WHEN account_opening_date BETWEEN $2 AND $3 THEN COALESCE(sanction_amount::numeric, 0) ELSE 0 END) AS total_balance
+    FROM dump_advances
+    WHERE branch_id = $1 
+      AND deleted_at IS NULL
+    GROUP BY scheme_id, npa_status
+) da_agg ON da_agg.scheme_id = sm.id
+WHERE sm.deleted_at IS NULL;
                     `,
                     [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
                 ),
@@ -1205,12 +1218,18 @@ GROUP BY sm.scheme_code, da.npa_status;
                     `
 SELECT 
   sm.scheme_code,
-  COUNT(CASE WHEN dd.account_opening_date BETWEEN $2 AND $3 THEN dd.account_no END) AS total_accounts
-FROM dump_deposits dd
-LEFT JOIN scheme_master sm ON sm.id = dd.scheme_id
-WHERE dd.branch_id = $1 
-  AND dd.deleted_at IS NULL
-GROUP BY sm.scheme_code;
+  COALESCE(dd_agg.total_accounts, 0) AS total_accounts
+FROM scheme_master sm
+INNER JOIN (
+    SELECT 
+        scheme_id,
+        COUNT(CASE WHEN account_opening_date BETWEEN $2 AND $3 THEN account_no END) AS total_accounts
+    FROM dump_deposits
+    WHERE branch_id = $1 
+      AND deleted_at IS NULL
+    GROUP BY scheme_id
+) dd_agg ON dd_agg.scheme_id = sm.id
+WHERE sm.deleted_at IS NULL;
                     `,
                     [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
                 ),
@@ -1219,13 +1238,20 @@ GROUP BY sm.scheme_code;
                     `
 SELECT 
   sm.scheme_code,
-  da.npa_status,
-  COUNT(CASE WHEN da.account_opening_date BETWEEN $2 AND $3 THEN da.account_no END) AS total_accounts
-FROM dump_advances da
-LEFT JOIN scheme_master sm ON sm.id = da.scheme_id
-WHERE da.branch_id = $1 
-  AND da.deleted_at IS NULL
-GROUP BY sm.scheme_code, da.npa_status;
+  da_agg.npa_status,
+  COALESCE(da_agg.total_accounts, 0) AS total_accounts
+FROM scheme_master sm
+INNER JOIN (
+    SELECT 
+        scheme_id,
+        npa_status,
+        COUNT(CASE WHEN account_opening_date BETWEEN $2 AND $3 THEN account_no END) AS total_accounts
+    FROM dump_advances
+    WHERE branch_id = $1 
+      AND deleted_at IS NULL
+    GROUP BY scheme_id, npa_status
+) da_agg ON da_agg.scheme_id = sm.id
+WHERE sm.deleted_at IS NULL;
                     `,
                     [data.audit_unit_id, data.assesment_period_from, data.assesment_period_to]
                 )
@@ -2481,14 +2507,20 @@ FROM (
         sm.name AS scheme_name,
         CASE WHEN LOWER(cm.name) LIKE '%saving%' OR LOWER(cm.name) LIKE '%casa%' OR sm.category_id IN (63, 9129) THEN 1 ELSE 2 END AS category_id,
         es.march_position,
-        COUNT(CASE WHEN dd.account_opening_date BETWEEN $4 AND $5 THEN dd.account_no END) AS total_accounts,
-        SUM(CASE WHEN dd.account_opening_date BETWEEN $4 AND $5 THEN COALESCE(dd.principal_amount::numeric, 0) ELSE 0 END) AS total_amount
+        COALESCE(dd_agg.total_accounts, 0) AS total_accounts,
+        COALESCE(dd_agg.total_amount, 0) AS total_amount
     FROM scheme_master sm
     LEFT JOIN category_master cm ON cm.id = sm.category_id
-    LEFT JOIN dump_deposits dd
-        ON dd.scheme_id = sm.id
-        AND dd.branch_id = $1
-        AND dd.deleted_at IS NULL
+    LEFT JOIN (
+        SELECT 
+            scheme_id,
+            COUNT(CASE WHEN account_opening_date BETWEEN $4 AND $5 THEN account_no END) AS total_accounts,
+            SUM(CASE WHEN account_opening_date BETWEEN $4 AND $5 THEN COALESCE(principal_amount::numeric, 0) ELSE 0 END) AS total_amount
+        FROM dump_deposits
+        WHERE branch_id = $1
+          AND deleted_at IS NULL
+        GROUP BY scheme_id
+    ) dd_agg ON dd_agg.scheme_id = sm.id
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
         AND es.year_id = $2
@@ -2496,13 +2528,6 @@ FROM (
     WHERE
         sm.scheme_type_id = 1
         AND sm.deleted_at IS NULL
-    GROUP BY
-        sm.id,
-        sm.scheme_code,
-        sm.name,
-        sm.category_id,
-        cm.name,
-        es.march_position
 
     UNION ALL
 
@@ -2520,14 +2545,20 @@ FROM (
             ELSE 6
         END AS category_id,
         es.march_position,
-        COUNT(CASE WHEN da.account_opening_date BETWEEN $4 AND $5 THEN da.account_no END) AS total_accounts,
-        SUM(CASE WHEN da.account_opening_date BETWEEN $4 AND $5 THEN COALESCE(da.sanction_amount::numeric, 0) ELSE 0 END) AS total_amount
+        COALESCE(da_agg.total_accounts, 0) AS total_accounts,
+        COALESCE(da_agg.total_amount, 0) AS total_amount
     FROM scheme_master sm
     LEFT JOIN category_master cm ON cm.id = sm.category_id
-    LEFT JOIN dump_advances da
-        ON da.scheme_id = sm.id
-        AND da.branch_id = $1
-        AND da.deleted_at IS NULL
+    LEFT JOIN (
+        SELECT 
+            scheme_id,
+            COUNT(CASE WHEN account_opening_date BETWEEN $4 AND $5 THEN account_no END) AS total_accounts,
+            SUM(CASE WHEN account_opening_date BETWEEN $4 AND $5 THEN COALESCE(sanction_amount::numeric, 0) ELSE 0 END) AS total_amount
+        FROM dump_advances
+        WHERE branch_id = $1
+          AND deleted_at IS NULL
+        GROUP BY scheme_id
+    ) da_agg ON da_agg.scheme_id = sm.id
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
         AND es.year_id = $2
@@ -2535,13 +2566,6 @@ FROM (
     WHERE
         sm.scheme_type_id = 2
         AND sm.deleted_at IS NULL
-    GROUP BY
-        sm.id,
-        sm.scheme_code,
-        sm.name,
-        sm.category_id,
-        cm.name,
-        es.march_position
 
     UNION ALL
     
