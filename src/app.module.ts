@@ -39,6 +39,7 @@ import { MasterBulkUploadModule } from './modules/admin/master-bulk-upload/maste
 import { AuditTypeModule } from './modules/admin/audit-type-master/audit-type.module';
 import { IncidentManagementModule } from './modules/incident-management/incident-management.module';
 import { TranslationModule } from './modules/translation/translation.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 
 @Module({
@@ -81,7 +82,8 @@ import { TranslationModule } from './modules/translation/translation.module';
     AuditLogsModule,
     MasterBulkUploadModule,
     AuditTypeModule,
-    IncidentManagementModule
+    IncidentManagementModule,
+    NotificationsModule
   ],
   controllers: [AppController],
   providers: [AppService],

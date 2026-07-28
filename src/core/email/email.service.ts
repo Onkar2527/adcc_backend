@@ -154,6 +154,8 @@ export class EmailService {
         aam.assesment_period_to,
         aam.audit_start_date,
         aam.audit_due_date,
+        aam.audit_head_id AS auditor_id,
+        aam.branch_head_id AS manager_id,
         aum.name AS branch_name,
         aum.audit_unit_code,
         ym.year AS financial_year,
@@ -175,7 +177,7 @@ export class EmailService {
     }
 
     const reviewersRes = await this.db.query(`
-      SELECT email, name FROM employee_master
+      SELECT id, email, name FROM employee_master
       WHERE user_type_id = 4
         AND deleted_at IS NULL
         AND EXISTS (
@@ -186,15 +188,19 @@ export class EmailService {
 
     const reviewerEmails = reviewersRes.rows.map((r: any) => r.email).filter(Boolean);
     const reviewerNames = reviewersRes.rows.map((r: any) => r.name).join(', ') || 'Reviewer';
+    const reviewerIds = reviewersRes.rows.map((r: any) => Number(r.id)).filter(Boolean);
 
     return {
       assessment,
       managerEmail: assessment.manager_email,
       managerName: assessment.manager_name || 'Branch Manager',
+      managerId: Number(assessment.manager_id || 0),
       auditorEmail: assessment.auditor_email,
       auditorName: assessment.auditor_name || 'Auditor',
+      auditorId: Number(assessment.auditor_id || 0),
       reviewerEmails,
       reviewerNames,
+      reviewerIds,
       period: this.formatPeriod(assessment.assesment_period_from, assessment.assesment_period_to),
       dueDate: this.formatDate(assessment.audit_due_date),
       startDate: this.formatDate(assessment.audit_start_date),
@@ -213,6 +219,38 @@ export class EmailService {
     } catch (err) {
       this.logger.error(`Error fetching top level emails: ${err.message}`);
       return [];
+    }
+  }
+
+  private async getTopLevelUserIds(): Promise<number[]> {
+    try {
+      const res = await this.db.query(`
+        SELECT id FROM employee_master
+        WHERE user_type_id = 5
+          AND deleted_at IS NULL
+      `);
+      return res.rows.map((r: any) => Number(r.id)).filter(Boolean);
+    } catch (err) {
+      this.logger.error(`Error fetching top level user IDs: ${err.message}`);
+      return [];
+    }
+  }
+
+  private async createInternalNotification(userIds: number[], title: string, message: string) {
+    if (!userIds || !userIds.length) return;
+    const uniqueUserIds = Array.from(new Set(userIds)).filter(Boolean);
+    for (const userId of uniqueUserIds) {
+      try {
+        await this.db.query(
+          `
+          INSERT INTO user_notifications (user_id, title, message, is_read, created_at)
+          VALUES ($1, $2, $3, FALSE, CURRENT_TIMESTAMP);
+          `,
+          [userId, title.trim(), message.trim()],
+        );
+      } catch (err) {
+        this.logger.error(`Failed to create internal notification for user ${userId}: ${err.message}`);
+      }
     }
   }
 
@@ -270,6 +308,11 @@ export class EmailService {
 
       const recipients = [managerEmail, ...reviewerEmails].filter(Boolean);
       await this.sendHtmlEmail(recipients, subject, this.buildLayout(subject, content));
+
+      // Internal Notification
+      const internalRecipients = [data.managerId, ...data.reviewerIds].filter(Boolean);
+      const notificationMsg = `A new audit assessment has been initiated for ${assessment.branch_name} (${assessment.audit_unit_code}) for the period ${period}. Due date is ${dueDate}.`;
+      await this.createInternalNotification(internalRecipients, subject, notificationMsg);
     } catch (err) {
       this.logger.error(`Error in sendAuditStartedEmail: ${err.message}`);
     }
@@ -348,6 +391,19 @@ export class EmailService {
         <p style="margin-top: 30px;">Best regards,<br><strong>AuditPro Team</strong></p>`;
 
       await this.sendHtmlEmail(recipients, subject, this.buildLayout(subject, content));
+
+      // Internal Notification
+      const internalRecipients = isSubmittingToReviewer 
+        ? data.reviewerIds 
+        : (isLiveFlow ? [data.managerId].filter(Boolean) : [data.managerId, ...data.reviewerIds].filter(Boolean));
+      
+      const notificationMsg = isSubmittingToReviewer
+        ? `The auditor has completed the live compliance verification for ${assessment.branch_name}. The assessment has transitioned to the Review Stage.`
+        : (isLiveFlow 
+            ? `The auditor has completed the audit assessment phase for ${assessment.branch_name}. The assessment has transitioned to the Manager Compliance Stage.`
+            : `The auditor has completed the audit assessment phase for ${assessment.branch_name}. The assessment has transitioned to the Review Stage.`);
+            
+      await this.createInternalNotification(internalRecipients, subject, notificationMsg);
     } catch (err) {
       this.logger.error(`Error in sendAuditSubmittedEmail: ${err.message}`);
     }
@@ -450,6 +506,23 @@ export class EmailService {
       }
 
       await this.sendHtmlEmail(recipients, subject, html);
+
+      // Internal Notification
+      let internalRecipients: number[] = [];
+      let notificationMsg = '';
+      if (nextStatus === 3) {
+        const rejectedCount = await this.getRejectedCount(assessmentId);
+        internalRecipients = [data.auditorId, ...data.reviewerIds].filter(Boolean);
+        notificationMsg = `The reviewer has evaluated the audit assessment for ${assessment.branch_name} and requested a Re-Audit / Re-Assessment on certain observations. Rejected observations: ${rejectedCount}.`;
+      } else if (nextStatus === 4) {
+        internalRecipients = [data.managerId, ...data.reviewerIds].filter(Boolean);
+        notificationMsg = `The audit review for ${assessment.branch_name} is complete. You are requested to Start Compliance on the accepted audit observations. Due date is ${dueDate}.`;
+      } else if (nextStatus === 7) {
+        const topLevelUserIds = await this.getTopLevelUserIds();
+        internalRecipients = [data.managerId, data.auditorId, ...data.reviewerIds, ...topLevelUserIds].filter(Boolean);
+        notificationMsg = `The audit and compliance verification process for ${assessment.branch_name} has been Completed Successfully.`;
+      }
+      await this.createInternalNotification(internalRecipients, subject, notificationMsg);
     } catch (err) {
       this.logger.error(`Error in sendReviewCompletedEmail: ${err.message}`);
     }
@@ -503,6 +576,17 @@ export class EmailService {
         <p style="margin-top: 30px;">Best regards,<br><strong>AuditPro Team</strong></p>`;
 
       await this.sendHtmlEmail(recipients, subject, this.buildLayout(subject, content));
+
+      // Internal Notification
+      const internalRecipients = isLiveFlowSubmitToAuditor 
+        ? [data.auditorId].filter(Boolean)
+        : [data.managerId, ...data.reviewerIds].filter(Boolean);
+
+      const notificationMsg = isLiveFlowSubmitToAuditor
+        ? `The branch compliance submission for ${assessment.branch_name} is complete and has been sent for your verification.`
+        : `The branch compliance submission for ${assessment.branch_name} is complete and has been sent for Review & Verification.`;
+
+      await this.createInternalNotification(internalRecipients, subject, notificationMsg);
     } catch (err) {
       this.logger.error(`Error in sendComplianceSubmittedEmail: ${err.message}`);
     }
@@ -579,6 +663,20 @@ export class EmailService {
       }
 
       await this.sendHtmlEmail(recipients, subject, html);
+
+      // Internal Notification
+      let internalRecipients: number[] = [];
+      let notificationMsg = '';
+      if (nextStatus === 6) {
+        const rejectedCount = await this.getRejectedCount(assessmentId);
+        internalRecipients = [data.managerId, ...data.reviewerIds].filter(Boolean);
+        notificationMsg = `The reviewer has evaluated the compliance submission for ${assessment.branch_name} and requested Re-Compliance for some observations. Rejected count: ${rejectedCount}.`;
+      } else if (nextStatus === 7) {
+        const topLevelUserIds = await this.getTopLevelUserIds();
+        internalRecipients = [data.managerId, data.auditorId, ...data.reviewerIds, ...topLevelUserIds].filter(Boolean);
+        notificationMsg = `The audit and compliance verification process for ${assessment.branch_name} has been Completed Successfully.`;
+      }
+      await this.createInternalNotification(internalRecipients, subject, notificationMsg);
     } catch (err) {
       this.logger.error(`Error in sendComplianceReviewCompletedEmail: ${err.message}`);
     }
