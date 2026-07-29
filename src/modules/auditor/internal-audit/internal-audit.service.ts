@@ -2533,6 +2533,7 @@ export class InternalAuditService {
               AND qm.set_id = qsm.id
               AND qm.is_active = 1
               AND qm.deleted_at IS NULL
+              AND qm.option_id != 3
               AND (
                   $4 = ''
                   OR qm.id::text = ANY(string_to_array($4, ','))
@@ -4031,6 +4032,7 @@ export class InternalAuditService {
             ||
             answer?.is_compliance === 1
           )
+          && Number(question?.option_id) !== 3
             ? 1
             : 0,
         audit_compulsary_ev_upload:
