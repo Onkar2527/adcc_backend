@@ -983,6 +983,30 @@ LIMIT 1;
             return result.rows.length > 0;
         }
 
+        if (Number(emp.user_type_id) === 3) {
+            const branchCheckQuery = `
+                SELECT 1
+                FROM audit_unit_master au
+                WHERE au.id = $1
+                  AND au.deleted_at IS NULL
+                  AND (
+                      au.branch_head_id = $2
+                      OR au.branch_subhead_id = $2
+                      OR $2::text = ANY(
+                          regexp_split_to_array(
+                              COALESCE(au.multi_compliance_ids, ''),
+                              '\\s*,\\s*'
+                          )
+                      )
+                  )
+                LIMIT 1;
+            `;
+            const branchCheckResult = await this.db.query(branchCheckQuery, [auditUnitId, employeeId]);
+            if (branchCheckResult.rows.length > 0) {
+                return true;
+            }
+        }
+
         const result =
             await this.db.query(
                 `

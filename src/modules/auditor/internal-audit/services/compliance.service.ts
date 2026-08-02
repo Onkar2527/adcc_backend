@@ -59,7 +59,6 @@ export class ComplianceService {
               'Live Compliance' AS compliance_stage,
               COUNT(DISTINCT ad.id) FILTER (
                   WHERE ad.is_compliance = 1
-                      AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
                       AND (
                           COALESCE(ad.compliance_status_id, 0) IN (
                               3,
@@ -74,7 +73,6 @@ export class ComplianceService {
               )::int AS compliance_points,
               COUNT(DISTINCT ad.id) FILTER (
                   WHERE ad.is_compliance = 1
-                      AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
                       AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4)
                       AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
               )::int AS responded_points,
@@ -118,7 +116,6 @@ export class ComplianceService {
               ym.year
           HAVING COUNT(DISTINCT ad.id) FILTER (
               WHERE ad.is_compliance = 1
-                  AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
                   AND (
                       COALESCE(ad.compliance_status_id, 0) IN (
                           3,
@@ -172,7 +169,6 @@ export class ComplianceService {
                 COUNT(DISTINCT ad.id) FILTER (
                     WHERE ad.is_compliance = 1
                         AND ad.audit_status_id = 2
-                        AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
                         AND (
                             aam.audit_status_id = 4
                             OR ad.compliance_status_id IN (3, 7, 8)
@@ -183,7 +179,6 @@ export class ComplianceService {
                     WHERE ad.is_compliance = 1
                         AND ad.audit_status_id = 2
                         AND aa.audit_status_id = 2
-                        AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
                         AND (
                             aam.audit_status_id = 4
                             OR aa.compliance_status_id IN (3, 7, 8)
@@ -194,7 +189,6 @@ export class ComplianceService {
                 COUNT(DISTINCT ad.id) FILTER (
                     WHERE ad.is_compliance = 1
                         AND ad.audit_status_id = 2
-                        AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
                         AND (
                             aam.audit_status_id = 4
                             OR ad.compliance_status_id IN (3, 7, 8)
@@ -210,7 +204,6 @@ export class ComplianceService {
                     WHERE ad.is_compliance = 1
                         AND ad.audit_status_id = 2
                         AND aa.audit_status_id = 2
-                        AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
                         AND (
                             aam.audit_status_id = 4
                             OR aa.compliance_status_id IN (3, 7, 8)
@@ -267,7 +260,6 @@ export class ComplianceService {
             COUNT(DISTINCT ad.id) FILTER (
                 WHERE ad.is_compliance = 1
                     AND ad.audit_status_id = 2
-                    AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
                     AND (
                         aam.audit_status_id = 4
                         OR ad.compliance_status_id IN (3, 7, 8)
@@ -278,7 +270,6 @@ export class ComplianceService {
                 WHERE ad.is_compliance = 1
                     AND ad.audit_status_id = 2
                     AND aa.audit_status_id = 2
-                    AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
                     AND (
                         aam.audit_status_id = 4
                         OR aa.compliance_status_id IN (3, 7, 8)
@@ -461,7 +452,6 @@ export class ComplianceService {
         WHERE ad.assesment_id = $1
             AND ad.is_compliance = 1
             AND ad.deleted_at IS NULL
-            AND NULLIF(BTRIM(COALESCE(ad.audit_comment, '')), '') IS NOT NULL
             AND (
                 (
                     $3::boolean = true
