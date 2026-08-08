@@ -11101,12 +11101,14 @@ export class ReportsService {
           `
         SELECT
             scheme_type,
+            scheme_id,
             scheme_code,
             scheme_name,
             category_id
         FROM (
             SELECT
                 'DEPOSITS' AS scheme_type,
+                sm.id AS scheme_id,
                 sm.scheme_code,
                 sm.name AS scheme_name,
                 CASE WHEN sm.category_id = 63 THEN 1 ELSE 2 END AS category_id
@@ -11119,12 +11121,14 @@ export class ReportsService {
                 dd.branch_id = aam.audit_unit_id
                 AND dd.deleted_at IS NULL
             GROUP BY
+                sm.id,
                 sm.scheme_code,
                 sm.name,
                 sm.category_id
             UNION ALL
             SELECT
                 'ADVANCES' AS scheme_type,
+                sm.id AS scheme_id,
                 sm.scheme_code,
                 sm.name AS scheme_name,
                 CASE WHEN sm.category_id = 44 THEN 3 WHEN sm.category_id = 52 THEN 4 WHEN sm.category_id IN (58, 59) THEN 5 WHEN sm.category_id IN (51, 60) THEN 7 ELSE 6 END AS category_id
@@ -11137,12 +11141,14 @@ export class ReportsService {
                 da.branch_id = aam.audit_unit_id
                 AND da.deleted_at IS NULL
             GROUP BY
+                sm.id,
                 sm.scheme_code,
                 sm.name,
                 sm.category_id
             UNION ALL
             SELECT
                 CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+                sm.id AS scheme_id,
                 sm.scheme_code,
                 sm.name AS scheme_name,
                 CASE 
@@ -11158,6 +11164,7 @@ export class ReportsService {
             UNION ALL
             SELECT
                 CASE WHEN cm.linked_table_id = 1 THEN 'DEPOSITS' ELSE 'ADVANCES' END AS scheme_type,
+                sm.id AS scheme_id,
                 sm.scheme_code,
                 sm.name AS scheme_name,
                 CASE 
@@ -11173,6 +11180,7 @@ export class ReportsService {
         ) x
         GROUP BY
             scheme_type,
+            scheme_id,
             scheme_code,
             scheme_name,
             category_id
