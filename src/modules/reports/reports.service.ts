@@ -11248,7 +11248,7 @@ export class ReportsService {
           audit_commpliance: row.audit_commpliance,
         })),
         march_positions: marchPositions.rows.map((row: any) => ({
-          gl_type_id: Number(row.gl_type_id),
+          gl_type_id: String(row.gl_type_id),
           march_position: Number(row.march_position || 0),
         })),
       },

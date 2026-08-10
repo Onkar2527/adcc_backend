@@ -531,13 +531,15 @@ export class MasterBulkUploadService {
         }
       }
 
-      let glTypeId: number | undefined;
+      let finalGlCode: string | undefined;
       if (!glCodeRaw) {
         issues.push('GL Code is required');
       } else {
-        glTypeId = schemeMap.get(glCodeRaw.toLowerCase());
-        if (glTypeId === undefined) {
+        const baseSchemeCode = glCodeRaw.replace(/_NPA$/i, '').trim().toLowerCase();
+        if (!schemeMap.has(baseSchemeCode)) {
           issues.push(`GL Code '${glCodeRaw}' not found in master`);
+        } else {
+          finalGlCode = glCodeRaw;
         }
       }
 
@@ -552,7 +554,7 @@ export class MasterBulkUploadService {
         return;
       }
 
-      const key = `${yearId}-${unitId}-${glTypeId}`;
+      const key = `${yearId}-${unitId}-${finalGlCode}`;
       if (consolidatedMap.has(key)) {
         const existing = consolidatedMap.get(key);
         existing.march_position = Number(existing.march_position) + Number(marchPositionRaw);
@@ -560,7 +562,7 @@ export class MasterBulkUploadService {
         consolidatedMap.set(key, {
           year_id: yearId,
           audit_unit_id: unitId,
-          gl_type_id: glTypeId,
+          gl_type_id: finalGlCode,
           march_position: Number(marchPositionRaw),
           admin_id: Number(row.admin_id || 1)
         });
