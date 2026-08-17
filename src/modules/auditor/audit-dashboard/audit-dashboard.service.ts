@@ -2548,7 +2548,7 @@ FROM (
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
         AND es.year_id = $2
-        AND es.gl_type_id = sm.scheme_code
+        AND es.gl_type_id::text = sm.scheme_code
     WHERE
         sm.scheme_type_id = 1
         AND sm.deleted_at IS NULL
@@ -2586,7 +2586,7 @@ FROM (
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
         AND es.year_id = $2
-        AND es.gl_type_id = sm.scheme_code
+        AND es.gl_type_id::text = sm.scheme_code
     WHERE
         sm.scheme_type_id = 2
         AND sm.deleted_at IS NULL
@@ -2620,7 +2620,7 @@ FROM (
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
         AND es.year_id = $2
-        AND es.gl_type_id = sm.scheme_code
+        AND es.gl_type_id::text = sm.scheme_code
     WHERE bp.assesment_id = $3 AND bp.deleted_at IS NULL
     
     UNION ALL
@@ -2652,7 +2652,7 @@ FROM (
     LEFT JOIN exe_summary es
         ON es.audit_unit_id = $1
         AND es.year_id = $2
-        AND es.gl_type_id = sm.scheme_code
+        AND es.gl_type_id::text = sm.scheme_code
     WHERE fa.assesment_id = $3 AND fa.deleted_at IS NULL
 ) x
 GROUP BY

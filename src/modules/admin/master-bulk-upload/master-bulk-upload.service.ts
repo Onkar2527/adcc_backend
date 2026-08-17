@@ -73,7 +73,6 @@ export class MasterBulkUploadService {
         if (!userTypeId) issues.push('User type is required');
         if (!password) issues.push('Password is required');
         if (existingCodes.has(normalizedCode) || batchCodes.has(normalizedCode)) issues.push('Employee code already exists');
-        if (existingEmails.has(normalizedEmail) || batchEmails.has(normalizedEmail)) issues.push('Email already exists');
         if (userTypeId === 6 && !String(row?.region_name || '').trim()) {
           issues.push('Assigned region is required for division user');
         }

@@ -2175,7 +2175,7 @@ export class ReportsService {
 
     // Status condition
     const statusCondition = removePending
-      ? (isFreeFlow ? 'AND aam.audit_status_id >= 4' : 'AND aam.audit_status_id > 4')
+      ? 'AND aam.audit_status_id >= 4'
       : (isFreeFlow ? 'AND aam.audit_status_id >= 1' : 'AND aam.audit_status_id > 1');
 
     if (searchType === '3' || searchType === '4') {
@@ -2983,7 +2983,7 @@ export class ReportsService {
         FROM audit_assesment_master asm
         INNER JOIN audit_unit_master aum
           ON aum.id = asm.audit_unit_id
-        WHERE ${isFreeFlow ? 'asm.audit_status_id >= 4' : 'asm.audit_status_id > 4'}
+        WHERE asm.audit_status_id >= 4
           AND asm.deleted_at IS NULL
           AND aum.deleted_at IS NULL
         ORDER BY aum.audit_unit_code ASC, asm.assesment_period_from DESC
@@ -4268,7 +4268,7 @@ export class ReportsService {
     } else {
       // searchType 5 or 6 (date range filter)
       const statusCondition = removePending
-        ? (isFreeFlow ? 'AND audit_status_id >= 4' : 'AND audit_status_id > 4')
+        ? 'AND audit_status_id >= 4'
         : (isFreeFlow ? 'AND audit_status_id >= 1' : 'AND audit_status_id > 1');
       const result = await this.db.query(
         `
@@ -4814,7 +4814,7 @@ export class ReportsService {
     }
 
     const statusCondition = removePending
-      ? (isFreeFlow ? 'AND asm.audit_status_id >= 4' : 'AND asm.audit_status_id > 4')
+      ? 'AND asm.audit_status_id >= 4'
       : (isFreeFlow ? 'AND asm.audit_status_id >= 1' : 'AND asm.audit_status_id > 1');
 
     const assessmentsResult = await this.db.query(
@@ -5511,7 +5511,7 @@ export class ReportsService {
     }
 
     const statusCondition = removePending
-      ? (isFreeFlow ? 'AND asm.audit_status_id >= 4' : 'AND asm.audit_status_id > 4')
+      ? 'AND asm.audit_status_id >= 4'
       : (isFreeFlow ? 'AND asm.audit_status_id >= 1' : 'AND asm.audit_status_id > 1');
 
     const assessmentsResult = await this.db.query(
@@ -6419,7 +6419,7 @@ export class ReportsService {
     const unitTypeId = searchType === '2' ? 2 : 1;
 
     const statusCondition = removePending
-      ? (isFreeFlow ? 'AND asm.audit_status_id >= 4' : 'AND asm.audit_status_id > 4')
+      ? 'AND asm.audit_status_id >= 4'
       : (isFreeFlow ? 'AND asm.audit_status_id >= 1' : 'AND asm.audit_status_id > 1');
 
     const assessmentsResult = await this.db.query(
@@ -7484,7 +7484,7 @@ export class ReportsService {
       );
     } else {
       const statusCondition = removePending
-        ? (isFreeFlow ? 'AND audit_status_id >= 4' : 'AND audit_status_id > 4')
+        ? 'AND audit_status_id >= 4'
         : (isFreeFlow ? 'AND audit_status_id >= 1' : 'AND audit_status_id > 1');
 
       assessmentsResult = await this.db.query(
@@ -7956,7 +7956,7 @@ export class ReportsService {
       );
     } else {
       const statusCondition = removePending
-        ? (isFreeFlow ? 'AND audit_status_id >= 4' : 'AND audit_status_id > 4')
+        ? 'AND audit_status_id >= 4'
         : (isFreeFlow ? 'AND audit_status_id >= 1' : 'AND audit_status_id > 1');
 
       assessmentsResult = await this.db.query(
@@ -8957,7 +8957,7 @@ export class ReportsService {
       assessments = result.rows;
     } else {
       const statusCondition = removePending
-        ? (isFreeFlow ? 'AND audit_status_id >= 4' : 'AND audit_status_id > 4')
+        ? 'AND audit_status_id >= 4'
         : (isFreeFlow ? 'AND audit_status_id >= 1' : 'AND audit_status_id > 1');
       const result = await this.db.query(
         `

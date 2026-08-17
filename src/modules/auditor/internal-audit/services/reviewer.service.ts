@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { syncAssessmentScoring } from '../../../../common/helpers/assessment-scoring.helper';
@@ -21,7 +21,7 @@ import {
 export class ReviewerService {
   constructor(
     private readonly svc: InternalAuditService,
-  ) {}
+  ) { }
 
   async getReviewerPending(
     employeeId: number,
@@ -278,7 +278,7 @@ export class ReviewerService {
       !(
         liveManagerCompliance
         &&
-        [1, 3].includes(
+        [1, 3, 4].includes(
           Number(overview.audit_status_id),
         )
       )
@@ -625,7 +625,7 @@ export class ReviewerService {
       );
 
     if (
-      ![1, 3, 5].includes(
+      ![1, 3, 4, 5].includes(
         Number(assessment.audit_status_id),
       )
     ) {
@@ -754,7 +754,7 @@ export class ReviewerService {
       !(
         liveManagerCompliance
         &&
-        [1, 3].includes(
+        [1, 3, 4].includes(
           Number(assessment.audit_status_id),
         )
       )

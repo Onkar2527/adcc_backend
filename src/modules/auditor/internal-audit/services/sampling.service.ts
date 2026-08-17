@@ -166,6 +166,8 @@ export class SamplingService {
         account_opening_date: row.account_opening_date,
         renewal_date: row.renewal_date,
         balance: Number(row.principal_amount || row.sanction_amount || 0),
+        principal_amount: row.principal_amount,
+        sanction_amount: row.sanction_amount,
         npa_classification: row.npa_classification || '',
         kyc: row.kyc || '',
         scheme_name: row.scheme_name,
