@@ -376,6 +376,20 @@ export class AuditorController {
     );
   }
 
+  @Post(':assessmentId/apply-defaults-all')
+  applyDefaultsAll(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Body()
+    body: any,
+  ) {
+    return this.service.applyDefaultsAndSaveAll(
+      assessmentId,
+      Number(body?.employee_id || 0),
+    );
+  }
+
   // ─── Account Sampling ─────────────────────────────────────────────────────
 
   @Get(':assessmentId/category/:categoryId/sampling')

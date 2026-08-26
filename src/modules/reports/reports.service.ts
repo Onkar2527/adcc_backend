@@ -10241,7 +10241,9 @@ export class ReportsService {
       audit_due_date: row.audit_due_date,
       audit_expired: auditExpired,
       compliance_start_date: auditCompleted ? row.compliance_start_date : null,
-      compliance_end_date: auditCompleted ? row.compliance_end_date : null,
+      compliance_end_date: isBlocked
+        ? (auditStatusId === 7 ? row.compliance_end_date : null)
+        : (auditCompleted ? row.compliance_end_date : null),
       compliance_due_date: row.compliance_due_date,
       compliance_status_label: auditCompleted
         ? this.complianceStatusLabel(
@@ -11001,6 +11003,7 @@ export class ReportsService {
         aam.compliance_due_date,
         aam.compliance_end_date,
         aam.audit_status_id,
+        aam.is_limit_blocked,
         ym.year AS financial_year,
         aum.name AS branch_name,
         aum.audit_unit_code AS branch_code,
@@ -11052,6 +11055,12 @@ export class ReportsService {
     }
 
     const assessment = assessmentResult.rows[0];
+
+    if (assessment && Number(assessment.is_limit_blocked || 0) === 1) {
+      if (Number(assessment.audit_status_id) !== 7) {
+        assessment.compliance_end_date = null;
+      }
+    }
 
     const [branchPositions, freshAccounts, marchPositions, schemes] =
       await Promise.all([

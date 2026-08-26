@@ -1238,9 +1238,12 @@ ORDER BY id DESC;
                 compliance_status_id = CASE
                     WHEN compliance_status_id = 7 THEN 8
                     WHEN $7::boolean = true
-                        AND COALESCE(compliance_status_id, 0) IN (
-                            3,
-                            ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                        AND (
+                            COALESCE(compliance_status_id, 0) IN (
+                                3,
+                                ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                            )
+                            OR $6::int = 4
                         )
                         THEN ${LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING}
                     WHEN $7::boolean = true
@@ -1299,9 +1302,12 @@ ORDER BY id DESC;
                 compliance_status_id = CASE
                     WHEN aa.compliance_status_id = 7 THEN 8
                     WHEN $7::boolean = true
-                        AND COALESCE(aa.compliance_status_id, 0) IN (
-                            3,
-                            ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                        AND (
+                            COALESCE(aa.compliance_status_id, 0) IN (
+                                3,
+                                ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                            )
+                            OR $6::int = 4
                         )
                         THEN ${LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING}
                     WHEN $7::boolean = true
@@ -1368,6 +1374,21 @@ ORDER BY id DESC;
     ) {
       throw new NotFoundException(
         'Compliance point not found for this assessment.',
+      );
+    }
+
+    if (
+      liveManagerCompliance
+      && Number(assessment.audit_status_id) === 4
+    ) {
+      await this.svc.db.query(
+        `
+        UPDATE audit_assesment_master
+        SET compliance_end_date = CURRENT_DATE
+        WHERE id = $1
+            AND deleted_at IS NULL;
+        `,
+        [assessmentId]
       );
     }
 

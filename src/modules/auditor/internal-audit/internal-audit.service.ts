@@ -95,9 +95,11 @@ const LIVE_COMPLIANCE_REVIEWER_PENDING_STATUSES = [
 
 const LIVE_COMPLIANCE_REVIEWER_QUEUE_STATUSES = [
   3,
+  4,
   5,
   8,
   9,
+  LIVE_COMPLIANCE_STATUS.AUDITOR_PENDING,
   LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
   LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING,
   LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED,
@@ -531,7 +533,7 @@ export class InternalAuditService {
                 (assessment: any) =>
                   Number(
                     assessment.audit_status_id,
-                  ) !== 7,
+                  ) < 4,
               )
               &&
               (
@@ -698,7 +700,7 @@ export class InternalAuditService {
         Number(
           assessment.audit_status_id,
         )
-        !== 7
+        < 4
       ) {
 
         pendingAssessment = true;
@@ -746,7 +748,7 @@ export class InternalAuditService {
           Number(
             latestAssessment.audit_status_id,
           )
-          !== 7
+          < 4
         ) {
 
           pendingAssessment = true;
@@ -3136,7 +3138,9 @@ export class InternalAuditService {
             SET
                 audit_end_date = CURRENT_DATE,
                 audit_status_id = $4,
-                audit_emp_id = $2
+                audit_emp_id = $2,
+                compliance_start_date = CASE WHEN $4 = 4 THEN CURRENT_DATE ELSE compliance_start_date END,
+                compliance_due_date = CASE WHEN $4 = 4 THEN CURRENT_DATE + INTERVAL '15 days' ELSE compliance_due_date END
             WHERE id = $1
                 AND audit_status_id = $3
                 AND deleted_at IS NULL
@@ -3500,7 +3504,7 @@ export class InternalAuditService {
 
     const subsetPromise = subsetIds.length
       ? this.db.query(
-          `
+        `
           SELECT
               qsm.id AS set_id,
               qsm.name AS set_name,
@@ -3588,15 +3592,15 @@ export class InternalAuditService {
               qhm.id,
               qm.id;
           `,
-          [
-            subsetIds.join(','),
-            overview.header_ids || '',
-            overview.question_ids || '',
-            assessmentId,
-            categoryId,
-            dumpId,
-          ]
-        )
+        [
+          subsetIds.join(','),
+          overview.header_ids || '',
+          overview.question_ids || '',
+          assessmentId,
+          categoryId,
+          dumpId,
+        ]
+      )
       : Promise.resolve(null);
 
     const [_, subsetResult] = await Promise.all([
@@ -3636,7 +3640,7 @@ export class InternalAuditService {
       risk_categories: [],
     };
 
-    const [,,,, riskOpts] = await Promise.all([
+    const [, , , , riskOpts] = await Promise.all([
       this.attachAnnexureRows(sets, assessmentId),
       this.attachEvidenceRows(sets, assessmentId),
       this.attachQuestionAssignments(sets, assessmentId, employeeId),
@@ -4078,7 +4082,7 @@ export class InternalAuditService {
             ||
             answer?.is_compliance === 1
           )
-          && Number(question?.option_id) !== 3
+            && Number(question?.option_id) !== 3
             ? 1
             : 0,
         audit_compulsary_ev_upload:
@@ -10902,5 +10906,259 @@ SELECT (
 
   /** @internal */ assertAccountSelection(detail: any) {
     return this.samplingService.assertAccountSelection(detail);
+  }
+
+  async applyDefaultsAndSaveAll(assessmentId: number, employeeId: number) {
+    console.log(`[DEFAULTS] Started applyDefaultsAndSaveAll. assessmentId=${assessmentId}, employeeId=${employeeId}`);
+    const overview = await this.getOverview(assessmentId, employeeId);
+    if (![1, 3].includes(Number(overview.audit_status_id))) {
+      throw new BadRequestException('Defaults can only be applied during active audit entry.');
+    }
+
+    const menuData = await this.getMenu(assessmentId, employeeId);
+    const categoryIds: number[] = [];
+    for (const menu of menuData.menus) {
+      for (const category of menu.categories || []) {
+        categoryIds.push(Number(category.id));
+      }
+    }
+
+    let appliedCount = 0;
+
+    await this.db.transaction(async (client) => {
+      for (const categoryId of categoryIds) {
+        const category = await client.query(
+          `SELECT cm.id, cm.menu_id, cm.name, cm.linked_table_id, cm.question_set_ids, mm.section_type_id
+           FROM category_master cm
+           LEFT JOIN menu_master mm ON mm.id = cm.menu_id
+           WHERE cm.id = $1 AND cm.is_active = 1 AND cm.deleted_at IS NULL LIMIT 1`,
+          [categoryId]
+        );
+        if (!category.rows.length) continue;
+        const catRow = category.rows[0];
+
+        const dumpIds: number[] = [];
+        if ([1, 2].includes(Number(catRow.linked_table_id))) {
+          const accounts = await this.samplingService.getSampledAccounts(catRow, overview);
+          for (const acc of accounts) {
+            dumpIds.push(Number(acc.id));
+          }
+        } else {
+          dumpIds.push(0);
+        }
+
+        for (const dumpId of dumpIds) {
+          const questionsRes = await client.query(
+            `
+            SELECT
+                qm.id AS question_id,
+                qm.option_id,
+                qm.parameters,
+                qm.suggestions,
+                qhm.id AS header_id,
+                ans.id AS answer_id,
+                ans.answer_given
+            FROM question_set_master qsm
+            INNER JOIN question_header_master qhm
+                ON qhm.question_set_id = qsm.id
+                AND qhm.is_active = 1
+                AND qhm.deleted_at IS NULL
+            INNER JOIN question_master qm
+                ON qm.set_id = qsm.id
+                AND qm.header_id = qhm.id
+                AND qm.is_active = 1
+                AND qm.deleted_at IS NULL
+            LEFT JOIN answers_data ans
+                ON ans.assesment_id = $1
+                AND ans.category_id = $2
+                AND ans.header_id = qhm.id
+                AND ans.question_id = qm.id
+                AND ans.dump_id = $3
+                AND ans.deleted_at IS NULL
+            WHERE qsm.is_active = 1
+                AND qsm.deleted_at IS NULL
+                AND qsm.id::text = ANY(string_to_array(COALESCE($4, ''), ','))
+            ORDER BY qm.id;
+            `,
+            [
+              assessmentId,
+              categoryId,
+              dumpId,
+              catRow.question_set_ids || '',
+            ]
+          );
+
+          const rowsToSave: any[] = [];
+
+          for (const qRow of questionsRes.rows) {
+            if (qRow.answer_id && qRow.answer_given !== null && qRow.answer_given !== '') {
+              continue;
+            }
+
+            if (qRow.option_id === 3) {
+              continue;
+            }
+
+            let parameters: any[] = [];
+            try {
+              parameters = typeof qRow.parameters === 'string' ? JSON.parse(qRow.parameters) : (qRow.parameters || []);
+            } catch {}
+
+            let defaultAnswer: string | null = null;
+            if (!parameters.length) {
+              continue;
+            } else {
+              let defaultOptionIndex = 0;
+              let prevTotRiskControl = 0;
+              let checkYesNo = false;
+              let noRiskStatus = true;
+              const noRiskOptionIndex: number[] = [];
+
+              for (let index = 0; index < parameters.length; index++) {
+                const option = parameters[index];
+                const br = Number(option?.br || 0);
+                const cr = Number(option?.cr || 0);
+                const CRP = br + cr;
+                const rtLower = String(option?.rt || '').trim().toLowerCase();
+
+                if ((rtLower === 'yes' || rtLower === 'no') && [0, 4.4, 8].includes(CRP)) {
+                  checkYesNo = true;
+                  defaultOptionIndex = index;
+                }
+
+                if (!checkYesNo) {
+                  if (![0, 4.4, 8].includes(CRP)) {
+                    noRiskStatus = false;
+                  }
+                  if (prevTotRiskControl < CRP) {
+                    defaultOptionIndex = index;
+                  }
+                  prevTotRiskControl = CRP;
+                  if (rtLower === 'not applicable' && [0, 4.4, 8].includes(CRP)) {
+                    noRiskStatus = false;
+                  }
+                  noRiskOptionIndex.push(CRP);
+                }
+              }
+
+              if (!checkYesNo && noRiskStatus && noRiskOptionIndex.length > 0) {
+                const firstOi = noRiskOptionIndex[0];
+                let checkOi = true;
+                for (const oiVal of noRiskOptionIndex) {
+                  if (oiVal !== firstOi) {
+                    checkOi = false;
+                    break;
+                  }
+                }
+                if (checkOi) {
+                  defaultOptionIndex = noRiskOptionIndex.length - 1;
+                }
+              }
+
+              defaultAnswer = parameters[defaultOptionIndex]?.rt;
+            }
+
+            if (defaultAnswer !== undefined && defaultAnswer !== null) {
+              let auditComment: string | null = null;
+              if (qRow.suggestions) {
+                try {
+                  const suggestionsObj = typeof qRow.suggestions === 'string' ? JSON.parse(qRow.suggestions) : qRow.suggestions;
+                  if (suggestionsObj?.default) {
+                    auditComment = suggestionsObj.default;
+                  } else if (suggestionsObj?.english?.default) {
+                    auditComment = suggestionsObj.english.default;
+                  }
+                } catch {}
+              }
+
+              let isCompliance = 0;
+              const resolvedOption = parameters.find(opt => opt.rt === defaultAnswer);
+              const br = Number(resolvedOption?.br || 0);
+              const cr = Number(resolvedOption?.cr || 0);
+              if ((br + cr) > 0) {
+                isCompliance = 1;
+              }
+
+              rowsToSave.push({
+                section_type_id: catRow.section_type_id || 0,
+                assesment_id: assessmentId,
+                menu_id: catRow.menu_id,
+                category_id: categoryId,
+                header_id: qRow.header_id,
+                question_id: qRow.question_id,
+                dump_id: dumpId,
+                answer_given: defaultAnswer,
+                audit_comment: auditComment,
+                audit_emp_id: employeeId,
+                is_compliance: isCompliance,
+                audit_compulsary_ev_upload: 0,
+                business_risk: br,
+                control_risk: cr,
+                batch_key: overview.batch_key
+              });
+            }
+          }
+
+          for (const row of rowsToSave) {
+            const existing = await client.query(
+              `SELECT id FROM answers_data
+               WHERE assesment_id = $1 AND category_id = $2 AND header_id = $3 AND question_id = $4 AND dump_id = $5 AND deleted_at IS NULL LIMIT 1`,
+              [row.assesment_id, row.category_id, row.header_id, row.question_id, row.dump_id]
+            );
+
+            if (existing.rows.length) {
+              await client.query(
+                `UPDATE answers_data
+                 SET answer_given = $1, audit_comment = $2, audit_emp_id = $3, is_compliance = $4,
+                     business_risk = $5, control_risk = $6, batch_key = $7
+                 WHERE id = $8;`,
+                [
+                  row.answer_given,
+                  row.audit_comment,
+                  row.audit_emp_id,
+                  row.is_compliance,
+                  row.business_risk,
+                  row.control_risk,
+                  row.batch_key,
+                  existing.rows[0].id
+                ]
+              );
+            } else {
+              await client.query(
+                `INSERT INTO answers_data (
+                   section_type_id, assesment_id, menu_id, category_id, header_id, question_id, dump_id,
+                   answer_given, audit_comment, audit_emp_id, is_compliance, audit_compulsary_ev_upload,
+                   business_risk, control_risk, batch_key, created_at
+                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW());`,
+                [
+                  row.section_type_id,
+                  row.assesment_id,
+                  row.menu_id,
+                  row.category_id,
+                  row.header_id,
+                  row.question_id,
+                  row.dump_id,
+                  row.answer_given,
+                  row.audit_comment,
+                  row.audit_emp_id,
+                  row.is_compliance,
+                  row.audit_compulsary_ev_upload,
+                  row.business_risk,
+                  row.control_risk,
+                  row.batch_key
+                ]
+              );
+            }
+            appliedCount++;
+          }
+        }
+      }
+    });
+
+    return {
+      success: true,
+      message: `${appliedCount} default answers applied and saved successfully across all categories.`,
+      applied_count: appliedCount
+    };
   }
 }

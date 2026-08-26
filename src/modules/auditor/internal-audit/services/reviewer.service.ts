@@ -136,14 +136,18 @@ export class ReviewerService {
                     AND ad2.is_compliance = 1
                     AND ad2.deleted_at IS NULL
                     AND (
-                        NULLIF(BTRIM(COALESCE(ad2.audit_commpliance, '')), '') IS NOT NULL
+                        COALESCE(ad2.compliance_status_id, 0) IN (0, 4)
+                        OR NULLIF(BTRIM(COALESCE(ad2.audit_commpliance, '')), '') IS NOT NULL
                         OR EXISTS (
                             SELECT 1
                             FROM answers_data_annexure aa2
                             WHERE aa2.answer_id = ad2.id
                                 AND aa2.assesment_id = ad2.assesment_id
                                 AND aa2.deleted_at IS NULL
-                                AND NULLIF(BTRIM(COALESCE(aa2.audit_commpliance, '')), '') IS NOT NULL
+                                AND (
+                                    COALESCE(aa2.compliance_status_id, 0) IN (0, 4)
+                                    OR NULLIF(BTRIM(COALESCE(aa2.audit_commpliance, '')), '') IS NOT NULL
+                                )
                         )
                     )
             ) AS total_points,
@@ -154,14 +158,18 @@ export class ReviewerService {
                     AND ad2.is_compliance = 1
                     AND ad2.deleted_at IS NULL
                     AND (
-                        NULLIF(BTRIM(COALESCE(ad2.audit_commpliance, '')), '') IS NOT NULL
+                        COALESCE(ad2.compliance_status_id, 0) IN (0, 4)
+                        OR NULLIF(BTRIM(COALESCE(ad2.audit_commpliance, '')), '') IS NOT NULL
                         OR EXISTS (
                             SELECT 1
                             FROM answers_data_annexure aa2
                             WHERE aa2.answer_id = ad2.id
                                 AND aa2.assesment_id = ad2.assesment_id
                                 AND aa2.deleted_at IS NULL
-                                AND NULLIF(BTRIM(COALESCE(ad2.audit_commpliance, '')), '') IS NOT NULL
+                                AND (
+                                    COALESCE(aa2.compliance_status_id, 0) IN (0, 4)
+                                    OR NULLIF(BTRIM(COALESCE(aa2.audit_commpliance, '')), '') IS NOT NULL
+                                )
                         )
                     )
             ) AS compliance_points,
@@ -217,7 +225,10 @@ export class ReviewerService {
                     AND (
                         (
                             COALESCE(ad2.compliance_status_id, 0) IN (${LIVE_COMPLIANCE_REVIEWER_QUEUE_STATUSES.join(', ')})
-                            AND NULLIF(BTRIM(COALESCE(ad2.audit_commpliance, '')), '') IS NOT NULL
+                            AND (
+                                COALESCE(ad2.compliance_status_id, 0) IN (0, 4)
+                                OR NULLIF(BTRIM(COALESCE(ad2.audit_commpliance, '')), '') IS NOT NULL
+                            )
                         )
                         OR EXISTS (
                             SELECT 1
@@ -226,7 +237,10 @@ export class ReviewerService {
                                 AND aa2.assesment_id = ad2.assesment_id
                                 AND aa2.deleted_at IS NULL
                                 AND COALESCE(ad2.compliance_status_id, 0) IN (${LIVE_COMPLIANCE_REVIEWER_QUEUE_STATUSES.join(', ')})
-                                AND NULLIF(BTRIM(COALESCE(aa2.audit_commpliance, '')), '') IS NOT NULL
+                                AND (
+                                    COALESCE(aa2.compliance_status_id, 0) IN (0, 4)
+                                    OR NULLIF(BTRIM(COALESCE(aa2.audit_commpliance, '')), '') IS NOT NULL
+                                )
                         )
                     )
             )
@@ -801,7 +815,7 @@ export class ReviewerService {
                       AND assesment_id = $6
                       AND is_compliance = 1
                       AND (
-                          COALESCE(compliance_status_id, 0) IN ($7, $8)
+                          COALESCE(compliance_status_id, 0) IN ($7, $8, $9)
                           OR EXISTS (
                               SELECT 1
                               FROM answers_data_annexure aa
@@ -823,6 +837,7 @@ export class ReviewerService {
                     assessmentId,
                     LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
                     LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
+                    LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED,
                   ],
                 );
 
@@ -832,7 +847,7 @@ export class ReviewerService {
                   UPDATE answers_data_annexure
                   SET
                       compliance_status_id = CASE
-                          WHEN COALESCE(compliance_status_id, 0) IN ($1, $8, 7, 8)
+                          WHEN COALESCE(compliance_status_id, 0) IN ($1, $8, $9, 7, 8)
                               THEN $2
                           ELSE compliance_status_id
                       END,
@@ -852,6 +867,7 @@ export class ReviewerService {
                     observationId,
                     assessmentId,
                     LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
+                    LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED,
                   ],
                 );
               }
@@ -870,7 +886,7 @@ export class ReviewerService {
                     batch_key = $4
                 WHERE aa.id = $5
                     AND aa.assesment_id = $6
-                    AND COALESCE(aa.compliance_status_id, 0) IN ($7, $8, 7, 8)
+                    AND COALESCE(aa.compliance_status_id, 0) IN ($7, $8, $9, 7, 8)
                     AND aa.deleted_at IS NULL
                 RETURNING aa.id, aa.answer_id;
                 `,
@@ -883,6 +899,7 @@ export class ReviewerService {
                   assessmentId,
                   LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
                   LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
+                  LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED,
                 ],
               );
 
@@ -1166,6 +1183,7 @@ export class ReviewerService {
 
     if (
       Number(assessment.audit_status_id) !== 5
+      && (!liveManagerCompliance || Number(assessment.audit_status_id) !== 4)
     ) {
       throw new BadRequestException(
         'Assessment is not pending for compliance review.',
@@ -1174,7 +1192,7 @@ export class ReviewerService {
 
     if (
       liveManagerCompliance
-      && Number(assessment.audit_status_id) === 5
+      && Number(assessment.audit_status_id) === 4
     ) {
       const pending =
         await this.svc.db.findOne(
@@ -1211,10 +1229,11 @@ export class ReviewerService {
         SET
             audit_status_id = 7,
             audit_end_date = CURRENT_DATE,
+            compliance_end_date = COALESCE(compliance_end_date, CURRENT_DATE),
             compliance_review_emp_id = $2,
             compliance_review_date = CURRENT_DATE
         WHERE id = $1
-            AND audit_status_id = 5
+            AND audit_status_id = 4
             AND deleted_at IS NULL;
         `,
         [
@@ -1222,6 +1241,22 @@ export class ReviewerService {
           employeeId,
         ],
       );
+
+      const existing = await this.svc.db.findOne<{ id: number }>(
+        `SELECT id FROM executive_summary_basic_details WHERE assesment_id = $1;`,
+        [assessmentId]
+      );
+      if (existing) {
+        await this.svc.db.query(
+          `UPDATE executive_summary_basic_details SET report_submitted_date = CURRENT_DATE, updated_at = NOW() WHERE assesment_id = $1;`,
+          [assessmentId]
+        );
+      } else {
+        await this.svc.db.query(
+          `INSERT INTO executive_summary_basic_details (year_id, assesment_id, report_submitted_date, staff_count, manual_challans_per_day, admin_id, created_at) VALUES ($1, $2, CURRENT_DATE, '0', '0', $3, NOW());`,
+          [assessment.year_id, assessmentId, employeeId]
+        );
+      }
 
       try {
         await syncAssessmentScoring(
@@ -1499,6 +1534,22 @@ export class ReviewerService {
             },
             client,
           );
+
+          const existing = await client.query(
+            `SELECT id FROM executive_summary_basic_details WHERE assesment_id = $1;`,
+            [assessmentId]
+          );
+          if (existing.rows.length) {
+            await client.query(
+              `UPDATE executive_summary_basic_details SET report_submitted_date = CURRENT_DATE, updated_at = NOW() WHERE assesment_id = $1;`,
+              [assessmentId]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO executive_summary_basic_details (year_id, assesment_id, report_submitted_date, staff_count, manual_challans_per_day, admin_id, created_at) VALUES ($1, $2, CURRENT_DATE, '0', '0', $3, NOW());`,
+              [assessment.year_id, assessmentId, employeeId]
+            );
+          }
 
           return {
             rejectedCount,
