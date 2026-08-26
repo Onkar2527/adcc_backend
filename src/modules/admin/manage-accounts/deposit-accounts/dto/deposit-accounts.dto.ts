@@ -101,6 +101,7 @@ export class UpdateDepositAccountDto
     extends PartialType(
         CreateDepositAccountDto,
     ) { }
+export interface UpdateDepositAccountDto extends Partial<CreateDepositAccountDto> {}
 
 export class DepositAccountFilterDto {
 

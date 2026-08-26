@@ -161,7 +161,7 @@ export class ReviewerService {
                             WHERE aa2.answer_id = ad2.id
                                 AND aa2.assesment_id = ad2.assesment_id
                                 AND aa2.deleted_at IS NULL
-                                AND NULLIF(BTRIM(COALESCE(aa2.audit_commpliance, '')), '') IS NOT NULL
+                                AND NULLIF(BTRIM(COALESCE(ad2.audit_commpliance, '')), '') IS NOT NULL
                         )
                     )
             ) AS compliance_points,
@@ -225,7 +225,7 @@ export class ReviewerService {
                             WHERE aa2.answer_id = ad2.id
                                 AND aa2.assesment_id = ad2.assesment_id
                                 AND aa2.deleted_at IS NULL
-                                AND COALESCE(aa2.compliance_status_id, 0) IN (${LIVE_COMPLIANCE_REVIEWER_QUEUE_STATUSES.join(', ')})
+                                AND COALESCE(ad2.compliance_status_id, 0) IN (${LIVE_COMPLIANCE_REVIEWER_QUEUE_STATUSES.join(', ')})
                                 AND NULLIF(BTRIM(COALESCE(aa2.audit_commpliance, '')), '') IS NOT NULL
                         )
                     )
@@ -332,7 +332,7 @@ export class ReviewerService {
             qm.annexure_id,
             qm.compliance_ev_upload AS compliance_evidence_upload,
             ac.columns_json AS annexure_columns,
-            au.name AS account_branch_name,
+            COALESCE(au_dd.name, au_da.name) AS account_branch_name,
             COALESCE(dd.account_no, da.account_no) AS account_no,
             COALESCE(dd.account_holder_name, da.account_holder_name) AS account_holder_name,
             COALESCE(dd.ucic, da.ucic) AS ucic,
@@ -346,8 +346,8 @@ export class ReviewerService {
             da.due_date,
             da.npa_status,
             COALESCE(dd.account_status, da.account_status) AS account_status,
-            sm.name AS scheme_name,
-            sm.scheme_code
+            COALESCE(sm_dd.name, sm_da.name) AS scheme_name,
+            COALESCE(sm_dd.scheme_code, sm_da.scheme_code) AS scheme_code
         FROM answers_data ad
         LEFT JOIN menu_master mm
             ON mm.id = ad.menu_id
@@ -381,12 +381,22 @@ export class ReviewerService {
             ON cm.linked_table_id = 2
             AND da.id = ad.dump_id
             AND da.deleted_at IS NULL
-        LEFT JOIN audit_unit_master au
-            ON au.id = COALESCE(dd.branch_id, da.branch_id)
-            AND au.deleted_at IS NULL
-        LEFT JOIN scheme_master sm
-            ON sm.id = COALESCE(dd.scheme_id, da.scheme_id)
-            AND sm.deleted_at IS NULL
+        LEFT JOIN audit_unit_master au_dd
+            ON cm.linked_table_id = 1
+            AND au_dd.id = dd.branch_id
+            AND au_dd.deleted_at IS NULL
+        LEFT JOIN audit_unit_master au_da
+            ON cm.linked_table_id = 2
+            AND au_da.id = da.branch_id
+            AND au_da.deleted_at IS NULL
+        LEFT JOIN scheme_master sm_dd
+            ON cm.linked_table_id = 1
+            AND sm_dd.id = dd.scheme_id
+            AND sm_dd.deleted_at IS NULL
+        LEFT JOIN scheme_master sm_da
+            ON cm.linked_table_id = 2
+            AND sm_da.id = da.scheme_id
+            AND sm_da.deleted_at IS NULL
         WHERE ad.assesment_id = $1
             AND ad.is_compliance = 1
             AND ad.deleted_at IS NULL

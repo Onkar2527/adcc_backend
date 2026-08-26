@@ -2049,106 +2049,111 @@ export class InternalAuditService {
         : null;
 
     const query = `
-
       SELECT
-
           mm.id AS menu_id,
           mm.name AS menu_name,
-
           cm.id AS category_id,
           cm.name AS category_name,
           cm.linked_table_id,
-
-          COUNT(DISTINCT qm.id)
-              AS question_count,
-
-          COUNT(DISTINCT ans.id)
-              AS answered_count,
-
-          COUNT(DISTINCT ans.id) FILTER (
-              WHERE ans.is_compliance = 1
-                  AND COALESCE(ans.compliance_status_id, 0) = 10
-          ) AS live_pending_count
-
+          COALESCE(q_agg.question_count, 0) AS question_count,
+          COALESCE(ans_agg.answered_count, 0) AS answered_count,
+          COALESCE(ans_agg.live_pending_count, 0) AS live_pending_count
       FROM menu_master mm
-
       LEFT JOIN category_master cm
           ON cm.menu_id = mm.id
           AND cm.is_active = 1
           AND cm.deleted_at IS NULL
           AND (
               $2 = ''
-              OR cm.id::text = ANY(
-                  string_to_array($2, ',')
-              )
+              OR cm.id = ANY(string_to_array(NULLIF($2, ''), ',')::int[])
           )
-
-      LEFT JOIN question_set_master qsm
-          ON qsm.id::text = ANY(
-              string_to_array(
-                  COALESCE(
-                      cm.question_set_ids,
-                      ''
-                  ),
-                  ','
+      LEFT JOIN (
+          SELECT 
+              cm.id AS category_id,
+              COUNT(DISTINCT qm.id) AS question_count
+          FROM category_master cm
+          INNER JOIN question_set_master qsm
+              ON qsm.id = ANY(string_to_array(NULLIF(cm.question_set_ids, ''), ',')::int[])
+              AND qsm.is_active = 1
+              AND qsm.deleted_at IS NULL
+          INNER JOIN question_header_master qhm
+              ON qhm.question_set_id = qsm.id
+              AND qhm.is_active = 1
+              AND qhm.deleted_at IS NULL
+              AND (
+                  $3 = ''
+                  OR qhm.id = ANY(string_to_array(NULLIF($3, ''), ',')::int[])
               )
-          )
-          AND qsm.is_active = 1
-          AND qsm.deleted_at IS NULL
-
-      LEFT JOIN question_header_master qhm
-          ON qhm.question_set_id = qsm.id
-          AND qhm.is_active = 1
-          AND qhm.deleted_at IS NULL
-          AND (
-              $3 = ''
-              OR qhm.id::text = ANY(
-                  string_to_array($3, ',')
+          INNER JOIN question_master qm
+              ON qm.header_id = qhm.id
+              AND qm.set_id = qsm.id
+              AND qm.is_active = 1
+              AND qm.deleted_at IS NULL
+              AND (
+                  $4 = ''
+                  OR qm.id = ANY(string_to_array(NULLIF($4, ''), ',')::int[])
               )
-          )
-
-      LEFT JOIN question_master qm
-          ON qm.header_id = qhm.id
-          AND qm.set_id = qsm.id
-          AND qm.is_active = 1
-          AND qm.deleted_at IS NULL
-          AND (
-              $4 = ''
-              OR qm.id::text = ANY(
-                  string_to_array($4, ',')
+          WHERE cm.is_active = 1
+            AND cm.deleted_at IS NULL
+            AND (
+                $2 = ''
+                OR cm.id = ANY(string_to_array(NULLIF($2, ''), ',')::int[])
+            )
+          GROUP BY cm.id
+      ) q_agg ON q_agg.category_id = cm.id
+      LEFT JOIN (
+          SELECT 
+              cm.id AS category_id,
+              COUNT(ans.id) AS answered_count,
+              COUNT(ans.id) FILTER (
+                  WHERE ans.is_compliance = 1
+                      AND COALESCE(ans.compliance_status_id, 0) = 10
+              ) AS live_pending_count
+          FROM category_master cm
+          INNER JOIN question_set_master qsm
+              ON qsm.id = ANY(string_to_array(NULLIF(cm.question_set_ids, ''), ',')::int[])
+              AND qsm.is_active = 1
+              AND qsm.deleted_at IS NULL
+          INNER JOIN question_header_master qhm
+              ON qhm.question_set_id = qsm.id
+              AND qhm.is_active = 1
+              AND qhm.deleted_at IS NULL
+              AND (
+                  $3 = ''
+                  OR qhm.id = ANY(string_to_array(NULLIF($3, ''), ',')::int[])
               )
-          )
-
-      LEFT JOIN answers_data ans
-          ON ans.assesment_id = $5
-          AND ans.category_id = cm.id
-          AND ans.question_id = qm.id
-          AND ans.deleted_at IS NULL
-
+          INNER JOIN question_master qm
+              ON qm.header_id = qhm.id
+              AND qm.set_id = qsm.id
+              AND qm.is_active = 1
+              AND qm.deleted_at IS NULL
+              AND (
+                  $4 = ''
+                  OR qm.id = ANY(string_to_array(NULLIF($4, ''), ',')::int[])
+              )
+          INNER JOIN answers_data ans
+              ON ans.assesment_id = $5
+              AND ans.category_id = cm.id
+              AND ans.question_id = qm.id
+              AND ans.deleted_at IS NULL
+          WHERE cm.is_active = 1
+            AND cm.deleted_at IS NULL
+            AND (
+                $2 = ''
+                OR cm.id = ANY(string_to_array(NULLIF($2, ''), ',')::int[])
+            )
+          GROUP BY cm.id
+      ) ans_agg ON ans_agg.category_id = cm.id
       WHERE
           mm.is_active = 1
           AND mm.deleted_at IS NULL
           AND (
               $1 = ''
-              OR mm.id::text = ANY(
-                  string_to_array($1, ',')
-              )
+              OR mm.id = ANY(string_to_array(NULLIF($1, ''), ',')::int[])
           )
-
-      GROUP BY
-
-          mm.id,
-          mm.name,
-
-          cm.id,
-          cm.name,
-          cm.linked_table_id
-
       ORDER BY
-
           mm.id,
           cm.id
-
     `;
 
     const result =
@@ -2264,53 +2269,50 @@ export class InternalAuditService {
 
     }
 
-    const accountCategoryTasks =
-      Array.from(
-        menuMap.values(),
-      )
-        .flatMap(
-          (menu: any) =>
-            menu.categories || [],
-        )
-        .filter(
-          (category: any) =>
-            [1, 2].includes(
-              Number(category.linked_table_id),
-            ),
-        )
-        .map(
-          async (category: any) => {
-            const accounts =
-              await this.samplingService.getSampledAccounts(
-                category,
-                overview,
-              );
+    const accountCategories = Array.from(menuMap.values())
+      .flatMap((menu: any) => menu.categories || [])
+      .filter((category: any) => [1, 2].includes(Number(category.linked_table_id)));
 
-            const visibleAccounts =
-              reAuditScope && reAuditScope.categories.size > 0
-                ? accounts.filter(
-                  (account: any) =>
-                    reAuditScope.dumps.has(
-                      `${Number(category.id)}:${Number(account.id)}`,
-                    ),
-                )
-                : accounts;
+    const depositsCategoryIds = accountCategories
+      .filter((c: any) => Number(c.linked_table_id) === 1)
+      .map((c: any) => Number(c.id));
+    const advancesCategoryIds = accountCategories
+      .filter((c: any) => Number(c.linked_table_id) === 2)
+      .map((c: any) => Number(c.id));
 
-            category.account_based =
-              true;
-            category.account_count =
-              visibleAccounts.length;
-            category.completed_account_count =
-              visibleAccounts.filter(
-                (account: any) =>
-                  account.is_completed,
-              ).length;
-          },
-        );
+    const [depositsAccounts, advancesAccounts] = await Promise.all([
+      this.getSampledAccountsBulk(1, depositsCategoryIds, overview),
+      this.getSampledAccountsBulk(2, advancesCategoryIds, overview),
+    ]);
 
-    await Promise.all(
-      accountCategoryTasks,
-    );
+    const accountsByCategory = new Map<number, any[]>();
+    for (const acct of [...depositsAccounts, ...advancesAccounts]) {
+      const catId = Number(acct.category_id);
+      if (!accountsByCategory.has(catId)) {
+        accountsByCategory.set(catId, []);
+      }
+      accountsByCategory.get(catId).push(acct);
+    }
+
+    for (const category of accountCategories) {
+      const accounts = accountsByCategory.get(Number(category.id)) || [];
+
+      const visibleAccounts =
+        reAuditScope && reAuditScope.categories.size > 0
+          ? accounts.filter(
+            (account: any) =>
+              reAuditScope.dumps.has(
+                `${Number(category.id)}:${Number(account.id)}`,
+              ),
+          )
+          : accounts;
+
+      category.account_based = true;
+      category.account_count = visibleAccounts.length;
+      category.completed_account_count = visibleAccounts.filter(
+        (account: any) => account.is_completed,
+      ).length;
+    }
 
     const carryForwardCount =
       await this.getCarryForwardCount(
@@ -2363,6 +2365,71 @@ export class InternalAuditService {
         ),
 
     };
+  }
+
+  private async getSampledAccountsBulk(
+    linkedTableId: number,
+    categoryIds: number[],
+    overview: any,
+  ) {
+    if (categoryIds.length === 0) {
+      return [];
+    }
+
+    const table = linkedTableId === 1 ? 'dump_deposits' : 'dump_advances';
+
+    const schemeIds =
+      linkedTableId === 1
+        ? overview.deposits_scheme_ids || ''
+        : overview.advances_scheme_ids || '';
+
+    if (!String(schemeIds).trim()) {
+      return [];
+    }
+
+    const periodCondition =
+      linkedTableId === 1
+        ? 'd.account_opening_date BETWEEN $4 AND $5'
+        : '(d.account_opening_date BETWEEN $4 AND $5 OR d.renewal_date BETWEEN $4 AND $5)';
+
+    const result = await this.db.query(
+      `
+      SELECT
+          d.id,
+          sm.category_id,
+          CASE
+              WHEN d.assesment_period_id = $1 THEN true
+              ELSE false
+          END AS is_completed
+      FROM ${table} d
+      INNER JOIN scheme_master sm
+          ON sm.id = d.scheme_id
+          AND sm.scheme_type_id = $2
+          AND sm.category_id = ANY(
+              string_to_array($3, ',')::int[]
+          )
+          AND sm.is_active = 1
+          AND sm.deleted_at IS NULL
+      WHERE d.branch_id = $6
+          AND d.scheme_id = ANY(
+              string_to_array($7, ',')::int[]
+          )
+          AND ${periodCondition}
+          AND d.sampling_filter = 1
+          AND d.deleted_at IS NULL;
+      `,
+      [
+        overview.id,
+        linkedTableId,
+        categoryIds.join(','),
+        overview.assesment_period_from,
+        overview.assesment_period_to,
+        overview.audit_unit_id,
+        String(schemeIds),
+      ],
+    );
+
+    return result.rows;
   }
 
   // Submit Assessment
@@ -3247,34 +3314,26 @@ export class InternalAuditService {
       );
     }
 
-    const reAuditScope =
+    const reAuditScopePromise =
       Number(overview.audit_status_id) === 3
-        ? await this.getReAuditScope(
-          assessmentId,
-        )
-        : null;
+        ? this.getReAuditScope(assessmentId)
+        : Promise.resolve(null);
 
-    let accounts =
-      [1, 2].includes(
-        Number(category.linked_table_id),
-      )
-        ? await this.samplingService.getSampledAccounts(
-          category,
-          overview,
-        )
-        : [];
+    const accountsPromise = [1, 2].includes(Number(category.linked_table_id))
+      ? this.samplingService.getSampledAccounts(category, overview)
+      : Promise.resolve([]);
 
-    let unsampledAccountCount = 0;
-    if (
-      [1, 2].includes(
-        Number(category.linked_table_id),
-      )
-    ) {
-      unsampledAccountCount = await this.samplingService.getUnsampledAccountCount(
-        category,
-        overview,
-      );
-    }
+    const unsampledPromise = [1, 2].includes(Number(category.linked_table_id))
+      ? this.samplingService.getUnsampledAccountCount(category, overview)
+      : Promise.resolve(0);
+
+    const [reAuditScope, initialAccounts, unsampledAccountCount] = await Promise.all([
+      reAuditScopePromise,
+      accountsPromise,
+      unsampledPromise,
+    ]);
+
+    let accounts = initialAccounts;
 
     if (
       reAuditScope
@@ -3428,10 +3487,6 @@ export class InternalAuditService {
         questionResult.rows,
       );
 
-    await this.attachSubsetOptions(
-      sets,
-    );
-
     let hasAnnexureQuestions =
       questionResult.rows.some(
         (row: any) =>
@@ -3443,12 +3498,8 @@ export class InternalAuditService {
         questionResult.rows,
       );
 
-    if (
-      subsetIds.length
-    ) {
-
-      const subsetResult =
-        await this.db.query(
+    const subsetPromise = subsetIds.length
+      ? this.db.query(
           `
           SELECT
               qsm.id AS set_id,
@@ -3544,9 +3595,16 @@ export class InternalAuditService {
             assessmentId,
             categoryId,
             dumpId,
-          ],
-        );
+          ]
+        )
+      : Promise.resolve(null);
 
+    const [_, subsetResult] = await Promise.all([
+      this.attachSubsetOptions(sets),
+      subsetPromise,
+    ]);
+
+    if (subsetResult) {
       this.attachSubsetSets(
         sets,
         this.groupCategoryQuestions(
@@ -3563,16 +3621,6 @@ export class InternalAuditService {
         );
     }
 
-    await this.attachAnnexureRows(
-      sets,
-      assessmentId,
-    );
-
-    await this.attachEvidenceRows(
-      sets,
-      assessmentId,
-    );
-
     const answersList: any[] = [];
     const questionMap = new Map<number, any>();
     this.collectQuestions(sets, questionMap);
@@ -3581,8 +3629,23 @@ export class InternalAuditService {
         answersList.push(q.answer);
       }
     }
-    if (answersList.length) {
-      await this.attachTimelines(answersList, assessmentId);
+
+    let annexureRiskOptions: any = {
+      business_risks: [],
+      control_risks: [],
+      risk_categories: [],
+    };
+
+    const [,,,, riskOpts] = await Promise.all([
+      this.attachAnnexureRows(sets, assessmentId),
+      this.attachEvidenceRows(sets, assessmentId),
+      this.attachQuestionAssignments(sets, assessmentId, employeeId),
+      answersList.length ? this.attachTimelines(answersList, assessmentId) : Promise.resolve(),
+      hasAnnexureQuestions ? this.getAnnexureRiskOptions(Number(overview.year_id)) : Promise.resolve(null),
+    ]);
+
+    if (riskOpts) {
+      annexureRiskOptions = riskOpts;
     }
 
     if (
@@ -3598,23 +3661,6 @@ export class InternalAuditService {
           dumpId,
         );
     }
-
-    const annexureRiskOptions =
-      hasAnnexureQuestions
-        ? await this.getAnnexureRiskOptions(
-          Number(overview.year_id),
-        )
-        : {
-          business_risks: [],
-          control_risks: [],
-          risk_categories: [],
-        };
-
-    await this.attachQuestionAssignments(
-      sets,
-      assessmentId,
-      employeeId,
-    );
 
     return {
       overview,

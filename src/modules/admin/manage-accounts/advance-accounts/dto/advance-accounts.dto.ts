@@ -105,6 +105,7 @@ export class UpdateAdvanceAccountDto
     extends PartialType(
         CreateAdvanceAccountDto,
     ) { }
+export interface UpdateAdvanceAccountDto extends Partial<CreateAdvanceAccountDto> {}
 
 export class AdvanceAccountFilterDto {
 
