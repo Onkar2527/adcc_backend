@@ -3618,9 +3618,9 @@ ORDER BY
             if (unitRatings.length > 0) {
                 const high = unitRatings.find(r => Number(r.risk_type_id) === 1);
                 const med = unitRatings.find(r => Number(r.risk_type_id) === 2);
-                if (high && score > Number(high.range_to)) {
+                if (high && score >= Number(high.range_from) && score <= Number(high.range_to)) {
                     color = 'rgba(220,20,60)'; // Red (high)
-                } else if (med && score > Number(med.range_to)) {
+                } else if (med && score >= Number(med.range_from) && score <= Number(med.range_to)) {
                     color = 'rgba(255,165,0)'; // Orange (medium)
                 }
             } else {

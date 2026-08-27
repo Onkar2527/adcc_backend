@@ -2155,6 +2155,97 @@ export class ReviewerService {
                 ? 4
                 : 7;
 
+          const asmUnitRes = await client.query(
+            `SELECT audit_unit_id FROM audit_assesment_master WHERE id = $1`,
+            [assessmentId]
+          );
+          const auditUnitId = asmUnitRes.rows[0]?.audit_unit_id;
+
+          let complianceDueDays = 20;
+          if (auditUnitId) {
+            const assessments = await client.query(`
+              SELECT asm.id, asm.year_id, rsm.weighted_score
+              FROM audit_assesment_master asm
+              INNER JOIN report_scoring_master rsm ON rsm.assesment_id = asm.id
+              WHERE asm.audit_unit_id = $1 AND asm.deleted_at IS NULL AND rsm.deleted_at IS NULL
+            `, [auditUnitId]);
+
+            const yearIds = Array.from(new Set(assessments.rows.map((a: any) => Number(a.year_id))));
+            let yearTotals = new Map<number, number>();
+            if (yearIds.length > 0) {
+              const totalsRes = await client.query(`
+                SELECT asm.year_id, rsm.weighted_score
+                FROM audit_assesment_master asm
+                INNER JOIN report_scoring_master rsm ON rsm.assesment_id = asm.id
+                WHERE asm.year_id = ANY($1::bigint[]) AND asm.deleted_at IS NULL AND rsm.deleted_at IS NULL
+              `, [yearIds]);
+              totalsRes.rows.forEach((r: any) => {
+                const yId = Number(r.year_id || 0);
+                const score = Number(r.weighted_score || 0);
+                yearTotals.set(yId, (yearTotals.get(yId) || 0) + score);
+              });
+            }
+
+            const ratings = await client.query(`
+              SELECT year_id, risk_type_id, range_from, range_to
+              FROM risk_branch_rating
+              WHERE audit_unit_id = $1 AND deleted_at IS NULL
+            `, [auditUnitId]);
+            const ratingsMap = new Map<number, any[]>();
+            ratings.rows.forEach((r: any) => {
+              const yId = Number(r.year_id || 0);
+              if (!ratingsMap.has(yId)) ratingsMap.set(yId, []);
+              ratingsMap.get(yId)!.push(r);
+            });
+
+            const frequencySettings = await client.query(`
+              SELECT risk_type_id, frequency, audit_due_days, compliance_due_days
+              FROM audit_frequency_master 
+              WHERE is_active = 1 AND deleted_at IS NULL
+            `);
+
+            const complianceDueDaysMap = new Map<number, number>();
+            frequencySettings.rows.forEach((f: any) => {
+              complianceDueDaysMap.set(Number(f.risk_type_id), Number(f.compliance_due_days || 20));
+            });
+
+            const matchRating = (score: number, yearId: number): number => {
+              const yearRatings = ratingsMap.get(yearId) || [];
+              for (const rating of yearRatings) {
+                const lowerBound = Number(rating.range_from || 0);
+                const upperBound = Number(rating.range_to || 0);
+                if (score >= lowerBound && score <= upperBound) {
+                  return Number(rating.risk_type_id);
+                }
+              }
+              if (score >= 3.0) return 1;
+              if (score >= 2.0) return 2;
+              return 3;
+            };
+
+            let totalScore = 0;
+            assessments.rows.forEach((a: any) => {
+              const yId = Number(a.year_id || 0);
+              const score = Number(a.weighted_score || 0);
+              const yearTotal = yearTotals.get(yId) || 1;
+              const percentShare = yearTotal > 0 ? (score / yearTotal) * 100 : 0;
+              const riskTypeId = matchRating(percentShare, yId);
+              if (riskTypeId === 1) totalScore += 3;
+              else if (riskTypeId === 2) totalScore += 2;
+              else totalScore += 1;
+            });
+
+            const totalCount = assessments.rows.length;
+            const riskAverage = totalCount > 0 ? totalScore / totalCount : 0;
+
+            let finalRisk = 'LOW';
+            if (riskAverage >= 2.5) finalRisk = 'HIGH';
+            else if (riskAverage >= 1.5) finalRisk = 'MEDIUM';
+
+            const riskTypeId = finalRisk === 'HIGH' ? 1 : finalRisk === 'MEDIUM' ? 2 : 3;
+            complianceDueDays = complianceDueDaysMap.get(riskTypeId) || 20;
+          }
+
           const updated =
             await client.query(
               `
@@ -2164,7 +2255,7 @@ export class ReviewerService {
                   audit_review_emp_id = $3,
                   audit_review_date = CURRENT_DATE,
                   compliance_start_date = CASE WHEN $2::bigint = 4 THEN CURRENT_DATE ELSE compliance_start_date END,
-                  compliance_due_date = CASE WHEN $2::bigint = 4 THEN CURRENT_DATE + INTERVAL '16 days' ELSE compliance_due_date END,
+                  compliance_due_date = CASE WHEN $2::bigint = 4 THEN CURRENT_DATE + CAST($4 || ' days' AS INTERVAL) ELSE compliance_due_date END,
                   batch_key = CASE
                       WHEN $2::bigint = 3
                       THEN CONCAT('A-', TO_CHAR(CLOCK_TIMESTAMP(), 'YYYYMMDDHH24MISSMS'))
@@ -2179,6 +2270,7 @@ export class ReviewerService {
                 assessmentId,
                 nextStatus,
                 employeeId,
+                complianceDueDays,
               ],
             );
 

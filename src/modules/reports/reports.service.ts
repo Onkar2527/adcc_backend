@@ -6323,10 +6323,10 @@ export class ReportsService {
 
   private matchBranchRiskRatingByPercent(score: number, ratings: any[]) {
     for (const rating of ratings) {
-      const upperBound = Number(rating.range_from || 0);
-      const lowerBound = Number(rating.range_to || 0);
+      const lowerBound = Number(rating.range_from || 0);
+      const upperBound = Number(rating.range_to || 0);
 
-      if (score <= upperBound && score > lowerBound) {
+      if (score >= lowerBound && score <= upperBound) {
         return this.riskWiseRiskLabel(rating.risk_type_id).toUpperCase();
       }
     }

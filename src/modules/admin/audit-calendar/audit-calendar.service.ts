@@ -312,6 +312,8 @@ export class AuditCalendarService {
         id SERIAL PRIMARY KEY,
         risk_type_id INTEGER NOT NULL UNIQUE,
         frequency INTEGER NOT NULL,
+        audit_due_days INTEGER DEFAULT 20,
+        compliance_due_days INTEGER DEFAULT 20,
         is_active INTEGER DEFAULT 1,
         admin_id INTEGER,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -320,13 +322,19 @@ export class AuditCalendarService {
       )
     `);
 
+    // Ensure columns exist (in case table was created previously without them)
+    await this.db.query(`
+      ALTER TABLE audit_frequency_master ADD COLUMN IF NOT EXISTS audit_due_days INTEGER DEFAULT 20;
+      ALTER TABLE audit_frequency_master ADD COLUMN IF NOT EXISTS compliance_due_days INTEGER DEFAULT 20;
+    `);
+
     const countRes = await this.db.query(`SELECT COUNT(*) FROM audit_frequency_master`);
     if (Number(countRes.rows[0].count) === 0) {
       await this.db.query(`
-        INSERT INTO audit_frequency_master (risk_type_id, frequency) VALUES
-        (1, 6),
-        (2, 12),
-        (3, 18)
+        INSERT INTO audit_frequency_master (risk_type_id, frequency, audit_due_days, compliance_due_days) VALUES
+        (1, 6, 20, 20),
+        (2, 12, 20, 20),
+        (3, 18, 20, 20)
       `);
     }
   }
@@ -409,17 +417,31 @@ export class AuditCalendarService {
 
       // 4. Fetch dynamic frequencies from audit_frequency_master
       const frequencySettings = await this.queryRows<any>(`
-        SELECT risk_type_id, frequency 
+        SELECT risk_type_id, frequency, audit_due_days, compliance_due_days
         FROM audit_frequency_master 
         WHERE is_active = 1 AND deleted_at IS NULL
       `);
 
       const freqMap = new Map<number, number>();
+      const auditDueDaysMap = new Map<number, number>();
+      const complianceDueDaysMap = new Map<number, number>();
+
       freqMap.set(1, 6);
       freqMap.set(2, 12);
       freqMap.set(3, 18);
+
+      auditDueDaysMap.set(1, 20);
+      auditDueDaysMap.set(2, 20);
+      auditDueDaysMap.set(3, 20);
+
+      complianceDueDaysMap.set(1, 20);
+      complianceDueDaysMap.set(2, 20);
+      complianceDueDaysMap.set(3, 20);
+
       frequencySettings.forEach((f: any) => {
         freqMap.set(Number(f.risk_type_id), Number(f.frequency));
+        auditDueDaysMap.set(Number(f.risk_type_id), Number(f.audit_due_days || 20));
+        complianceDueDaysMap.set(Number(f.risk_type_id), Number(f.compliance_due_days || 20));
       });
 
       // Group ratings by key: `${unitId}:${yearId}`
@@ -446,9 +468,9 @@ export class AuditCalendarService {
         const unitYearRatings = ratingsMap.get(key) || [];
         
         for (const rating of unitYearRatings) {
-          const upperBound = Number(rating.range_from || 0);
-          const lowerBound = Number(rating.range_to || 0);
-          if (score <= upperBound && score > lowerBound) {
+          const lowerBound = Number(rating.range_from || 0);
+          const upperBound = Number(rating.range_to || 0);
+          if (score >= lowerBound && score <= upperBound) {
             return Number(rating.risk_type_id); // 1 = High, 2 = Medium, 3 = Low
           }
         }
@@ -468,7 +490,260 @@ export class AuditCalendarService {
         assessmentsByUnit.get(uId)!.push(a);
       });
 
+      // Fetch actual assessments
+      const actualAssessments = await this.queryRows<any>(`
+        SELECT 
+          id, 
+          audit_unit_id, 
+          assesment_period_from, 
+          assesment_period_to, 
+          audit_start_date, 
+          audit_end_date, 
+          audit_due_date, 
+          compliance_due_date, 
+          audit_status_id
+        FROM audit_assesment_master
+        WHERE deleted_at IS NULL
+        ORDER BY assesment_period_to ASC
+      `);
+
+      const actualAssessmentsMap = new Map<number, any[]>();
+      actualAssessments.forEach((asm: any) => {
+        const uId = Number(asm.audit_unit_id);
+        if (!actualAssessmentsMap.has(uId)) {
+          actualAssessmentsMap.set(uId, []);
+        }
+        actualAssessmentsMap.get(uId)!.push(asm);
+      });
+
       const projectedSchedules: any[] = [];
+
+      units.forEach((unit) => {
+        const unitId = Number(unit.id);
+        const unitAssessments = assessmentsByUnit.get(unitId) || [];
+        
+        let high = 0;
+        let medium = 0;
+        let low = 0;
+        let totalScore = 0;
+
+        unitAssessments.forEach((a: any) => {
+          const yId = Number(a.year_id || 0);
+          const score = Number(a.weighted_score || 0);
+          const yearTotal = yearTotals.get(yId) || 1;
+          const percentShare = yearTotal > 0 ? (score / yearTotal) * 100 : 0;
+          
+          const riskTypeId = matchRating(percentShare, unitId, yId);
+          if (riskTypeId === 1) {
+            high++;
+            totalScore += 3;
+          } else if (riskTypeId === 2) {
+            medium++;
+            totalScore += 2;
+          } else {
+            low++;
+            totalScore += 1;
+          }
+        });
+
+        const totalCount = unitAssessments.length;
+        const riskAverage = totalCount > 0 ? Number((totalScore / totalCount).toFixed(2)) : 0;
+
+        let finalRisk = 'LOW';
+        let frequencyMonths = freqMap.get(3) || 18;
+
+        if (riskAverage >= 2.5) {
+          finalRisk = 'HIGH';
+          frequencyMonths = freqMap.get(1) || 6;
+        } else if (riskAverage >= 1.5) {
+          finalRisk = 'MEDIUM';
+          frequencyMonths = freqMap.get(2) || 12;
+        }
+
+        const activeFrequencyMonths = unit.frequency ? Number(unit.frequency) : frequencyMonths;
+        const lastAuditDate = unit.last_audit_date;
+        
+        const riskTypeIdForOffsets = finalRisk === 'HIGH' ? 1 : finalRisk === 'MEDIUM' ? 2 : 3;
+        const currentAuditDueDays = auditDueDaysMap.get(riskTypeIdForOffsets) || 20;
+        const currentComplianceDueDays = complianceDueDaysMap.get(riskTypeIdForOffsets) || 20;
+
+        let currentLastAudit: Date | null = null;
+        let firstPeriodFrom: Date | null = null;
+
+        const unitActuals = actualAssessmentsMap.get(unitId) || [];
+
+        // Track first period start date
+        if (unitActuals.length > 0) {
+          const firstAsm = unitActuals[0];
+          if (firstAsm.assesment_period_from) {
+            firstPeriodFrom = this.parseDateUTC(firstAsm.assesment_period_from);
+          }
+        } else if (lastAuditDate) {
+          firstPeriodFrom = this.parseDateUTC(lastAuditDate);
+          firstPeriodFrom.setUTCDate(firstPeriodFrom.getUTCDate() + 1);
+        }
+
+        if (firstPeriodFrom) {
+          let iteration = 0;
+          const currentSlotStart = new Date(firstPeriodFrom);
+          let currentActualIndex = 0;
+          
+          const today = new Date();
+          const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+
+          while (iteration < 12) {
+            const pStartYear = currentSlotStart.getUTCMonth() >= 3 ? currentSlotStart.getUTCFullYear() : currentSlotStart.getUTCFullYear() - 1;
+            const pFyEnd = new Date(currentSlotStart);
+            pFyEnd.setUTCFullYear(pStartYear + 1);
+            pFyEnd.setUTCMonth(2); // March
+            pFyEnd.setUTCDate(31);
+
+            if (currentSlotStart > pFyEnd) {
+              break;
+            }
+
+            // 1. If there's a corresponding actual assessment record, use its actual dates
+            if (currentActualIndex < unitActuals.length) {
+              const asm = unitActuals[currentActualIndex];
+              const asmFrom = asm.assesment_period_from ? this.formatDateUTC(this.parseDateUTC(asm.assesment_period_from)) : '';
+              const asmTo = asm.assesment_period_to ? this.formatDateUTC(this.parseDateUTC(asm.assesment_period_to)) : '';
+              
+              let asmAuditDue = '';
+              if (asm.audit_end_date) {
+                asmAuditDue = this.formatDateUTC(this.parseDateUTC(asm.audit_end_date));
+              } else if (asm.audit_due_date) {
+                asmAuditDue = this.formatDateUTC(this.parseDateUTC(asm.audit_due_date));
+              } else if (asmTo) {
+                const d = this.parseDateUTC(asmTo);
+                d.setUTCDate(d.getUTCDate() + currentAuditDueDays);
+                asmAuditDue = this.formatDateUTC(d);
+              }
+
+              let asmComplianceDue = '';
+              if (asm.compliance_due_date) {
+                asmComplianceDue = this.formatDateUTC(this.parseDateUTC(asm.compliance_due_date));
+              } else if (asmAuditDue) {
+                const d = this.parseDateUTC(asmAuditDue);
+                d.setUTCDate(d.getUTCDate() + currentComplianceDueDays);
+                asmComplianceDue = this.formatDateUTC(d);
+              }
+
+              projectedSchedules.push({
+                audit_unit_id: unitId,
+                audit_unit_name: unit.name,
+                audit_unit_code: unit.audit_unit_code,
+                final_risk: finalRisk,
+                assessment_period_from: asmFrom,
+                assessment_period_to: asmTo,
+                audit_due_date: asmAuditDue,
+                compliance_due_date: asmComplianceDue,
+                frequency: activeFrequencyMonths,
+                is_actual: true,
+                status_id: asm.audit_status_id,
+                status: Number(asm.audit_status_id) >= 4 ? 'Completed' : 'Started'
+              });
+
+              if (asmAuditDue) {
+                currentLastAudit = this.parseDateUTC(asmAuditDue);
+              }
+
+              currentActualIndex++;
+              currentSlotStart.setUTCMonth(currentSlotStart.getUTCMonth() + activeFrequencyMonths);
+              currentSlotStart.setUTCDate(1);
+              iteration++;
+              continue;
+            }
+
+            // 2. Compute normal target boundaries for this slot
+            let normalSlotTo = new Date(currentSlotStart);
+            normalSlotTo.setUTCMonth(normalSlotTo.getUTCMonth() + activeFrequencyMonths);
+            normalSlotTo.setUTCDate(0);
+
+            if (normalSlotTo > pFyEnd) {
+              normalSlotTo = pFyEnd;
+            }
+
+            // 3. Past slot with no audit is marked Expired
+            if (normalSlotTo < todayUTC) {
+              const pFromStr = this.formatDateUTC(currentSlotStart);
+              const pToStr = this.formatDateUTC(normalSlotTo);
+              
+              const pAudit = new Date(normalSlotTo);
+              pAudit.setUTCDate(pAudit.getUTCDate() + currentAuditDueDays);
+
+              const pCompliance = new Date(pAudit);
+              pCompliance.setUTCDate(pCompliance.getUTCDate() + currentComplianceDueDays);
+
+              projectedSchedules.push({
+                audit_unit_id: unitId,
+                audit_unit_name: unit.name,
+                audit_unit_code: unit.audit_unit_code,
+                final_risk: finalRisk,
+                assessment_period_from: pFromStr,
+                assessment_period_to: pToStr,
+                audit_due_date: this.formatDateUTC(pAudit),
+                compliance_due_date: this.formatDateUTC(pCompliance),
+                frequency: activeFrequencyMonths,
+                status: 'Expired'
+              });
+
+              currentSlotStart.setUTCMonth(currentSlotStart.getUTCMonth() + activeFrequencyMonths);
+              currentSlotStart.setUTCDate(1);
+              iteration++;
+              continue;
+            }
+
+            // 4. Current or future slot shifts start date based on previous delay
+            let pFrom = new Date(currentSlotStart);
+            if (currentLastAudit) {
+              pFrom = new Date(currentLastAudit);
+              pFrom.setUTCDate(pFrom.getUTCDate() + 1);
+            }
+
+            let pTo = new Date(pFrom);
+            pTo.setUTCMonth(pTo.getUTCMonth() + activeFrequencyMonths);
+            pTo.setUTCDate(0);
+
+            const diffTime = pTo.getTime() - pFrom.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            if (diffDays < 15) {
+              pTo = new Date(pFrom);
+              pTo.setUTCMonth(pTo.getUTCMonth() + activeFrequencyMonths + 1);
+              pTo.setUTCDate(0);
+            }
+
+            if (pTo > pFyEnd) {
+              pTo = pFyEnd;
+            }
+
+            const pAudit = new Date(pTo);
+            pAudit.setUTCDate(pAudit.getUTCDate() + currentAuditDueDays);
+
+            const pCompliance = new Date(pAudit);
+            pCompliance.setUTCDate(pCompliance.getUTCDate() + currentComplianceDueDays);
+
+            const isDelayed = currentLastAudit && pFrom.getTime() !== currentSlotStart.getTime();
+
+            projectedSchedules.push({
+              audit_unit_id: unitId,
+              audit_unit_name: unit.name,
+              audit_unit_code: unit.audit_unit_code,
+              final_risk: finalRisk,
+              assessment_period_from: this.formatDateUTC(pFrom),
+              assessment_period_to: this.formatDateUTC(pTo),
+              audit_due_date: this.formatDateUTC(pAudit),
+              compliance_due_date: this.formatDateUTC(pCompliance),
+              frequency: activeFrequencyMonths,
+              status: 'Not Started'
+            });
+
+            currentLastAudit = pTo;
+            currentSlotStart.setUTCMonth(currentSlotStart.getUTCMonth() + activeFrequencyMonths);
+            currentSlotStart.setUTCDate(1);
+            iteration++;
+          }
+        }
+      });
 
       const results = units.map((unit) => {
         const unitId = Number(unit.id);
@@ -515,102 +790,22 @@ export class AuditCalendarService {
           frequencyMonths = freqMap.get(2) || 12;
         }
 
-        // Schedule dates from last_audit_date
-        const lastAuditDate = unit.last_audit_date;
+        const unitSchedules = projectedSchedules.filter((p) => p.audit_unit_id === unitId);
+        const currentCycle = unitSchedules[0];
+
         let assessmentPeriodFrom = '';
         let assessmentPeriodTo = '';
         let auditDueDate = '';
         let complianceDueDate = '';
 
-        // Prioritize manually set frequency (unit.frequency) over recommended frequency
-        const activeFrequencyMonths = unit.frequency ? Number(unit.frequency) : frequencyMonths;
-
-        if (lastAuditDate) {
-          const lastAudit = this.parseDateUTC(lastAuditDate);
-          
-          // assessmentPeriodFrom = last_audit_date + 1 day
-          const fromDate = new Date(lastAudit);
-          fromDate.setUTCDate(fromDate.getUTCDate() + 1);
-          assessmentPeriodFrom = this.formatDateUTC(fromDate);
-
-          // Find the financial year end for fromDate (Financial year starts 01-04 and ends 31-03)
-          const startYear = fromDate.getUTCMonth() >= 3 ? fromDate.getUTCFullYear() : fromDate.getUTCFullYear() - 1;
-          const fyEnd = new Date(fromDate);
-          fyEnd.setUTCFullYear(startYear + 1);
-          fyEnd.setUTCMonth(2); // March
-          fyEnd.setUTCDate(31);
-
-          // assessmentPeriodTo = end of month after frequency months from fromDate
-          let toDate = new Date(fromDate);
-          toDate.setUTCMonth(toDate.getUTCMonth() + activeFrequencyMonths);
-          toDate.setUTCDate(0); // Sets to the last day of previous month
-
-          // Cap toDate so it doesn't cross the financial year boundary (31-03)
-          if (toDate > fyEnd) {
-            toDate = fyEnd;
-          }
-          assessmentPeriodTo = this.formatDateUTC(toDate);
-
-          // auditDueDate = assessmentPeriodTo + 20 days
-          const auditDue = new Date(toDate);
-          auditDue.setUTCDate(auditDue.getUTCDate() + 20);
-          auditDueDate = this.formatDateUTC(auditDue);
-
-          // complianceDueDate = auditDueDate + 20 days
-          const complianceDue = new Date(auditDue);
-          complianceDue.setUTCDate(complianceDue.getUTCDate() + 20);
-          complianceDueDate = this.formatDateUTC(complianceDue);
-
-          // Project sequential assessments for the calendar view within the FY boundary
-          let currentLastAudit = this.parseDateUTC(lastAuditDate);
-          let iteration = 0;
-          while (iteration < 6) {
-            const pFrom = new Date(currentLastAudit);
-            pFrom.setUTCDate(pFrom.getUTCDate() + 1);
-            
-            const pStartYear = pFrom.getUTCMonth() >= 3 ? pFrom.getUTCFullYear() : pFrom.getUTCFullYear() - 1;
-            const pFyEnd = new Date(pFrom);
-            pFyEnd.setUTCFullYear(pStartYear + 1);
-            pFyEnd.setUTCMonth(2); // March
-            pFyEnd.setUTCDate(31);
-
-            if (pFrom > pFyEnd) {
-              break;
-            }
-
-            let pTo = new Date(pFrom);
-            pTo.setUTCMonth(pTo.getUTCMonth() + activeFrequencyMonths);
-            pTo.setUTCDate(0);
-
-            if (pTo > pFyEnd) {
-              pTo = pFyEnd;
-            }
-
-            const pAudit = new Date(pTo);
-            pAudit.setUTCDate(pAudit.getUTCDate() + 20);
-
-            const pCompliance = new Date(pAudit);
-            pCompliance.setUTCDate(pCompliance.getUTCDate() + 20);
-
-            projectedSchedules.push({
-              audit_unit_id: unitId,
-              audit_unit_name: unit.name,
-              audit_unit_code: unit.audit_unit_code,
-              final_risk: finalRisk,
-              assessment_period_from: this.formatDateUTC(pFrom),
-              assessment_period_to: this.formatDateUTC(pTo),
-              audit_due_date: this.formatDateUTC(pAudit),
-              compliance_due_date: this.formatDateUTC(pCompliance),
-              frequency: activeFrequencyMonths
-            });
-
-            if (pTo >= pFyEnd) {
-              break;
-            }
-            currentLastAudit = pTo;
-            iteration++;
-          }
+        if (currentCycle) {
+          assessmentPeriodFrom = currentCycle.assessment_period_from;
+          assessmentPeriodTo = currentCycle.assessment_period_to;
+          auditDueDate = currentCycle.audit_due_date;
+          complianceDueDate = currentCycle.compliance_due_date;
         }
+
+        const lastAuditDate = unit.last_audit_date;
 
         return {
           audit_unit_id: unitId,
@@ -668,14 +863,14 @@ export class AuditCalendarService {
   async getRiskFrequencies() {
     await this.ensureFrequencyMasterTable();
     return this.queryRows<any>(`
-      SELECT risk_type_id, frequency 
+      SELECT risk_type_id, frequency, audit_due_days, compliance_due_days
       FROM audit_frequency_master 
       WHERE is_active = 1 AND deleted_at IS NULL
       ORDER BY risk_type_id ASC
     `);
   }
 
-  async updateRiskFrequencies(body: { frequencies: { risk_type_id: number; frequency: number }[] }) {
+  async updateRiskFrequencies(body: { frequencies: { risk_type_id: number; frequency: number; audit_due_days?: number; compliance_due_days?: number }[] }) {
     if (!body?.frequencies || !Array.isArray(body.frequencies)) {
       throw new BadRequestException('Frequencies array is required');
     }
@@ -683,13 +878,17 @@ export class AuditCalendarService {
     try {
       await this.db.transaction(async (client) => {
         for (const item of body.frequencies) {
-          const { risk_type_id, frequency } = item;
+          const { risk_type_id, frequency, audit_due_days, compliance_due_days } = item;
           await client.query(`
-            INSERT INTO audit_frequency_master (risk_type_id, frequency)
-            VALUES ($1, $2)
+            INSERT INTO audit_frequency_master (risk_type_id, frequency, audit_due_days, compliance_due_days)
+            VALUES ($1, $2, $3, $4)
             ON CONFLICT (risk_type_id)
-            DO UPDATE SET frequency = $2, updated_at = CURRENT_TIMESTAMP
-          `, [Number(risk_type_id), Number(frequency)]);
+            DO UPDATE SET 
+              frequency = $2, 
+              audit_due_days = $3, 
+              compliance_due_days = $4, 
+              updated_at = CURRENT_TIMESTAMP
+          `, [Number(risk_type_id), Number(frequency), Number(audit_due_days || 20), Number(compliance_due_days || 20)]);
         }
       });
       return { success: true, message: 'Successfully updated risk frequencies' };

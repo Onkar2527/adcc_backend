@@ -450,10 +450,14 @@ export class MasterBulkUploadService {
       const rowNumber = index + 1;
       const riskTypeId = Number(row?.risk_type_id || 0);
       const frequency = Number(row?.frequency || 0);
+      const auditDueDays = Number(row?.audit_due_days || 0);
+      const complianceDueDays = Number(row?.compliance_due_days || 0);
       const issues: string[] = [];
 
       if (!validRiskTypes.has(riskTypeId)) issues.push('Risk type is invalid');
       if (!Number.isFinite(frequency) || frequency <= 0) issues.push('Frequency must be a positive number');
+      if (!Number.isFinite(auditDueDays) || auditDueDays <= 0) issues.push('Audit due days must be a positive number');
+      if (!Number.isFinite(complianceDueDays) || complianceDueDays <= 0) issues.push('Compliance due days must be a positive number');
       if (seenRiskTypes.has(riskTypeId)) issues.push('Duplicate risk type found in CSV');
 
       if (issues.length) {
@@ -471,11 +475,20 @@ export class MasterBulkUploadService {
     await this.db.transaction(async (client) => {
       for (const row of rows) {
         await client.query(
-          `INSERT INTO audit_frequency_master (risk_type_id, frequency)
-           VALUES ($1, $2)
+          `INSERT INTO audit_frequency_master (risk_type_id, frequency, audit_due_days, compliance_due_days)
+           VALUES ($1, $2, $3, $4)
            ON CONFLICT (risk_type_id)
-           DO UPDATE SET frequency = $2, updated_at = CURRENT_TIMESTAMP`,
-          [Number(row.risk_type_id), Number(row.frequency)],
+           DO UPDATE SET 
+             frequency = $2, 
+             audit_due_days = $3, 
+             compliance_due_days = $4, 
+             updated_at = CURRENT_TIMESTAMP`,
+          [
+            Number(row.risk_type_id),
+            Number(row.frequency),
+            Number(row.audit_due_days || 20),
+            Number(row.compliance_due_days || 20),
+          ],
         );
       }
     });
