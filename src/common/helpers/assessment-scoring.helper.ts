@@ -408,9 +408,9 @@ async function updateAllAssessmentRatingsForYear(db: DatabaseService, yearId: nu
   const getMatchedRating = (score: number, unitId: number): number => {
     const unitRatings = ratingsMap.get(unitId) || [];
     for (const r of unitRatings) {
-      const upperBound = Number(r.range_from || 0);
-      const lowerBound = Number(r.range_to || 0);
-      if (score <= upperBound && score > lowerBound) {
+      const lowerBound = Number(r.range_from || 0);
+      const upperBound = Number(r.range_to || 0);
+      if (score >= lowerBound && score <= upperBound) {
         return Number(r.risk_type_id);
       }
     }

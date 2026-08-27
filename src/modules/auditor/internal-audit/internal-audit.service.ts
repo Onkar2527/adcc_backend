@@ -887,6 +887,88 @@ export class InternalAuditService {
         );
     }
 
+    // Fetch dynamic audit due days for the unit
+    const frequencySettingsForPreview = await this.db.query(`
+      SELECT risk_type_id, frequency, audit_due_days, compliance_due_days
+      FROM audit_frequency_master 
+      WHERE is_active = 1 AND deleted_at IS NULL
+    `);
+    const auditDueDaysMapForPreview = new Map<number, number>();
+    frequencySettingsForPreview.rows.forEach((f: any) => {
+      auditDueDaysMapForPreview.set(Number(f.risk_type_id), Number(f.audit_due_days || 20));
+    });
+
+    const assessmentsForPreview = await this.db.query(`
+      SELECT asm.id, asm.year_id, rsm.weighted_score
+      FROM audit_assesment_master asm
+      INNER JOIN report_scoring_master rsm ON rsm.assesment_id = asm.id
+      WHERE asm.audit_unit_id = $1 AND asm.deleted_at IS NULL AND rsm.deleted_at IS NULL
+    `, [auditUnitId]);
+
+    const yearIdsForPreview = Array.from(new Set(assessmentsForPreview.rows.map((a: any) => Number(a.year_id))));
+    let yearTotalsForPreview = new Map<number, number>();
+    if (yearIdsForPreview.length > 0) {
+      const totalsRes = await this.db.query(`
+        SELECT asm.year_id, rsm.weighted_score
+        FROM audit_assesment_master asm
+        INNER JOIN report_scoring_master rsm ON rsm.assesment_id = asm.id
+        WHERE asm.year_id = ANY($1::bigint[]) AND asm.deleted_at IS NULL AND rsm.deleted_at IS NULL
+      `, [yearIdsForPreview]);
+      totalsRes.rows.forEach((r: any) => {
+        const yId = Number(r.year_id || 0);
+        const score = Number(r.weighted_score || 0);
+        yearTotalsForPreview.set(yId, (yearTotalsForPreview.get(yId) || 0) + score);
+      });
+    }
+
+    const ratingsForPreview = await this.db.query(`
+      SELECT year_id, risk_type_id, range_from, range_to
+      FROM risk_branch_rating
+      WHERE audit_unit_id = $1 AND deleted_at IS NULL
+    `, [auditUnitId]);
+    const ratingsMapForPreview = new Map<number, any[]>();
+    ratingsForPreview.rows.forEach((r: any) => {
+      const yId = Number(r.year_id || 0);
+      if (!ratingsMapForPreview.has(yId)) ratingsMapForPreview.set(yId, []);
+      ratingsMapForPreview.get(yId)!.push(r);
+    });
+
+    const matchRatingForPreview = (score: number, yearId: number): number => {
+      const yearRatings = ratingsMapForPreview.get(yearId) || [];
+      for (const rating of yearRatings) {
+        const lowerBound = Number(rating.range_from || 0);
+        const upperBound = Number(rating.range_to || 0);
+        if (score >= lowerBound && score <= upperBound) {
+          return Number(rating.risk_type_id);
+        }
+      }
+      if (score >= 3.0) return 1;
+      if (score >= 2.0) return 2;
+      return 3;
+    };
+
+    let totalScoreForPreview = 0;
+    assessmentsForPreview.rows.forEach((a: any) => {
+      const yId = Number(a.year_id || 0);
+      const score = Number(a.weighted_score || 0);
+      const yearTotal = yearTotalsForPreview.get(yId) || 1;
+      const percentShare = yearTotal > 0 ? (score / yearTotal) * 100 : 0;
+      const riskTypeId = matchRatingForPreview(percentShare, yId);
+      if (riskTypeId === 1) totalScoreForPreview += 3;
+      else if (riskTypeId === 2) totalScoreForPreview += 2;
+      else totalScoreForPreview += 1;
+    });
+
+    const totalCountForPreview = assessmentsForPreview.rows.length;
+    const riskAverageForPreview = totalCountForPreview > 0 ? totalScoreForPreview / totalCountForPreview : 0;
+
+    let finalRiskForPreview = 'LOW';
+    if (riskAverageForPreview >= 2.5) finalRiskForPreview = 'HIGH';
+    else if (riskAverageForPreview >= 1.5) finalRiskForPreview = 'MEDIUM';
+
+    const riskTypeIdForPreview = finalRiskForPreview === 'HIGH' ? 1 : finalRiskForPreview === 'MEDIUM' ? 2 : 3;
+    const currentAuditDueDays = auditDueDaysMapForPreview.get(riskTypeIdForPreview) || 20;
+
     const auditStartDate =
       this.formatDate(
         new Date(),
@@ -896,7 +978,7 @@ export class InternalAuditService {
       this.formatDate(
         this.addDays(
           new Date(),
-          15,
+          currentAuditDueDays,
         ),
       );
 
@@ -3131,6 +3213,92 @@ export class InternalAuditService {
               ? Number(preview.live_next_status || 7)
               : 2;
 
+          const auditUnitId = preview.overview.audit_unit_id;
+          let complianceDueDays = 20;
+          if (auditUnitId) {
+            const assessments = await client.query(`
+              SELECT asm.id, asm.year_id, rsm.weighted_score
+              FROM audit_assesment_master asm
+              INNER JOIN report_scoring_master rsm ON rsm.assesment_id = asm.id
+              WHERE asm.audit_unit_id = $1 AND asm.deleted_at IS NULL AND rsm.deleted_at IS NULL
+            `, [auditUnitId]);
+
+            const yearIds = Array.from(new Set(assessments.rows.map((a: any) => Number(a.year_id))));
+            let yearTotals = new Map<number, number>();
+            if (yearIds.length > 0) {
+              const totalsRes = await client.query(`
+                SELECT asm.year_id, rsm.weighted_score
+                FROM audit_assesment_master asm
+                INNER JOIN report_scoring_master rsm ON rsm.assesment_id = asm.id
+                WHERE asm.year_id = ANY($1::bigint[]) AND asm.deleted_at IS NULL AND rsm.deleted_at IS NULL
+              `, [yearIds]);
+              totalsRes.rows.forEach((r: any) => {
+                const yId = Number(r.year_id || 0);
+                const score = Number(r.weighted_score || 0);
+                yearTotals.set(yId, (yearTotals.get(yId) || 0) + score);
+              });
+            }
+
+            const ratings = await client.query(`
+              SELECT year_id, risk_type_id, range_from, range_to
+              FROM risk_branch_rating
+              WHERE audit_unit_id = $1 AND deleted_at IS NULL
+            `, [auditUnitId]);
+            const ratingsMap = new Map<number, any[]>();
+            ratings.rows.forEach((r: any) => {
+              const yId = Number(r.year_id || 0);
+              if (!ratingsMap.has(yId)) ratingsMap.set(yId, []);
+              ratingsMap.get(yId)!.push(r);
+            });
+
+            const frequencySettings = await client.query(`
+              SELECT risk_type_id, frequency, audit_due_days, compliance_due_days
+              FROM audit_frequency_master 
+              WHERE is_active = 1 AND deleted_at IS NULL
+            `);
+
+            const complianceDueDaysMap = new Map<number, number>();
+            frequencySettings.rows.forEach((f: any) => {
+              complianceDueDaysMap.set(Number(f.risk_type_id), Number(f.compliance_due_days || 20));
+            });
+
+            const matchRating = (score: number, yearId: number): number => {
+              const yearRatings = ratingsMap.get(yearId) || [];
+              for (const rating of yearRatings) {
+                const lowerBound = Number(rating.range_from || 0);
+                const upperBound = Number(rating.range_to || 0);
+                if (score >= lowerBound && score <= upperBound) {
+                  return Number(rating.risk_type_id);
+                }
+              }
+              if (score >= 3.0) return 1;
+              if (score >= 2.0) return 2;
+              return 3;
+            };
+
+            let totalScore = 0;
+            assessments.rows.forEach((a: any) => {
+              const yId = Number(a.year_id || 0);
+              const score = Number(a.weighted_score || 0);
+              const yearTotal = yearTotals.get(yId) || 1;
+              const percentShare = yearTotal > 0 ? (score / yearTotal) * 100 : 0;
+              const riskTypeId = matchRating(percentShare, yId);
+              if (riskTypeId === 1) totalScore += 3;
+              else if (riskTypeId === 2) totalScore += 2;
+              else totalScore += 1;
+            });
+
+            const totalCount = assessments.rows.length;
+            const riskAverage = totalCount > 0 ? totalScore / totalCount : 0;
+
+            let finalRisk = 'LOW';
+            if (riskAverage >= 2.5) finalRisk = 'HIGH';
+            else if (riskAverage >= 1.5) finalRisk = 'MEDIUM';
+
+            const riskTypeId = finalRisk === 'HIGH' ? 1 : finalRisk === 'MEDIUM' ? 2 : 3;
+            complianceDueDays = complianceDueDaysMap.get(riskTypeId) || 20;
+          }
+
           const updated =
             await client.query(
               `
@@ -3140,7 +3308,7 @@ export class InternalAuditService {
                 audit_status_id = $4,
                 audit_emp_id = $2,
                 compliance_start_date = CASE WHEN $4 = 4 THEN CURRENT_DATE ELSE compliance_start_date END,
-                compliance_due_date = CASE WHEN $4 = 4 THEN CURRENT_DATE + INTERVAL '15 days' ELSE compliance_due_date END
+                compliance_due_date = CASE WHEN $4 = 4 THEN CURRENT_DATE + CAST($5 || ' days' AS INTERVAL) ELSE compliance_due_date END
             WHERE id = $1
                 AND audit_status_id = $3
                 AND deleted_at IS NULL
@@ -3151,6 +3319,7 @@ export class InternalAuditService {
                 employeeId,
                 currentStatus,
                 liveNextStatus,
+                complianceDueDays,
               ],
             );
 
@@ -3294,12 +3463,12 @@ export class InternalAuditService {
             AND cm.deleted_at IS NULL
             AND (
                 $2 = ''
-                OR cm.id::text = ANY(string_to_array($2, ','))
+                OR cm.id = ANY(string_to_array(NULLIF($2, ''), ',')::int[])
             )
             AND (
                 $3 = ''
-                OR cm.menu_id::text = ANY(string_to_array($3, ','))
-            )
+                OR cm.menu_id = ANY(string_to_array(NULLIF($3, ''), ',')::int[])
+)
         LIMIT 1;
         `,
         [
@@ -3420,7 +3589,7 @@ export class InternalAuditService {
               AND qhm.deleted_at IS NULL
               AND (
                   $3 = ''
-                  OR qhm.id::text = ANY(string_to_array($3, ','))
+                  OR qhm.id = ANY(string_to_array(NULLIF($3, ''), ',')::int[])
               )
           INNER JOIN question_master qm
               ON qm.set_id = qsm.id
@@ -3429,7 +3598,7 @@ export class InternalAuditService {
               AND qm.deleted_at IS NULL
               AND (
                   $4 = ''
-                  OR qm.id::text = ANY(string_to_array($4, ','))
+                  OR qm.id = ANY(string_to_array(NULLIF($4, ''), ',')::int[])
               )
           LEFT JOIN risk_category_master rcm
               ON rcm.id = qm.risk_category_id
@@ -3462,10 +3631,10 @@ export class InternalAuditService {
               AND ans.deleted_at IS NULL
           WHERE qsm.is_active = 1
               AND qsm.deleted_at IS NULL
-              AND qsm.id::text = ANY(string_to_array(COALESCE($1, ''), ','))
+              AND qsm.id = ANY(string_to_array(NULLIF(COALESCE($1, ''), ''), ',')::int[])
               AND (
                   $2 = ''
-                  OR qsm.id::text = ANY(string_to_array($2, ','))
+                  OR qsm.id = ANY(string_to_array(NULLIF($2, ''), ',')::int[])
               )
           ORDER BY
               qsm.id,
@@ -3544,7 +3713,7 @@ export class InternalAuditService {
               AND qhm.deleted_at IS NULL
               AND (
                   $2 = ''
-                  OR qhm.id::text = ANY(string_to_array($2, ','))
+                  OR qhm.id = ANY(string_to_array(NULLIF($2, ''), ',')::int[])
               )
           INNER JOIN question_master qm
               ON qm.set_id = qsm.id
@@ -3553,7 +3722,7 @@ export class InternalAuditService {
               AND qm.deleted_at IS NULL
               AND (
                   $3 = ''
-                  OR qm.id::text = ANY(string_to_array($3, ','))
+                  OR qm.id = ANY(string_to_array(NULLIF($3, ''), ',')::int[])
               )
           LEFT JOIN risk_category_master rcm
               ON rcm.id = qm.risk_category_id
@@ -3586,7 +3755,7 @@ export class InternalAuditService {
               AND ans.deleted_at IS NULL
           WHERE qsm.is_active = 1
               AND qsm.deleted_at IS NULL
-              AND qsm.id::text = ANY(string_to_array($1, ','))
+              AND qsm.id = ANY(string_to_array(NULLIF($1, ''), ',')::int[])
           ORDER BY
               qsm.id,
               qhm.id,
