@@ -3294,12 +3294,12 @@ export class InternalAuditService {
             AND cm.deleted_at IS NULL
             AND (
                 $2 = ''
-                OR cm.id::text = ANY(string_to_array($2, ','))
+                OR cm.id = ANY(string_to_array(NULLIF($2, ''), ',')::int[])
             )
             AND (
                 $3 = ''
-                OR cm.menu_id::text = ANY(string_to_array($3, ','))
-            )
+                OR cm.menu_id = ANY(string_to_array(NULLIF($3, ''), ',')::int[])
+)
         LIMIT 1;
         `,
         [
@@ -3420,7 +3420,7 @@ export class InternalAuditService {
               AND qhm.deleted_at IS NULL
               AND (
                   $3 = ''
-                  OR qhm.id::text = ANY(string_to_array($3, ','))
+                  OR qhm.id = ANY(string_to_array(NULLIF($3, ''), ',')::int[])
               )
           INNER JOIN question_master qm
               ON qm.set_id = qsm.id
@@ -3429,7 +3429,7 @@ export class InternalAuditService {
               AND qm.deleted_at IS NULL
               AND (
                   $4 = ''
-                  OR qm.id::text = ANY(string_to_array($4, ','))
+                  OR qm.id = ANY(string_to_array(NULLIF($4, ''), ',')::int[])
               )
           LEFT JOIN risk_category_master rcm
               ON rcm.id = qm.risk_category_id
@@ -3462,10 +3462,10 @@ export class InternalAuditService {
               AND ans.deleted_at IS NULL
           WHERE qsm.is_active = 1
               AND qsm.deleted_at IS NULL
-              AND qsm.id::text = ANY(string_to_array(COALESCE($1, ''), ','))
+              AND qsm.id = ANY(string_to_array(NULLIF(COALESCE($1, ''), ''), ',')::int[])
               AND (
                   $2 = ''
-                  OR qsm.id::text = ANY(string_to_array($2, ','))
+                  OR qsm.id = ANY(string_to_array(NULLIF($2, ''), ',')::int[])
               )
           ORDER BY
               qsm.id,
@@ -3544,7 +3544,7 @@ export class InternalAuditService {
               AND qhm.deleted_at IS NULL
               AND (
                   $2 = ''
-                  OR qhm.id::text = ANY(string_to_array($2, ','))
+                  OR qhm.id = ANY(string_to_array(NULLIF($2, ''), ',')::int[])
               )
           INNER JOIN question_master qm
               ON qm.set_id = qsm.id
@@ -3553,7 +3553,7 @@ export class InternalAuditService {
               AND qm.deleted_at IS NULL
               AND (
                   $3 = ''
-                  OR qm.id::text = ANY(string_to_array($3, ','))
+                  OR qm.id = ANY(string_to_array(NULLIF($3, ''), ',')::int[])
               )
           LEFT JOIN risk_category_master rcm
               ON rcm.id = qm.risk_category_id
@@ -3586,7 +3586,7 @@ export class InternalAuditService {
               AND ans.deleted_at IS NULL
           WHERE qsm.is_active = 1
               AND qsm.deleted_at IS NULL
-              AND qsm.id::text = ANY(string_to_array($1, ','))
+              AND qsm.id = ANY(string_to_array(NULLIF($1, ''), ',')::int[])
           ORDER BY
               qsm.id,
               qhm.id,
