@@ -52,10 +52,12 @@ export class ReportsService {
     return process.env.BANK_NAME || defaultName;
   }
 
-  // Special Audit Filter
   private normalizeAuditType(query: any) {
     const value = String(query?.audit_type_id || 'all').trim();
-    return ['1', '2'].includes(value) ? Number(value) : null;
+    if (value === 'all' || isNaN(Number(value))) {
+      return null;
+    }
+    return Number(value);
   }
 
   private applyAssessmentAuditTypeFilter(
@@ -68,7 +70,11 @@ export class ReportsService {
 
     if (auditTypeId) {
       params.push(auditTypeId);
-      where.push(`COALESCE(${field}, 1) = $${params.length}`);
+      const parts = field.split('.');
+      const alias = parts.length > 1 ? parts[0] : 'aam';
+      where.push(
+        `${alias}.audit_unit_id IN (SELECT id FROM audit_unit_master WHERE section_type_id = $${params.length})`,
+      );
     }
   }
 
@@ -10102,6 +10108,20 @@ export class ReportsService {
         aum.audit_unit_code,
         aum.name AS audit_unit_name,
         aum.section_type_id,
+        COALESCE(
+          (
+            SELECT STRING_AGG(atm.name, ', ' ORDER BY atm.name)
+            FROM audit_type_master atm
+            WHERE atm.deleted_at IS NULL
+              AND atm.id::text = ANY(
+                string_to_array(
+                  COALESCE(sec.audit_type_id::text, ''),
+                  ','
+                )
+              )
+          ),
+          ''
+        ) AS section_name,
         asm.audit_emp_id,
         emp.name AS auditor_name,
         emp.emp_code AS auditor_code,
@@ -10119,6 +10139,8 @@ export class ReportsService {
       FROM audit_assesment_master asm
       INNER JOIN audit_unit_master aum
         ON aum.id = asm.audit_unit_id
+      LEFT JOIN audit_section_master sec
+        ON sec.id = aum.section_type_id
       LEFT JOIN year_master ym
         ON ym.id = asm.year_id
       LEFT JOIN employee_master emp
@@ -10141,6 +10163,9 @@ export class ReportsService {
         audit_type_id: String(query.audit_type_id || 'all').trim(),
         audit_status: auditStatus,
         comp_status: complianceStatus,
+      },
+      header: {
+        sectionName: rows[0]?.section_name || '',
       },
       total: rows.length,
       generatedAt: new Date().toISOString(),
@@ -10221,6 +10246,7 @@ export class ReportsService {
     return {
       sr_no: srNo,
       id: row.id,
+      section_name: row.section_name,
       year_id: row.year_id,
       financial_year: row.financial_year,
       audit_unit_id: row.audit_unit_id,
@@ -10353,10 +10379,26 @@ export class ReportsService {
         aam.frequency,
         aam.is_multiple_auditors,
         aum.name AS audit_unit_name,
-        aum.audit_unit_code
+        aum.audit_unit_code,
+        COALESCE(
+          (
+            SELECT STRING_AGG(atm.name, ', ' ORDER BY atm.name)
+            FROM audit_type_master atm
+            WHERE atm.deleted_at IS NULL
+              AND atm.id::text = ANY(
+                string_to_array(
+                  COALESCE(sec.audit_type_id::text, ''),
+                  ','
+                )
+              )
+          ),
+          ''
+        ) AS section_name
       FROM audit_assesment_master aam
       LEFT JOIN audit_unit_master aum
         ON aum.id = aam.audit_unit_id
+      LEFT JOIN audit_section_master sec
+        ON sec.id = aum.section_type_id
       WHERE aam.id = $1
         AND aam.deleted_at IS NULL
       `,
@@ -10374,6 +10416,7 @@ export class ReportsService {
       auditUnit: this.auditUnitName(row),
       frequency: row.frequency,
       isMultipleAuditors: !!row.is_multiple_auditors,
+      sectionName: row.section_name,
     };
   }
 
