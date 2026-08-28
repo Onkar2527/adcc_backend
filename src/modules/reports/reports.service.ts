@@ -239,9 +239,10 @@ export class ReportsService {
         },
       ],
       columns: [
-        { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
-        { key: 'audit_unit_name', label: 'Audit Unit', width: '10%' },
-        { key: 'auditor_name', label: 'Auditor', width: '15%' },
+        { key: 'sr_no', label: 'Sr. No', width: '4%', align: 'center' },
+        { key: 'audit_unit_name', label: 'Audit Unit', width: '12%' },
+        { key: 'audit_type_name', label: 'Audit Type', width: '12%' },
+        { key: 'auditor_name', label: 'Auditor', width: '12%' },
         {
           key: 'audit_start_date',
           label: 'Audit Start Date',
@@ -257,7 +258,7 @@ export class ReportsService {
         {
           key: 'assessment_period',
           label: 'Assessment Period',
-          width: '15%',
+          width: '14%',
           type: 'assessmentPeriod',
         },
         {
@@ -284,7 +285,7 @@ export class ReportsService {
         {
           key: 'compliance_status_label',
           label: 'Compliance Status',
-          width: '13%',
+          width: '12%',
           type: 'status',
           expiredKey: 'compliance_expired',
           dueDateKey: 'compliance_due_date',
@@ -469,31 +470,40 @@ export class ReportsService {
         },
       ],
       columns: [
-        { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
-        { key: 'audit_unit_name', label: 'Audit Unit', width: '10%' },
-        { key: 'auditor_name', label: 'Auditor', width: '15%' },
+        { key: 'sr_no', label: 'Sr. No', width: '3%', align: 'center' },
+        { key: 'audit_unit_name', label: 'Audit Unit', width: '8%' },
+        { key: 'audit_type_name', label: 'Audit Type', width: '8%' },
+        { key: 'branch_manager_name', label: 'Branch Manager', width: '8%' },
+        { key: 'auditor_name', label: 'Auditor', width: '8%' },
+        { key: 'reviewer_name', label: 'Reviewer', width: '8%' },
         {
           key: 'audit_start_date',
           label: 'Audit Start Date',
-          width: '8%',
+          width: '6%',
           type: 'date',
         },
         {
           key: 'audit_end_date',
           label: 'Audit End Date',
-          width: '8%',
+          width: '6%',
           type: 'date',
+        },
+        {
+          key: 'inspection_days',
+          label: 'Inspection Days',
+          width: '4%',
+          align: 'center',
         },
         {
           key: 'assessment_period',
           label: 'Assessment Period',
-          width: '15%',
+          width: '10%',
           type: 'assessmentPeriod',
         },
         {
           key: 'audit_status_label',
           label: 'Audit Status',
-          width: '10%',
+          width: '6%',
           align: 'center',
           type: 'status',
           expiredKey: 'audit_expired',
@@ -502,22 +512,40 @@ export class ReportsService {
         {
           key: 'compliance_start_date',
           label: 'Compliance Start Date',
-          width: '8%',
+          width: '6%',
           type: 'date',
         },
         {
           key: 'compliance_end_date',
           label: 'Compliance End Date',
-          width: '8%',
+          width: '6%',
           type: 'date',
+        },
+        {
+          key: 'compliance_days',
+          label: 'Compliance Days',
+          width: '4%',
+          align: 'center',
         },
         {
           key: 'compliance_status_label',
           label: 'Compliance Status',
-          width: '13%',
+          width: '6%',
           type: 'status',
           expiredKey: 'compliance_expired',
           dueDateKey: 'compliance_due_date',
+        },
+        {
+          key: 'expiry_date',
+          label: 'Expiry Date',
+          width: '6%',
+          type: 'date',
+        },
+        {
+          key: 'total_audit_days',
+          label: 'Total Audit Days',
+          width: '4%',
+          align: 'center',
         },
       ],
       summaryCards: [
@@ -572,20 +600,23 @@ export class ReportsService {
         },
       ],
       columns: [
-        { key: 'sr_no', label: 'Sr. No.', width: '10%', align: 'center' },
-        { key: 'inspection_type', label: 'Inspection Type', width: '20%' },
+        { key: 'sr_no', label: 'Sr. No.', width: '5%', align: 'center' },
+        { key: 'audit_type', label: 'Audit Type', width: '15%' },
+        { key: 'inspection_type', label: 'Inspection Type', width: '12%' },
+        { key: 'how_much_completed', label: 'How Much Completed', width: '15%', align: 'center' },
+        { key: 'report_submitted_date', label: 'Report Submitted Date', width: '13%', type: 'date' },
         {
           key: 'rejected_count',
           label: 'Rejected Count',
-          width: '10%',
+          width: '8%',
           align: 'center',
         },
-        { key: 'employee_name', label: 'Employee Name', width: '10%' },
-        { key: 'status_label', label: 'Status', width: '40%' },
+        { key: 'employee_name', label: 'Employee Name', width: '12%' },
+        { key: 'status_label', label: 'Status', width: '10%' },
         {
           key: 'created_at',
           label: 'Status Changed On',
-          width: '20%',
+          width: '10%',
           type: 'date',
         },
       ],
@@ -657,8 +688,8 @@ export class ReportsService {
       page: 'A4L',
       fileName: 'audit-complete-report',
       brand: {
-        logoUrl: '/assets/images/logos/assurepro-logo.svg',
-        bankName: this.getBankName(),
+        logoUrl: '/assets/images/logos/kredpool_logo.png',
+        bankName: this.getBankName('The Kurla Nagrik Sahakari Bank Ltd'),
       },
       defaultFilters: {
         reportAuditUnit: '',
@@ -3575,7 +3606,7 @@ export class ReportsService {
         assessment_period: `${this.dateOnly(assessment.assesment_period_from)} to ${this.dateOnly(assessment.assesment_period_to)} (Frequency: ${assessment.frequency || '-'} Months)`,
         audit_status_id: auditStatusId,
         audit_status_label: this.auditTimelineStatusLabel(auditStatusId),
-        
+
         audited_high: counts.high_audited,
         audited_medium: counts.medium_audited,
         audited_low: counts.low_audited,
@@ -3901,6 +3932,23 @@ export class ReportsService {
       assessmentHeader = await this.getAssessmentHeader(assessmentIds[0]);
     }
 
+    let exeData: any = null;
+    if (unitIds.length === 1 && assessmentIds.length === 1) {
+      try {
+        const exeReport = await this.getExecutiveSummaryReport(
+          {
+            ...query,
+            reportAuditUnit: String(unitIds[0]),
+            reportAuditAssesment: String(assessmentIds[0]),
+          },
+          false,
+        );
+        exeData = exeReport.exeData;
+      } catch (err) {
+        console.error('Failed to load executive summary for audit complete report:', err);
+      }
+    }
+
     return {
       filters: {
         reportAuditUnit: query.reportAuditUnit || '',
@@ -3914,6 +3962,7 @@ export class ReportsService {
       generatedAt: new Date().toISOString(),
       header: assessmentHeader,
       rows,
+      exeData,
       summary: {
         total: questionRows.length,
         complianceRequired: questionRows.filter(
@@ -10726,6 +10775,12 @@ export class ReportsService {
         aum.audit_unit_code,
         aum.name AS audit_unit_name,
         aum.section_type_id,
+        aut.name AS audit_type_name,
+        branch_manager.name AS branch_manager_name,
+        review.name AS reviewer_name,
+        COALESCE(asm.audit_end_date::date - asm.audit_start_date::date, 0) AS inspection_days,
+        COALESCE(asm.compliance_end_date::date - asm.compliance_start_date::date, 0) AS compliance_days,
+        COALESCE(asm.compliance_end_date::date - asm.audit_start_date::date, 0) AS total_audit_days,
         asm.audit_emp_id,
         emp.name AS auditor_name,
         emp.emp_code AS auditor_code,
@@ -10747,6 +10802,12 @@ export class ReportsService {
         ON ym.id = asm.year_id
       LEFT JOIN employee_master emp
         ON emp.id = asm.audit_emp_id
+      LEFT JOIN audit_type_master aut
+        ON aut.id = asm.audit_type_id AND aut.deleted_at IS NULL
+      LEFT JOIN employee_master branch_manager
+        ON branch_manager.id = asm.branch_head_id
+      LEFT JOIN employee_master review
+        ON review.id = asm.audit_review_emp_id
       WHERE ${where.join(' AND ')}
       ORDER BY aum.audit_unit_code ASC, asm.audit_unit_id ASC, asm.assesment_period_from ASC
       `,
@@ -10788,6 +10849,24 @@ export class ReportsService {
       throw new BadRequestException('Audit assessment is required');
     }
 
+    const progressResult = await this.db.query(
+      `
+      SELECT 
+        COUNT(id) AS total_count,
+        SUM(CASE WHEN answer_given IS NOT NULL AND answer_given != '' THEN 1 ELSE 0 END) AS answered_count
+      FROM answers_data
+      WHERE assesment_id = $1
+        AND deleted_at IS NULL
+      `,
+      [assessmentId]
+    );
+
+    const progressRow = progressResult.rows[0];
+    const totalCount = Number(progressRow?.total_count || 0);
+    const answeredCount = Number(progressRow?.answered_count || 0);
+    const progressPercent = totalCount > 0 ? Math.round((answeredCount * 100) / totalCount) : 0;
+    const progressLabel = `${progressPercent}% (${answeredCount}/${totalCount})`;
+
     const result = await this.db.query(
       `
       SELECT
@@ -10798,12 +10877,19 @@ export class ReportsService {
         aut.rejected_cnt,
         aut.reviewer_emp_id,
         aut.created_at,
-        emp.name AS employee_name
+        emp.name AS employee_name,
+        atm.name AS audit_type_name,
+        esb.report_submitted_date,
+        asm.audit_end_date
       FROM audit_assesment_master asm
       INNER JOIN audit_assesment_timeline aut
         ON asm.id = aut.assesment_id
       LEFT JOIN employee_master emp
         ON emp.id = aut.reviewer_emp_id
+      LEFT JOIN audit_type_master atm
+        ON atm.id = asm.audit_type_id AND atm.deleted_at IS NULL
+      LEFT JOIN executive_summary_basic_details esb
+        ON esb.assesment_id = asm.id
       WHERE aut.assesment_id = $1
         AND asm.audit_unit_id = $2
         AND ($3::int IS NULL OR COALESCE(asm.audit_type_id, 1) = $3)
@@ -10816,7 +10902,10 @@ export class ReportsService {
 
     const rows = result.rows.map((row: any, index: number) => ({
       sr_no: index + 1,
+      audit_type: row.audit_type_name || '-',
       inspection_type: this.timelineTypeLabel(row.type_id),
+      how_much_completed: progressLabel,
+      report_submitted_date: row.report_submitted_date || row.audit_end_date || null,
       rejected_count: [3, 6].includes(Number(row.status_id))
         ? row.rejected_cnt || 0
         : '-',
@@ -11461,6 +11550,7 @@ export class ReportsService {
         aum.audit_unit_code,
         aum.name AS audit_unit_name,
         aum.section_type_id,
+        aut.name AS audit_type_name,
         COALESCE(
           (
             SELECT STRING_AGG(atm.name, ', ' ORDER BY atm.name)
@@ -11498,6 +11588,8 @@ export class ReportsService {
         ON ym.id = asm.year_id
       LEFT JOIN employee_master emp
         ON emp.id = asm.audit_emp_id
+      LEFT JOIN audit_type_master aut
+        ON aut.id = asm.audit_type_id AND aut.deleted_at IS NULL
       WHERE ${where.join(' AND ')}
       ORDER BY aum.audit_unit_code ASC, asm.audit_unit_id ASC, asm.assesment_period_from ASC
       `,
@@ -11605,6 +11697,15 @@ export class ReportsService {
       audit_unit_id: row.audit_unit_id,
       audit_unit_code: row.audit_unit_code,
       audit_unit_name: this.auditUnitName(row),
+      audit_type_name: row.audit_type_name || '-',
+      branch_manager_name: row.branch_manager_name || '-',
+      reviewer_name: row.reviewer_name || '-',
+      inspection_days: row.inspection_days !== undefined ? (row.audit_end_date && row.audit_start_date ? `${row.inspection_days} Days` : '-') : '-',
+      compliance_days: row.compliance_days !== undefined ? (row.compliance_end_date && row.compliance_start_date ? `${row.compliance_days} Days` : '-') : '-',
+      total_audit_days: row.total_audit_days !== undefined ? (row.compliance_end_date && row.audit_start_date ? `${row.total_audit_days} Days` : '-') : '-',
+      expiry_date: complianceExpired
+        ? row.compliance_due_date
+        : (auditExpired ? row.audit_due_date : null),
       auditor_name: this.employeeName(row),
       audit_start_date: row.audit_start_date,
       audit_end_date: row.audit_end_date,
