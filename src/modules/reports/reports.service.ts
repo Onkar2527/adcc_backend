@@ -3411,14 +3411,17 @@ export class ReportsService {
           totalAuditedMedium: 0,
           totalAuditedLow: 0,
           totalAuditedNoRisk: 0,
+          totalAuditedTotal: 0,
           totalPendingHigh: 0,
           totalPendingMedium: 0,
           totalPendingLow: 0,
           totalPendingNoRisk: 0,
+          totalPendingTotal: 0,
           totalCompletedHigh: 0,
           totalCompletedMedium: 0,
           totalCompletedLow: 0,
           totalCompletedNoRisk: 0,
+          totalCompletedTotal: 0,
         },
       };
     }
@@ -3559,6 +3562,12 @@ export class ReportsService {
       const completed_low = counts.low_audited - pending_low;
       const completed_no_risk = counts.no_risk_audited - pending_no_risk;
 
+      const audited_total = counts.high_audited + counts.medium_audited + counts.low_audited + counts.no_risk_audited;
+
+      const pending_total = pending_high + pending_medium + pending_low + pending_no_risk;
+
+      const completed_total = completed_high + completed_medium + completed_low + completed_no_risk;
+
       return {
         sr_no: index + 1,
         audit_unit_id: assessment.audit_unit_id,
@@ -3571,16 +3580,19 @@ export class ReportsService {
         audited_medium: counts.medium_audited,
         audited_low: counts.low_audited,
         audited_no_risk: counts.no_risk_audited,
+        audited_total,
 
         pending_high,
         pending_medium,
         pending_low,
         pending_no_risk,
+        pending_total,
 
         completed_high,
         completed_medium,
         completed_low,
         completed_no_risk,
+        completed_total,
       };
     });
 
@@ -3605,16 +3617,19 @@ export class ReportsService {
         totalAuditedMedium: rows.reduce((sum, row) => sum + row.audited_medium, 0),
         totalAuditedLow: rows.reduce((sum, row) => sum + row.audited_low, 0),
         totalAuditedNoRisk: rows.reduce((sum, row) => sum + row.audited_no_risk, 0),
+        totalAuditedTotal: rows.reduce((sum, row) => sum + row.audited_total, 0),
 
         totalPendingHigh: rows.reduce((sum, row) => sum + row.pending_high, 0),
         totalPendingMedium: rows.reduce((sum, row) => sum + row.pending_medium, 0),
         totalPendingLow: rows.reduce((sum, row) => sum + row.pending_low, 0),
         totalPendingNoRisk: rows.reduce((sum, row) => sum + row.pending_no_risk, 0),
+        totalPendingTotal: rows.reduce((sum, row) => sum + row.pending_total, 0),
 
         totalCompletedHigh: rows.reduce((sum, row) => sum + row.completed_high, 0),
         totalCompletedMedium: rows.reduce((sum, row) => sum + row.completed_medium, 0),
         totalCompletedLow: rows.reduce((sum, row) => sum + row.completed_low, 0),
         totalCompletedNoRisk: rows.reduce((sum, row) => sum + row.completed_no_risk, 0),
+        totalCompletedTotal: rows.reduce((sum, row) => sum + row.completed_total, 0),
       },
     };
   }
