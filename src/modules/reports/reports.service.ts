@@ -3074,7 +3074,7 @@ export class ReportsService {
       ],
       auditUnits: [
         { value: 'all_branches', label: 'All Branches' },
-        { value: 'all_head_of_dept', label: 'All Head Of Departments' },
+        { value: 'all_head_of_dept', label: 'All Departments' },
         ...units.rows.map((row: any) => ({
           value: String(row.id),
           label: this.auditUnitName(row),
@@ -3620,25 +3620,85 @@ export class ReportsService {
   }
 
   async getAuditCompleteReport(query: any) {
-    const auditUnitId = Number(query.reportAuditUnit || 0);
-    const assessmentId = Number(query.reportAuditAssesment || 0);
+    const userTypeId = Number(query.user_type_id || 0);
+    const auditUnitAuthority = String(query.audit_unit_authority || '').trim();
+    const inputUnit = String(query.reportAuditUnit || '').trim();
+    let inputAssessment = String(query.reportAuditAssesment || '').trim();
+    if ((inputUnit === 'all' || inputUnit === 'all_branches' || inputUnit === 'all_head_of_dept') && !inputAssessment) {
+      inputAssessment = 'all';
+    }
     const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
-    if (!auditUnitId) {
+    let assignedIds: number[] | null = null;
+    if ([2, 3, 4, 6].includes(userTypeId) && auditUnitAuthority) {
+      assignedIds = auditUnitAuthority
+        .split(',')
+        .map((s) => Number(s.trim()))
+        .filter((n) => !isNaN(n));
+    }
+
+    let unitIds: number[] = [];
+    if (inputUnit === 'all' || inputUnit === 'all_branches') {
+      const res = await this.db.query(
+        `SELECT id FROM audit_unit_master WHERE section_type_id = 1 AND is_active = 1 AND deleted_at IS NULL`
+      );
+      unitIds = res.rows.map((r: any) => Number(r.id));
+      if (assignedIds) {
+        unitIds = unitIds.filter(id => assignedIds.includes(id));
+      }
+    } else if (inputUnit === 'all_head_of_dept') {
+      const res = await this.db.query(
+        `SELECT id FROM audit_unit_master WHERE section_type_id > 1 AND is_active = 1 AND deleted_at IS NULL`
+      );
+      unitIds = res.rows.map((r: any) => Number(r.id));
+      if (assignedIds) {
+        unitIds = unitIds.filter(id => assignedIds.includes(id));
+      }
+    } else {
+      const unitNum = Number(inputUnit);
+      if (!isNaN(unitNum) && unitNum > 0) {
+        if (!assignedIds || assignedIds.includes(unitNum)) {
+          unitIds = [unitNum];
+        }
+      }
+    }
+
+    if (!unitIds.length) {
       throw new BadRequestException('Audit unit is required');
     }
 
-    if (!assessmentId) {
+    let assessmentIds: number[] = [];
+    if (inputAssessment === 'all') {
+      const yearVal = String(query.financial_year || '').trim();
+      let queryStr = `SELECT id FROM audit_assesment_master WHERE audit_unit_id = ANY($1::int[]) AND deleted_at IS NULL`;
+      const queryParams: any[] = [unitIds];
+      if (yearVal && yearVal !== 'all') {
+        const yearNum = Number(yearVal);
+        if (!isNaN(yearNum) && yearNum > 0) {
+          queryStr += ` AND year_id = $2`;
+          queryParams.push(yearNum);
+        }
+      }
+      const res = await this.db.query(queryStr, queryParams);
+      assessmentIds = res.rows.map((r: any) => Number(r.id));
+    } else {
+      const assessNum = Number(inputAssessment);
+      if (!isNaN(assessNum) && assessNum > 0) {
+        assessmentIds = [assessNum];
+      }
+    }
+
+    if (!assessmentIds.length) {
       throw new BadRequestException('Audit assessment is required');
     }
 
     const riskCategoryIds = this.toNumberArray(query.risk_category_arr);
     const businessRiskIds = this.toNumberArray(query.business_risk_arr);
     const controlRiskIds = this.toNumberArray(query.control_risk_arr);
-    const params: any[] = [assessmentId, auditUnitId];
+    const params: any[] = [assessmentIds, unitIds];
     const where = [
-      'ad.assesment_id = $1',
-      'aam.audit_unit_id = $2',
+      'ad.assesment_id = ANY($1::int[])',
+      'aam.audit_unit_id = ANY($2::int[])',
       isFreeFlow ? 'aam.audit_status_id >= 1' : 'aam.audit_status_id > 1',
       'ad.deleted_at IS NULL',
       'qm.deleted_at IS NULL',
@@ -3671,6 +3731,11 @@ export class ReportsService {
         ad.id,
         auditor.emp_code AS auditor_emp_code,
         aam.is_multiple_auditors,
+        aam.assesment_period_from,
+        aam.assesment_period_to,
+        aam.frequency,
+        aum.name AS branch_name,
+        aum.audit_unit_code AS branch_code,
         ad.menu_id,
         mm.name AS menu_name,
         ad.category_id,
@@ -3711,6 +3776,8 @@ export class ReportsService {
       FROM answers_data ad
       INNER JOIN audit_assesment_master aam
         ON aam.id = ad.assesment_id
+      LEFT JOIN audit_unit_master aum
+        ON aum.id = aam.audit_unit_id
       LEFT JOIN menu_master mm
         ON mm.id = ad.menu_id
       LEFT JOIN category_master cm
@@ -3754,7 +3821,8 @@ export class ReportsService {
       LEFT JOIN employee_master auditor
         ON auditor.id = ad.audit_emp_id
       WHERE ${where.join(' AND ')}
-      ORDER BY ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
+      ORDER BY aum.name, ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
+      LIMIT 10000
       `,
       params,
     );
@@ -3762,8 +3830,8 @@ export class ReportsService {
     const answerIds = result.rows
       .map((row: any) => Number(row.id))
       .filter(Boolean);
-    const annexureRowsByAnswer = await this.getAuditCompleteAnnexureRows(
-      assessmentId,
+    const annexureRowsByAnswer = await this.getAuditCompleteAnnexureRowsForAssessments(
+      assessmentIds,
       answerIds,
     );
 
@@ -3792,12 +3860,36 @@ export class ReportsService {
     }));
     const rows = this.buildAuditCompleteGroupedRows(questionRows);
 
-    const assessment = await this.getAssessmentHeader(assessmentId);
+    const isAllBranches = query.reportAuditUnit === 'all' || query.reportAuditUnit === 'all_branches';
+    const isAllDepts = query.reportAuditUnit === 'all_head_of_dept';
+    const isAllAssessments = query.reportAuditAssesment === 'all';
+
+    let assessmentHeader: any;
+    if (isAllBranches || isAllDepts || isAllAssessments) {
+      assessmentHeader = {
+        assessmentPeriod: isAllAssessments ? 'All Periods' : 'All Periods',
+        auditUnit: isAllBranches ? 'All Branches' : (isAllDepts ? 'All Departments' : ''),
+        frequency: '-',
+        isMultipleAuditors: false,
+      };
+      if (!isAllBranches && !isAllDepts && unitIds.length === 1) {
+        const unitRes = await this.db.query('SELECT name FROM audit_unit_master WHERE id = $1', [unitIds[0]]);
+        if (unitRes.rows.length) {
+          assessmentHeader.auditUnit = unitRes.rows[0].name;
+        }
+      }
+      if (!isAllAssessments && assessmentIds.length === 1) {
+        const header = await this.getAssessmentHeader(assessmentIds[0]);
+        assessmentHeader.assessmentPeriod = header.assessmentPeriod;
+      }
+    } else {
+      assessmentHeader = await this.getAssessmentHeader(assessmentIds[0]);
+    }
 
     return {
       filters: {
-        reportAuditUnit: String(auditUnitId),
-        reportAuditAssesment: String(assessmentId),
+        reportAuditUnit: query.reportAuditUnit || '',
+        reportAuditAssesment: query.reportAuditAssesment || '',
         audit_type_id: String(query.audit_type_id || 'all').trim(),
         risk_category_arr: riskCategoryIds,
         business_risk_arr: businessRiskIds,
@@ -3805,7 +3897,7 @@ export class ReportsService {
       },
       total: questionRows.length,
       generatedAt: new Date().toISOString(),
-      header: assessment,
+      header: assessmentHeader,
       rows,
       summary: {
         total: questionRows.length,
@@ -4465,11 +4557,11 @@ export class ReportsService {
 
     const assessment = isAllBranches
       ? {
-          assessmentPeriod: 'All Periods',
-          auditUnit: 'All Branches',
-          frequency: '-',
-          isMultipleAuditors: false,
-        }
+        assessmentPeriod: 'All Periods',
+        auditUnit: 'All Branches',
+        frequency: '-',
+        isMultipleAuditors: false,
+      }
       : await this.getAssessmentHeader(assessmentId);
 
     return {
@@ -11332,6 +11424,8 @@ export class ReportsService {
       where.push(`asm.audit_unit_id = $${params.length}`);
     }
 
+    this.applyUserAuthorityRestriction(where, params, query, 'asm.audit_unit_id');
+
     if (financialYear !== 'all') {
       params.push(Number(financialYear));
       where.push(`asm.year_id = $${params.length}`);
@@ -11786,6 +11880,7 @@ export class ReportsService {
 
   private buildAuditCompleteGroupedRows(questionRows: any[]) {
     const rows: any[] = [];
+    let currentBranch = '';
     let currentMenu = '';
     let currentCategory = '';
     let currentHeader = '';
@@ -11793,10 +11888,31 @@ export class ReportsService {
     let headerSerial = 0;
 
     questionRows.forEach((row) => {
+      const branch = row.branch_name ? `${row.branch_code || ''} - ${row.branch_name}`.trim() : '';
       const menu = String(row.menu_name || '-').trim();
       const category = String(row.category_name || '-').trim();
       const header = String(row.header_name || '-').trim();
       const account = String(row.__account_key || '').trim();
+
+      if (branch && branch !== currentBranch) {
+        let label = `Branch: ${branch}`;
+        if (row.assesment_period_from && row.assesment_period_to) {
+          const period = `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)}`;
+          const freq = row.frequency ? ` (${row.frequency})` : '';
+          label += ` | Assessment Period: ${period}${freq}`;
+        }
+        rows.push({
+          __report_group: true,
+          __group_level: 'branch',
+          __group_label: label,
+        });
+        currentBranch = branch;
+        currentMenu = '';
+        currentCategory = '';
+        currentHeader = '';
+        currentAccount = '';
+        headerSerial = 0;
+      }
 
       if (menu !== currentMenu) {
         rows.push({
@@ -12824,5 +12940,23 @@ export class ReportsService {
       rows: auditUnits,
       summary: {},
     };
+  }
+
+  private applyUserAuthorityRestriction(where: string[], params: any[], query: any, auditUnitField: string) {
+    const userTypeId = Number(query.user_type_id || 0);
+    const auditUnitAuthority = String(query.audit_unit_authority || '').trim();
+
+    if ([2, 3, 4, 6].includes(userTypeId) && auditUnitAuthority) {
+      const assignedIds = auditUnitAuthority
+        .split(',')
+        .map((s) => Number(s.trim()))
+        .filter((n) => !isNaN(n));
+      if (assignedIds.length > 0) {
+        params.push(assignedIds);
+        where.push(`${auditUnitField} = ANY($${params.length}::int[])`);
+      } else {
+        where.push('1 = 0');
+      }
+    }
   }
 }
