@@ -70,17 +70,13 @@ export class ReportsService {
 
     if (auditTypeId) {
       params.push(auditTypeId);
-      const parts = field.split('.');
-      const alias = parts.length > 1 ? parts[0] : 'aam';
-      where.push(
-        `${alias}.audit_unit_id IN (SELECT id FROM audit_unit_master WHERE section_type_id = $${params.length})`,
-      );
+      where.push(`COALESCE(${field}, 1) = $${params.length}`);
     }
   }
 
   // Report Definitions
 
-  async getReportDefinition(reportSlug: string, isFreeFlow = false) {
+  async getReportDefinition(reportSlug: string, isFreeFlow = false, liveManagerCompliance = false) {
     if (reportSlug === 'audit-status-report') {
       return this.getAuditStatusDefinition();
     }
@@ -114,15 +110,27 @@ export class ReportsService {
     }
 
     if (reportSlug === 'compliance-report') {
-      return this.getComplianceDefinition(isFreeFlow);
+      return this.getComplianceDefinition(liveManagerCompliance);
     }
 
     if (reportSlug === 'compliance-summary-report') {
-      return this.getComplianceSummaryDefinition(isFreeFlow);
+      return this.getComplianceSummaryDefinition(liveManagerCompliance);
+    }
+
+    if (reportSlug === 'risk-trend-summary-report') {
+      return this.getRiskTrendSummaryDefinition();
+    }
+
+    if (reportSlug === 'risk-category-summary') {
+      return this.getRiskCategorySummaryDefinition(isFreeFlow);
+    }
+
+    if (reportSlug === 'type-wise-risk-weightage') {
+      return this.getTypewiseRiskWeightageDefinition(isFreeFlow);
     }
 
     if (reportSlug === 'risk-weightage-report') {
-      return this.getRiskWeightageDefinition(isFreeFlow);
+      return this.getRiskWeightageDefinition(liveManagerCompliance);
     }
 
     if (reportSlug === 'risk-wise-audit-units-report') {
@@ -166,7 +174,7 @@ export class ReportsService {
     }
 
     if (reportSlug === 'pending-compliance-detail-report') {
-      return this.getPendingComplianceDetailDefinition(isFreeFlow);
+      return this.getPendingComplianceDetailDefinition(liveManagerCompliance);
     }
 
     if (reportSlug === 'executive-summary-audit-report') {
@@ -801,8 +809,8 @@ export class ReportsService {
     };
   }
 
-  private async getComplianceDefinition(isFreeFlow = false) {
-    const lookups = await this.getComplianceLookups(isFreeFlow);
+  private async getComplianceDefinition(liveManagerCompliance = false) {
+    const lookups = await this.getComplianceLookups(liveManagerCompliance);
 
     return {
       slug: 'compliance-report',
@@ -884,8 +892,124 @@ export class ReportsService {
     };
   }
 
-  private async getComplianceSummaryDefinition(isFreeFlow = false) {
-    const lookups = await this.getComplianceLookups(isFreeFlow);
+  private async getTypewiseRiskWeightageDefinition(isFreeFlow = false) {
+    const lookups = await this.getAuditCompleteLookups(isFreeFlow);
+
+    return {
+      slug: 'type-wise-risk-weightage',
+      title: 'Typewise Risk Weightage Report',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'type-wise-risk-weightage-report',
+      brand: {
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
+        bankName: this.getBankName(),
+      },
+      defaultFilters: {
+        selectSearchTypeFilter: '3',
+        reportAuditUnit: '',
+        financial_year: 'all',
+        reportAuditAssesment: '',
+        rmv_pending_assesments: [],
+      },
+      filters: [
+        {
+          key: 'selectSearchTypeFilter',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '1', label: 'All Branches' },
+            { value: '2', label: 'All Head Of Departments' },
+            { value: '3', label: 'Single Branch (Assessment Wise)' },
+            { value: '4', label: 'Single Department (Assessment Wise)' },
+            { value: '5', label: 'Single Branch Wise' },
+            { value: '6', label: 'Single Head Of Department Wise' },
+          ],
+        },
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Branch / Department',
+          type: 'select',
+          required: false,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Select Assessment',
+          type: 'select',
+          required: false,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+        {
+          key: 'rmv_pending_assesments',
+          label: 'Remove Pending Assessments',
+          type: 'checkbox',
+          options: [{ value: '1', label: 'Remove Pending Assessments' }],
+        },
+      ],
+      columns: [
+        { key: 'audit_unit_code', label: 'Branch Code', align: 'center', width: '15%' },
+        { key: 'audit_unit_name', label: 'Branch Name', width: '30%' },
+        { key: 'risk_type', label: 'Risk Type', width: '25%' },
+        { key: 'no_of_audits', label: 'Number of Audits', align: 'center', width: '10%' },
+        { key: 'weighted_score', label: 'Weighted Score', align: 'right', width: '10%' },
+        { key: 'percentage', label: '% To Total Weighted Score', align: 'right', width: '10%' },
+      ],
+    };
+  }
+
+  private async getRiskTrendSummaryDefinition() {
+    const lookups = await this.getAuditStatusLookups();
+
+    return {
+      slug: 'risk-trend-summary-report',
+      title: 'Risk Trend Summary Report',
+      category: 'Audit Reports',
+      page: 'A4L',
+      fileName: 'risk-trend-summary-report',
+      brand: {
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
+        bankName: this.getBankName(),
+      },
+      defaultFilters: {
+        audit_unit_id: '',
+      },
+      filters: [
+        {
+          key: 'audit_unit_id',
+          label: 'Audit Unit',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '', label: 'Please select audit unit' },
+            ...lookups.auditUnits.filter((opt: any) => opt.value !== 'all_branches' && opt.value !== 'all_head_of_dept'),
+          ],
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No.', width: '8%', align: 'center' },
+        { key: 'assessmentPeriod', label: 'Assessment Period', type: 'assessmentPeriod', width: '30%' },
+        { key: 'audit_start_date', label: 'Start Date', type: 'date', width: '15%', align: 'center' },
+        { key: 'audit_end_date', label: 'End Date', type: 'date', width: '15%', align: 'center' },
+        { key: 'frequency', label: 'Frequency (Months)', width: '12%', align: 'center' },
+        { key: 'weighted_score', label: 'Weighted Score', width: '10%', align: 'center' },
+        { key: 'trend', label: 'Trend', type: 'trend', width: '10%', align: 'center' },
+      ],
+    };
+  }
+
+  private async getComplianceSummaryDefinition(liveManagerCompliance = false) {
+    const lookups = await this.getComplianceLookups(liveManagerCompliance);
 
     return {
       slug: 'compliance-summary-report',
@@ -971,8 +1095,8 @@ export class ReportsService {
     };
   }
 
-  private async getRiskWeightageDefinition(isFreeFlow = false) {
-    const lookups = await this.getComplianceLookups(isFreeFlow);
+  private async getRiskWeightageDefinition(liveManagerCompliance = false) {
+    const lookups = await this.getComplianceLookups(liveManagerCompliance);
 
     return {
       slug: 'risk-weightage-report',
@@ -1190,6 +1314,81 @@ export class ReportsService {
           key: 'branch_rating',
           label: 'Branch Rating',
           width: '10%',
+          align: 'center',
+        },
+      ],
+      summaryCards: [
+        { key: 'totalAuditUnits', label: 'Audit Units' },
+        { key: 'totalScore', label: 'Total Score' },
+      ],
+    };
+  }
+
+  private async getRiskCategorySummaryDefinition(isFreeFlow = false) {
+    const lookups = await this.getAuditStatusLookups();
+
+    return {
+      slug: 'risk-category-summary',
+      title: 'Risk Category Summary Report',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'risk-category-summary-report',
+      brand: {
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
+        bankName: this.getBankName(),
+      },
+      defaultFilters: {
+        reportAuditUnit: 'all_branches',
+        financial_year: 'all',
+        rmv_pending_assesments: [],
+      },
+      filters: [
+        {
+          key: 'reportAuditUnit',
+          label: 'Audit Unit',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
+        },
+        {
+          key: 'rmv_pending_assesments',
+          label: 'Remove Pending Assessments',
+          type: 'checkbox',
+          required: false,
+          options: [{ value: '1', label: 'Remove Pending Assessments' }],
+        },
+      ],
+      columns: [
+        {
+          key: 'audit_unit_code',
+          label: 'BR Code',
+          width: '15%',
+          align: 'center',
+        },
+        { key: 'audit_unit_name', label: 'Branch / HO', width: '30%' },
+        {
+          key: 'total_score',
+          label: 'Total Score',
+          width: '15%',
+          align: 'right',
+        },
+        {
+          key: 'total_score_all_percent',
+          label: 'Total Score % to All Branches / HO Departments',
+          width: '25%',
+          align: 'right',
+        },
+        {
+          key: 'branch_rating',
+          label: 'Branch Rating',
+          width: '15%',
           align: 'center',
         },
       ],
@@ -2582,8 +2781,6 @@ export class ReportsService {
       defaultFilters: {
         reportAuditUnit: 'all_branches',
         financial_year: 'all',
-        startDate: '',
-        endDate: '',
       },
       filters: [
         {
@@ -2600,44 +2797,36 @@ export class ReportsService {
           required: true,
           options: lookups.years,
         },
-        {
-          key: 'startDate',
-          label: 'Start Date',
-          type: 'date',
-          required: true,
-        },
-        {
-          key: 'endDate',
-          label: 'End Date',
-          type: 'date',
-          required: true,
-        },
       ],
       columns: [
-        { key: 'sr_no', label: 'Sr. No.', width: '5%', align: 'center' },
-        { key: 'audit_unit_name', label: 'Audit Unit', width: '20%' },
+        { key: 'sr_no', label: 'Sr. No.', width: '4%', align: 'center' },
+        { key: 'audit_unit_name', label: 'Audit Unit', width: '15%' },
         { key: 'assessment_period', label: 'Assesment Period', width: '15%' },
-        { key: 'audit_status_label', label: 'Audit Status', width: '20%' },
-        { key: 'audited', label: 'Audited', width: '10%', align: 'center' },
-        {
-          key: 'pending_observations',
-          label: 'Pending Observations',
-          width: '10%',
-          align: 'center',
-        },
-        { key: 'completed', label: 'Completed', width: '10%', align: 'center' },
+        { key: 'audit_status_label', label: 'Audit Status', width: '12%' },
+        { key: 'audited_high', label: 'Audited - High', width: '4%', align: 'center' },
+        { key: 'audited_medium', label: 'Audited - Medium', width: '4%', align: 'center' },
+        { key: 'audited_low', label: 'Audited - Low', width: '4%', align: 'center' },
+        { key: 'audited_no_risk', label: 'Audited - No Risk', width: '4%', align: 'center' },
+        { key: 'pending_high', label: 'Pending - High', width: '4%', align: 'center' },
+        { key: 'pending_medium', label: 'Pending - Medium', width: '4%', align: 'center' },
+        { key: 'pending_low', label: 'Pending - Low', width: '4%', align: 'center' },
+        { key: 'pending_no_risk', label: 'Pending - No Risk', width: '4%', align: 'center' },
+        { key: 'completed_high', label: 'Completed - High', width: '4%', align: 'center' },
+        { key: 'completed_medium', label: 'Completed - Medium', width: '4%', align: 'center' },
+        { key: 'completed_low', label: 'Completed - Low', width: '4%', align: 'center' },
+        { key: 'completed_no_risk', label: 'Completed - No Risk', width: '4%', align: 'center' },
       ],
       summaryCards: [
         { key: 'totalAssessments', label: 'Assessments' },
-        { key: 'totalAudited', label: 'Audited' },
-        { key: 'totalPending', label: 'Pending Observations' },
-        { key: 'totalCompleted', label: 'Completed' },
+        { key: 'totalAudited', label: 'Total Audited Observations' },
+        { key: 'totalPending', label: 'Total Pending Observations' },
+        { key: 'totalCompleted', label: 'Total Completed Observations' },
       ],
     };
   }
 
-  private async getPendingComplianceDetailDefinition(isFreeFlow = false) {
-    const lookups = await this.getComplianceLookups(isFreeFlow);
+  private async getPendingComplianceDetailDefinition(liveManagerCompliance = false) {
+    const lookups = await this.getComplianceLookups(liveManagerCompliance, true);
 
     return {
       slug: 'pending-compliance-detail-report',
@@ -2710,8 +2899,8 @@ export class ReportsService {
         { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
         { key: 'question', label: 'Question', width: '26%' },
         { key: 'answer_given', label: 'Audit Point', width: '9%' },
-        { key: 'audit_comment', label: 'Audit Comment', width: '13%' },
-        { key: 'audit_commpliance', label: 'Compliance', width: '18%' },
+        { key: 'audit_comment', label: 'Audit Comment', width: '13%', type: 'commentWithAuthor', authorKey: 'auditor_info' },
+        { key: 'audit_commpliance', label: 'Compliance', width: '18%', type: 'commentWithAuthor', authorKey: 'compliance_user_info' },
         { key: 'business_risk_label', label: 'Business Risk', width: '7%' },
         { key: 'control_risk_label', label: 'Control Risk', width: '7%' },
         { key: 'risk_category', label: 'Risk Type', width: '7%' },
@@ -2719,6 +2908,8 @@ export class ReportsService {
           key: 'compliance_reviewer_comment',
           label: 'Reviewer Comment',
           width: '10%',
+          type: 'commentWithAuthor',
+          authorKey: 'reviewer_info',
         },
       ],
       summaryCards: [
@@ -2751,6 +2942,18 @@ export class ReportsService {
 
     if (reportSlug === 'compliance-summary-report') {
       return this.getComplianceSummaryReport(query);
+    }
+
+    if (reportSlug === 'risk-trend-summary-report') {
+      return this.getRiskTrendSummaryReport(query);
+    }
+
+    if (reportSlug === 'risk-category-summary') {
+      return this.getRiskCategorySummaryReport(query);
+    }
+
+    if (reportSlug === 'type-wise-risk-weightage') {
+      return this.getTypewiseRiskWeightageReport(query);
     }
 
     if (reportSlug === 'risk-weightage-report') {
@@ -2962,7 +3165,7 @@ export class ReportsService {
     };
   }
 
-  async getComplianceLookups(isFreeFlow = false) {
+  async getComplianceLookups(liveManagerCompliance = false, excludeCompleted = false) {
     const [units, assessments, riskCategories, years] = await Promise.all([
       this.db.query(`
         SELECT
@@ -2989,7 +3192,8 @@ export class ReportsService {
         FROM audit_assesment_master asm
         INNER JOIN audit_unit_master aum
           ON aum.id = asm.audit_unit_id
-        WHERE asm.audit_status_id >= 4
+        WHERE ${liveManagerCompliance ? 'asm.audit_status_id >= 1' : 'asm.audit_status_id >= 4'}
+          ${excludeCompleted ? 'AND asm.audit_status_id < 7' : ''}
           AND asm.deleted_at IS NULL
           AND aum.deleted_at IS NULL
         ORDER BY aum.audit_unit_code ASC, asm.assesment_period_from DESC
@@ -3107,31 +3311,54 @@ export class ReportsService {
   }
 
   async getAuditObservationCountReport(query: any) {
-    const auditUnit = String(query.reportAuditUnit || '').trim();
-    const startDate = this.dateOnly(query.startDate);
-    const endDate = this.dateOnly(query.endDate);
+    const auditUnit = String(query.reportAuditUnit || 'all_branches').trim();
+    let startDate = query.startDate ? String(query.startDate).trim() : '';
+    let endDate = query.endDate ? String(query.endDate).trim() : '';
     const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
 
     if (!auditUnit) {
       throw new BadRequestException('Audit unit is required');
     }
 
-    if (!startDate) {
-      throw new BadRequestException('Start date is required');
+    if (!startDate || !endDate) {
+      if (query.financial_year && query.financial_year !== 'all') {
+        let yearLabel = '';
+        if (/^\d+$/.test(String(query.financial_year).trim())) {
+          const yearResult = await this.db.query(
+            `SELECT year FROM year_master WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+            [Number(query.financial_year)],
+          );
+          if (yearResult.rows.length > 0) {
+            yearLabel = yearResult.rows[0].year;
+          }
+        } else {
+          yearLabel = String(query.financial_year);
+        }
+        const dates = this.financialYearDateRange(yearLabel);
+        if (dates) {
+          startDate = dates.startDate;
+          endDate = dates.endDate;
+        }
+      }
     }
 
-    if (!endDate) {
-      throw new BadRequestException('End date is required');
+    if ((!startDate || !endDate) && query.financial_year !== 'all') {
+      throw new BadRequestException(
+        'Please select a specific Financial Year',
+      );
     }
 
-    const params: any[] = [startDate, endDate];
+    const params: any[] = [];
     const where = [
-      'asm.assesment_period_from >= $1',
-      'asm.assesment_period_to <= $2',
       isFreeFlow ? 'asm.audit_status_id >= 1' : 'asm.audit_status_id > 1',
       'asm.deleted_at IS NULL',
       'aum.deleted_at IS NULL',
     ];
+
+    if (startDate && endDate) {
+      params.push(startDate, endDate);
+      where.push(`asm.assesment_period_from >= $1`, `asm.assesment_period_to <= $2`);
+    }
 
     if (auditUnit === 'all_branches') {
       where.push('aum.section_type_id = 1');
@@ -3180,6 +3407,18 @@ export class ReportsService {
           totalAudited: 0,
           totalPending: 0,
           totalCompleted: 0,
+          totalAuditedHigh: 0,
+          totalAuditedMedium: 0,
+          totalAuditedLow: 0,
+          totalAuditedNoRisk: 0,
+          totalPendingHigh: 0,
+          totalPendingMedium: 0,
+          totalPendingLow: 0,
+          totalPendingNoRisk: 0,
+          totalCompletedHigh: 0,
+          totalCompletedMedium: 0,
+          totalCompletedLow: 0,
+          totalCompletedNoRisk: 0,
         },
       };
     }
@@ -3191,7 +3430,9 @@ export class ReportsService {
           ans.id,
           ans.assesment_id,
           ans.audit_status_id,
-          ans.compliance_status_id
+          ans.compliance_status_id,
+          ans.business_risk,
+          ans.control_risk
         FROM answers_data ans
         INNER JOIN question_master qm
           ON qm.id = ans.question_id
@@ -3208,7 +3449,9 @@ export class ReportsService {
           ax.id,
           ax.assesment_id,
           ax.audit_status_id,
-          ax.compliance_status_id
+          ax.compliance_status_id,
+          ax.business_risk,
+          ax.control_risk
         FROM answers_data_annexure ax
         INNER JOIN answers_data ans
           ON ans.id = ax.answer_id
@@ -3226,9 +3469,30 @@ export class ReportsService {
       ),
     ]);
 
-    const countMap = new Map<number, { audited: number; pending: number }>();
+    const countMap = new Map<
+      number,
+      {
+        high_audited: number;
+        medium_audited: number;
+        low_audited: number;
+        no_risk_audited: number;
+        high_pending: number;
+        medium_pending: number;
+        low_pending: number;
+        no_risk_pending: number;
+      }
+    >();
     assessments.forEach((assessment: any) => {
-      countMap.set(Number(assessment.id), { audited: 0, pending: 0 });
+      countMap.set(Number(assessment.id), {
+        high_audited: 0,
+        medium_audited: 0,
+        low_audited: 0,
+        no_risk_audited: 0,
+        high_pending: 0,
+        medium_pending: 0,
+        low_pending: 0,
+        no_risk_pending: 0,
+      });
     });
 
     [...answerResult.rows, ...annexureResult.rows].forEach(
@@ -3243,28 +3507,57 @@ export class ReportsService {
           return;
         }
 
-        counts.audited++;
+        const isPending = this.isPendingObservation(
+          Number(assessment.audit_status_id),
+          observation,
+        );
 
-        if (
-          this.isPendingObservation(
-            Number(assessment.audit_status_id),
-            observation,
-          )
-        ) {
-          counts.pending++;
+        const businessRisk = Number(observation.business_risk || 0);
+        const controlRisk = Number(observation.control_risk || 0);
+
+        let highestRisk = businessRisk;
+        if (controlRisk > 0 && (controlRisk < highestRisk || highestRisk === 0)) {
+          highestRisk = controlRisk;
+        }
+
+        if (highestRisk === 1) {
+          counts.high_audited++;
+          if (isPending) counts.high_pending++;
+        } else if (highestRisk === 2) {
+          counts.medium_audited++;
+          if (isPending) counts.medium_pending++;
+        } else if (highestRisk === 3) {
+          counts.low_audited++;
+          if (isPending) counts.low_pending++;
+        } else {
+          counts.no_risk_audited++;
+          if (isPending) counts.no_risk_pending++;
         }
       },
     );
 
     const rows = assessments.map((assessment: any, index: number) => {
       const counts = countMap.get(Number(assessment.id)) || {
-        audited: 0,
-        pending: 0,
+        high_audited: 0,
+        medium_audited: 0,
+        low_audited: 0,
+        no_risk_audited: 0,
+        high_pending: 0,
+        medium_pending: 0,
+        low_pending: 0,
+        no_risk_pending: 0,
       };
       const auditStatusId = Number(assessment.audit_status_id || 0);
-      const pending = auditStatusId === 7 ? 0 : counts.pending;
-      const completed =
-        auditStatusId === 7 ? counts.audited : counts.audited - pending;
+
+      const pending_high = auditStatusId === 7 ? 0 : counts.high_pending;
+      const pending_medium = auditStatusId === 7 ? 0 : counts.medium_pending;
+      const pending_low = auditStatusId === 7 ? 0 : counts.low_pending;
+      const pending_no_risk = auditStatusId === 7 ? 0 : counts.no_risk_pending;
+
+      const completed_high = counts.high_audited - pending_high;
+      const completed_medium = counts.medium_audited - pending_medium;
+      const completed_low = counts.low_audited - pending_low;
+      const completed_no_risk = counts.no_risk_audited - pending_no_risk;
 
       return {
         sr_no: index + 1,
@@ -3273,9 +3566,21 @@ export class ReportsService {
         assessment_period: `${this.dateOnly(assessment.assesment_period_from)} to ${this.dateOnly(assessment.assesment_period_to)} (Frequency: ${assessment.frequency || '-'} Months)`,
         audit_status_id: auditStatusId,
         audit_status_label: this.auditTimelineStatusLabel(auditStatusId),
-        audited: counts.audited,
-        pending_observations: pending,
-        completed,
+        
+        audited_high: counts.high_audited,
+        audited_medium: counts.medium_audited,
+        audited_low: counts.low_audited,
+        audited_no_risk: counts.no_risk_audited,
+
+        pending_high,
+        pending_medium,
+        pending_low,
+        pending_no_risk,
+
+        completed_high,
+        completed_medium,
+        completed_low,
+        completed_no_risk,
       };
     });
 
@@ -3287,17 +3592,29 @@ export class ReportsService {
       },
       generatedAt: new Date().toISOString(),
       header: {
-        assessmentPeriod: `${startDate} to ${endDate}`,
+        assessmentPeriod: startDate && endDate ? `${startDate} to ${endDate}` : 'All Years',
       },
       rows,
       summary: {
         totalAssessments: rows.length,
-        totalAudited: rows.reduce((sum, row) => sum + row.audited, 0),
-        totalPending: rows.reduce(
-          (sum, row) => sum + row.pending_observations,
-          0,
-        ),
-        totalCompleted: rows.reduce((sum, row) => sum + row.completed, 0),
+        totalAudited: rows.reduce((sum, row) => sum + row.audited_high + row.audited_medium + row.audited_low + row.audited_no_risk, 0),
+        totalPending: rows.reduce((sum, row) => sum + row.pending_high + row.pending_medium + row.pending_low + row.pending_no_risk, 0),
+        totalCompleted: rows.reduce((sum, row) => sum + row.completed_high + row.completed_medium + row.completed_low + row.completed_no_risk, 0),
+
+        totalAuditedHigh: rows.reduce((sum, row) => sum + row.audited_high, 0),
+        totalAuditedMedium: rows.reduce((sum, row) => sum + row.audited_medium, 0),
+        totalAuditedLow: rows.reduce((sum, row) => sum + row.audited_low, 0),
+        totalAuditedNoRisk: rows.reduce((sum, row) => sum + row.audited_no_risk, 0),
+
+        totalPendingHigh: rows.reduce((sum, row) => sum + row.pending_high, 0),
+        totalPendingMedium: rows.reduce((sum, row) => sum + row.pending_medium, 0),
+        totalPendingLow: rows.reduce((sum, row) => sum + row.pending_low, 0),
+        totalPendingNoRisk: rows.reduce((sum, row) => sum + row.pending_no_risk, 0),
+
+        totalCompletedHigh: rows.reduce((sum, row) => sum + row.completed_high, 0),
+        totalCompletedMedium: rows.reduce((sum, row) => sum + row.completed_medium, 0),
+        totalCompletedLow: rows.reduce((sum, row) => sum + row.completed_low, 0),
+        totalCompletedNoRisk: rows.reduce((sum, row) => sum + row.completed_no_risk, 0),
       },
     };
   }
@@ -3713,6 +4030,227 @@ export class ReportsService {
     };
   }
 
+  async getTypewiseRiskWeightageReport(query: any) {
+    const searchType = String(query.selectSearchTypeFilter || '3').trim();
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+    const removePending = Array.isArray(query.rmv_pending_assesments)
+      ? query.rmv_pending_assesments.includes('1')
+      : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
+
+    const where: string[] = [
+      'aam.deleted_at IS NULL',
+      'aum.deleted_at IS NULL',
+      'rsm.deleted_at IS NULL',
+    ];
+    const params: any[] = [];
+
+    // status condition on aam
+    if (removePending) {
+      where.push('aam.audit_status_id >= 4');
+    } else if (!isFreeFlow) {
+      where.push('aam.audit_status_id > 1');
+    } else {
+      where.push('aam.audit_status_id >= 1');
+    }
+
+    if (searchType === '3' || searchType === '4') {
+      if (!auditUnitId || !assessmentId) {
+        throw new BadRequestException('Audit unit and assessment are required');
+      }
+      params.push(assessmentId, auditUnitId);
+      where.push(`aam.id = $1 AND aam.audit_unit_id = $2`);
+    } else if (searchType === '5' || searchType === '6') {
+      if (!auditUnitId) {
+        throw new BadRequestException('Audit unit is required');
+      }
+      params.push(auditUnitId);
+      where.push(`aam.audit_unit_id = $${params.length}`);
+
+      const financialYear = query.financial_year;
+      if (financialYear && financialYear !== 'all') {
+        params.push(Number(financialYear));
+        where.push(`aam.year_id = $${params.length}`);
+      }
+    } else if (searchType === '1' || searchType === '2') {
+      const unitTypeId = searchType === '2' ? 2 : 1; // 2 for HO, 1 for branches
+      params.push(unitTypeId);
+      where.push(`aum.section_type_id = $${params.length}`);
+
+      const financialYear = query.financial_year;
+      if (financialYear && financialYear !== 'all') {
+        params.push(Number(financialYear));
+        where.push(`aam.year_id = $${params.length}`);
+      }
+    }
+
+    const queryStr = `
+      SELECT
+        aam.id AS assessment_id,
+        aum.audit_unit_code,
+        aum.name AS audit_unit_name,
+        rsm.risk_data,
+        rsm.weighted_score AS assessment_weighted_score
+      FROM audit_assesment_master aam
+      INNER JOIN audit_unit_master aum ON aam.audit_unit_id = aum.id
+      INNER JOIN report_scoring_master rsm ON rsm.assesment_id = aam.id
+      WHERE ${where.join(' AND ')}
+      ORDER BY aum.audit_unit_code ASC, aam.assesment_period_from ASC
+    `;
+
+    const result = await this.db.query(queryStr, params);
+
+    const riskCategoriesResult = await this.db.query(
+      `SELECT id, risk_category FROM risk_category_master WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id ASC`,
+    );
+    const riskCategories = riskCategoriesResult.rows;
+
+    const branchRiskMap = new Map<string, {
+      audit_unit_code: string;
+      audit_unit_name: string;
+      risk_type: string;
+      no_of_audits: number;
+      weighted_score: number;
+    }>();
+
+    const branchTotalMap = new Map<string, number>();
+
+    result.rows.forEach((row: any) => {
+      const branchCode = row.audit_unit_code;
+      const branchName = row.audit_unit_name;
+      const riskData = this.parseRiskData(row.risk_data);
+      const totalScore = Number(row.assessment_weighted_score || 0);
+
+      const currentBranchTotal = branchTotalMap.get(branchCode) || 0;
+      branchTotalMap.set(branchCode, currentBranchTotal + totalScore);
+
+      riskCategories.forEach((rc: any) => {
+        const rcId = Number(rc.id);
+        const rcName = rc.risk_category;
+        const wgSc = Number(riskData[rcId]?.wg_sc || 0);
+
+        const key = `${branchCode}:${rcId}`;
+        let entry = branchRiskMap.get(key);
+        if (!entry) {
+          entry = {
+            audit_unit_code: branchCode,
+            audit_unit_name: branchName,
+            risk_type: rcName,
+            no_of_audits: 0,
+            weighted_score: 0,
+          };
+          branchRiskMap.set(key, entry);
+        }
+
+        entry.no_of_audits += 1;
+        entry.weighted_score += wgSc;
+      });
+    });
+
+    const rows: any[] = [];
+    branchRiskMap.forEach((entry) => {
+      const branchCode = entry.audit_unit_code;
+      const branchTotal = branchTotalMap.get(branchCode) || 0;
+      const percentage = branchTotal > 0 ? (entry.weighted_score / branchTotal) * 100 : 0;
+
+      rows.push({
+        ...entry,
+        weighted_score: Number(entry.weighted_score.toFixed(2)),
+        percentage: Number(percentage.toFixed(2)),
+      });
+    });
+
+    rows.sort((a, b) => {
+      if (a.audit_unit_code !== b.audit_unit_code) {
+        return a.audit_unit_code.localeCompare(b.audit_unit_code);
+      }
+      return a.risk_type.localeCompare(b.risk_type);
+    });
+
+    return {
+      filters: {
+        selectSearchTypeFilter: searchType,
+        reportAuditUnit: auditUnitId || '',
+        financial_year: query.financial_year || 'all',
+        reportAuditAssesment: assessmentId || '',
+        rmv_pending_assesments: query.rmv_pending_assesments || [],
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      rows,
+    };
+  }
+
+  async getRiskTrendSummaryReport(query: any) {
+    const auditUnitId = String(query.audit_unit_id || '').trim();
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    const result = await this.db.query(
+      `SELECT
+        id,
+        assesment_period_from,
+        assesment_period_to,
+        audit_start_date,
+        audit_end_date,
+        weighted_score
+       FROM report_scoring_master
+       WHERE audit_unit_id = $1 AND deleted_at IS NULL
+       ORDER BY assesment_period_from ASC`,
+      [Number(auditUnitId)],
+    );
+
+    let previousScore: number | null = null;
+    const items = result.rows.map((row: any, index: number) => {
+      const fromDate = row.assesment_period_from ? new Date(row.assesment_period_from) : null;
+      const toDate = row.assesment_period_to ? new Date(row.assesment_period_to) : null;
+
+      let frequency = '1';
+      if (fromDate && toDate) {
+        let monthsDiff = (toDate.getFullYear() - fromDate.getFullYear()) * 12 + (toDate.getMonth() - fromDate.getMonth());
+        if (monthsDiff < 0) monthsDiff = 0;
+        frequency = monthsDiff > 0 ? String(monthsDiff) : '1';
+      }
+
+      const weightedScore = Number(row.weighted_score || 0);
+
+      let trend = '-';
+      if (previousScore !== null) {
+        if (weightedScore > previousScore) {
+          trend = 'Increasing';
+        } else if (weightedScore < previousScore) {
+          trend = 'Decreasing';
+        } else {
+          trend = 'No Change';
+        }
+      }
+      previousScore = weightedScore;
+
+      return {
+        sr_no: index + 1,
+        assesment_period_from: row.assesment_period_from,
+        assesment_period_to: row.assesment_period_to,
+        audit_start_date: row.audit_start_date,
+        audit_end_date: row.audit_end_date,
+        frequency,
+        weighted_score: Number(weightedScore.toFixed(2)),
+        trend,
+      };
+    });
+
+    return {
+      filters: {
+        audit_unit_id: auditUnitId,
+      },
+      total: items.length,
+      generatedAt: new Date().toISOString(),
+      rows: items,
+    };
+  }
+
   async getComplianceSummaryReport(query: any) {
     const isAllBranches = query.reportAuditUnit === 'all_branches';
     const auditUnitId = isAllBranches ? null : Number(query.reportAuditUnit || 0);
@@ -3986,10 +4524,12 @@ export class ReportsService {
       );
     }
 
+    const isLiveManager = query.live_manager_compliance === 'true' || query.live_manager_compliance === '1';
+
     const assessmentParams: any[] = [auditUnitId];
     const assessmentWhere = [
       'audit_unit_id = $1',
-      'audit_status_id = 6',
+      isLiveManager ? 'audit_status_id >= 1' : 'audit_status_id >= 4',
       'deleted_at IS NULL',
     ];
 
@@ -4050,18 +4590,43 @@ export class ReportsService {
     const where = [
       'ad.assesment_id = ANY($1::int[])',
       'aam.audit_unit_id = $2',
-      'aam.audit_status_id = 6',
+      isLiveManager ? 'aam.audit_status_id >= 1' : 'aam.audit_status_id >= 4',
       'ad.deleted_at IS NULL',
       'qm.deleted_at IS NULL',
       'ad.is_compliance = 1',
-      '(ad.compliance_status_id = 3 OR COALESCE(qm.annexure_id, 0) > 0)',
+      isLiveManager
+        ? `(
+            (COALESCE(qm.annexure_id, 0) = 0 AND ad.compliance_status_id = 12)
+            OR
+            (qm.annexure_id > 0 AND EXISTS (
+              SELECT 1 FROM answers_data_annexure ada
+              WHERE ada.answer_id = ad.id
+                AND ada.compliance_status_id = 12
+                AND ada.deleted_at IS NULL
+            ))
+          )`
+        : `(
+            (COALESCE(qm.annexure_id, 0) = 0 AND ad.compliance_status_id = 3)
+            OR
+            (qm.annexure_id > 0 AND EXISTS (
+              SELECT 1 FROM answers_data_annexure ada
+              WHERE ada.answer_id = ad.id
+                AND ada.compliance_status_id = 3
+                AND ada.deleted_at IS NULL
+            ))
+          )`,
     ];
 
     const result = await this.db.query(
       `
       SELECT
         ad.id,
+        auditor.name AS auditor_name,
         auditor.emp_code AS auditor_emp_code,
+        compliance_user.name AS compliance_user_name,
+        compliance_user.emp_code AS compliance_user_code,
+        reviewer_user.name AS reviewer_name,
+        reviewer_user.emp_code AS reviewer_code,
         aam.is_multiple_auditors,
         ad.assesment_id,
         ad.menu_id,
@@ -4148,6 +4713,10 @@ export class ReportsService {
         AND au.deleted_at IS NULL
       LEFT JOIN employee_master auditor
         ON auditor.id = ad.audit_emp_id
+      LEFT JOIN employee_master compliance_user
+        ON compliance_user.id = ad.compliance_emp_id
+      LEFT JOIN employee_master reviewer_user
+        ON reviewer_user.id = ad.compliance_reviewer_emp_id
       WHERE ${where.join(' AND ')}
       ORDER BY ad.assesment_id, ad.menu_id, ad.category_id, ad.dump_id, ad.header_id, ad.question_id
       `,
@@ -4161,7 +4730,7 @@ export class ReportsService {
       await this.getAuditCompleteAnnexureRowsForAssessments(
         assessmentIds,
         answerIds,
-        'aa.compliance_status_id = 3',
+        isLiveManager ? 'aa.compliance_status_id = 12' : 'aa.compliance_status_id = 3',
       );
 
     const assessmentHeaderById = new Map<number, any>();
@@ -4180,8 +4749,17 @@ export class ReportsService {
       question: row.question || 'Assessment observation',
       answer_given: this.auditAnswerLabel(row),
       audit_comment: row.audit_comment || '-',
+      auditor_info: row.audit_comment
+        ? `Auditor: ${row.auditor_name || '-'} (${row.auditor_emp_code || '-'})`
+        : '',
       audit_commpliance: row.audit_commpliance || '-',
+      compliance_user_info: row.audit_commpliance
+        ? `Compliance: ${row.compliance_user_name || '-'} (${row.compliance_user_code || '-'})`
+        : '',
       compliance_reviewer_comment: row.compliance_reviewer_comment || '-',
+      reviewer_info: row.compliance_reviewer_comment
+        ? `Reviewer: ${row.reviewer_name || '-'} (${row.reviewer_code || '-'})`
+        : '',
       risk_category: row.risk_category || '-',
       business_risk_label: this.riskParameterLabel(row.business_risk),
       control_risk_label: this.riskParameterLabel(row.control_risk),
@@ -5439,6 +6017,672 @@ export class ReportsService {
       rows: outputRows,
       summary: {
         totalAuditUnits: summaryRows.length,
+        totalScore: this.formatDecimal(totalAllScore, 2),
+      },
+    };
+  }
+
+  async getRiskCategorySummaryReport(query: any) {
+    const auditUnit = String(query.reportAuditUnit || 'all_branches').trim();
+    let startDate = query.startDate ? String(query.startDate).trim() : '';
+    let endDate = query.endDate ? String(query.endDate).trim() : '';
+    const removePending = Array.isArray(query.rmv_pending_assesments)
+      ? query.rmv_pending_assesments.includes('1')
+      : String(query.rmv_pending_assesments) === '1';
+    const isFreeFlow = query.freeFlow === 'true' || query.freeFlow === '1';
+
+    if (!auditUnit) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if (!startDate || !endDate) {
+      if (query.financial_year && query.financial_year !== 'all') {
+        let yearLabel = '';
+        if (/^\d+$/.test(String(query.financial_year).trim())) {
+          const yearResult = await this.db.query(
+            `SELECT year FROM year_master WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+            [Number(query.financial_year)],
+          );
+          if (yearResult.rows.length > 0) {
+            yearLabel = yearResult.rows[0].year;
+          }
+        } else {
+          yearLabel = String(query.financial_year);
+        }
+        const dates = this.financialYearDateRange(yearLabel);
+        if (dates) {
+          startDate = dates.startDate;
+          endDate = dates.endDate;
+        }
+      }
+    }
+
+    if ((!startDate || !endDate) && query.financial_year !== 'all') {
+      throw new BadRequestException(
+        'Please select a specific Financial Year',
+      );
+    }
+
+    const riskCategoriesResult = await this.db.query(
+      `
+      SELECT id, risk_category
+      FROM risk_category_master
+      WHERE is_active = 1
+        AND deleted_at IS NULL
+      ORDER BY id ASC
+      `,
+      [],
+    );
+
+    let unitCondition = '';
+    const unitParams: any[] = [];
+    if (auditUnit === 'all_branches') {
+      unitCondition = 'AND section_type_id = 1';
+    } else if (auditUnit === 'all_head_of_dept') {
+      unitCondition = 'AND section_type_id != 1';
+    } else {
+      unitParams.push(Number(auditUnit));
+      unitCondition = 'AND id = $1';
+    }
+
+    const unitsResult = await this.db.query(
+      `
+      SELECT id, audit_unit_code, name, section_type_id
+      FROM audit_unit_master
+      WHERE is_active = 1
+        AND deleted_at IS NULL
+        ${unitCondition}
+      ORDER BY audit_unit_code ASC, name ASC
+      `,
+      unitParams,
+    );
+
+    if (!unitsResult.rows.length) {
+      throw new BadRequestException(
+        'No audit units found for selected filters.',
+      );
+    }
+
+    const params: any[] = [];
+    const where = [
+      'asm.deleted_at IS NULL',
+      'aum.deleted_at IS NULL',
+    ];
+
+    if (auditUnit === 'all_branches') {
+      where.push('aum.section_type_id = 1');
+    } else if (auditUnit === 'all_head_of_dept') {
+      where.push('aum.section_type_id != 1');
+    } else {
+      params.push(Number(auditUnit));
+      where.push(`asm.audit_unit_id = $${params.length}`);
+    }
+
+    if (startDate && endDate) {
+      params.push(startDate, endDate);
+      where.push(`asm.assesment_period_from >= $${params.length - 1}`, `asm.assesment_period_to <= $${params.length}`);
+    }
+
+    const statusCondition = removePending
+      ? 'asm.audit_status_id >= 4'
+      : (isFreeFlow ? 'asm.audit_status_id >= 1' : 'asm.audit_status_id > 1');
+
+    const assessmentsResult = await this.db.query(
+      `
+      SELECT
+        asm.id,
+        asm.year_id,
+        asm.audit_unit_id
+      FROM audit_assesment_master asm
+      INNER JOIN audit_unit_master aum
+        ON aum.id = asm.audit_unit_id
+      WHERE ${where.join(' AND ')}
+        AND ${statusCondition}
+      `,
+      params,
+    );
+
+    if (!assessmentsResult.rows.length) {
+      throw new BadRequestException('No data found for selected filters.');
+    }
+
+    const assessmentIds = assessmentsResult.rows.map((row: any) =>
+      Number(row.id),
+    );
+    const firstYearId = Number(assessmentsResult.rows[0].year_id || 0);
+
+    const assessmentById = new Map<number, any>();
+    const assessmentCountByUnit = new Map<number, number>();
+
+    assessmentsResult.rows.forEach((row: any) => {
+      const assessmentId = Number(row.id);
+      const auditUnitId = Number(row.audit_unit_id);
+
+      assessmentById.set(assessmentId, row);
+      assessmentCountByUnit.set(
+        auditUnitId,
+        Number(assessmentCountByUnit.get(auditUnitId) || 0) + 1,
+      );
+    });
+
+    const [
+      riskMatrixResult,
+      riskWeightsResult,
+      depositsSamplingResult,
+      advancesSamplingResult,
+      answersResult,
+    ] = await Promise.all([
+      this.db.query(
+        `SELECT risk_parameter, business_risk_score, control_risk_score FROM risk_matrix WHERE year_id = $1 AND deleted_at IS NULL`,
+        [firstYearId],
+      ),
+      this.db.query(
+        `
+          SELECT risk_category_id, risk_weight
+          FROM risk_category_weights
+          WHERE year_id = $1
+            AND is_active = 1
+            AND deleted_at IS NULL
+          `,
+        [firstYearId],
+      ),
+      this.db.query(
+        `
+          SELECT assesment_period_id, COUNT(*)::int AS count
+          FROM dump_deposits
+          WHERE sampling_filter = 1
+            AND assesment_period_id = ANY($1::int[])
+            AND deleted_at IS NULL
+          GROUP BY assesment_period_id
+          `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+          SELECT assesment_period_id, COUNT(*)::int AS count
+          FROM dump_advances
+          WHERE sampling_filter = 1
+            AND assesment_period_id = ANY($1::int[])
+            AND deleted_at IS NULL
+          GROUP BY assesment_period_id
+          `,
+        [assessmentIds],
+      ),
+      this.db.query(
+        `
+          SELECT
+            ans.id,
+            ans.category_id,
+            ans.dump_id,
+            ans.business_risk,
+            ans.control_risk,
+            ans.question_id,
+            ans.assesment_id,
+            qm.risk_category_id,
+            qm.option_id,
+            qm.area_of_audit_id AS audit_area_id,
+            cm.linked_table_id
+          FROM answers_data ans
+          INNER JOIN question_master qm
+            ON ans.question_id = qm.id
+          LEFT JOIN category_master cm
+            ON cm.id = ans.category_id
+          WHERE ans.assesment_id = ANY($1::int[])
+            AND (
+              ans.business_risk IN ('1', '2', '3')
+              OR ans.control_risk IN ('1', '2', '3')
+              OR qm.option_id = 4
+            )
+            AND ans.deleted_at IS NULL
+            AND qm.deleted_at IS NULL
+          `,
+        [assessmentIds],
+      ),
+    ]);
+
+    const businessRiskScores = new Map<number, number>();
+    const controlRiskScores = new Map<number, number>();
+
+    riskMatrixResult.rows.forEach((row: any) => {
+      const parameter = Number(row.risk_parameter);
+
+      businessRiskScores.set(parameter, Number(row.business_risk_score || 0));
+      controlRiskScores.set(parameter, Number(row.control_risk_score || 0));
+    });
+
+    const riskWeightMap = new Map<number, number>();
+
+    riskWeightsResult.rows.forEach((row: any) => {
+      riskWeightMap.set(
+        Number(row.risk_category_id),
+        Number(row.risk_weight || 0),
+      );
+    });
+
+    const matrixScore = (businessRisk: any, controlRisk: any) => {
+      const businessRiskId = Number(businessRisk);
+      const controlRiskId = Number(controlRisk);
+
+      if (
+        !businessRiskId ||
+        !controlRiskId ||
+        businessRiskId < 1 ||
+        businessRiskId > 4 ||
+        controlRiskId < 1 ||
+        controlRiskId > 4
+      ) {
+        return 0;
+      }
+
+      return (
+        Number(businessRiskScores.get(businessRiskId) || 0) +
+        Number(controlRiskScores.get(controlRiskId) || 0)
+      );
+    };
+
+    const depositsSamplingByAssessment = new Map<number, number>();
+    depositsSamplingResult.rows.forEach((row: any) => {
+      depositsSamplingByAssessment.set(
+        Number(row.assesment_period_id),
+        Number(row.count || 0),
+      );
+    });
+
+    const advancesSamplingByAssessment = new Map<number, number>();
+    advancesSamplingResult.rows.forEach((row: any) => {
+      advancesSamplingByAssessment.set(
+        Number(row.assesment_period_id),
+        Number(row.count || 0),
+      );
+    });
+
+    const annexureAnswerIds = answersResult.rows
+      .filter((row: any) => Number(row.option_id) === 4)
+      .map((row: any) => Number(row.id));
+
+    const annexuresResult = annexureAnswerIds.length
+      ? await this.db.query(
+        `
+        SELECT
+          ax.answer_id,
+          ax.business_risk,
+          ax.control_risk,
+          ax.risk_cat_id AS risk_category_id,
+          ax.assesment_id,
+          ans.category_id,
+          qm.area_of_audit_id AS audit_area_id,
+          cm.linked_table_id
+        FROM answers_data_annexure ax
+        INNER JOIN answers_data ans
+          ON ax.answer_id = ans.id
+        INNER JOIN question_master qm
+          ON ans.question_id = qm.id
+        LEFT JOIN category_master cm
+          ON cm.id = ans.category_id
+        WHERE ax.answer_id = ANY($1::int[])
+          AND ax.assesment_id = ANY($2::int[])
+          AND (
+            ax.business_risk IN ('1', '2', '3')
+            OR ax.control_risk IN ('1', '2', '3')
+          )
+          AND ax.deleted_at IS NULL
+        `,
+        [annexureAnswerIds, assessmentIds],
+      )
+      : { rows: [] };
+
+    const assessmentStats = new Map<
+      number,
+      Map<
+        number,
+        Map<
+          string,
+          Map<
+            number,
+            Map<
+              number,
+              {
+                qualScoreSum: number;
+                quanScoreSum: number;
+                totalAnnexRows: number;
+              }
+            >
+          >
+        >
+      >
+    >();
+
+    const categoryKey = (row: any) => {
+      const linkedTableId = Number(row.linked_table_id || 0);
+
+      if (linkedTableId === 1) {
+        return 'deposits';
+      }
+
+      if (linkedTableId === 2) {
+        return 'advances';
+      }
+
+      return 'general';
+    };
+
+    const statsFor = (
+      auditUnitId: number,
+      assessmentId: number,
+      catKey: string,
+      broaderAreaId: number,
+      riskCategoryId: number,
+    ) => {
+      if (!assessmentStats.has(auditUnitId)) {
+        assessmentStats.set(auditUnitId, new Map());
+      }
+
+      const unitMap = assessmentStats.get(auditUnitId)!;
+
+      if (!unitMap.has(assessmentId)) {
+        unitMap.set(assessmentId, new Map());
+      }
+
+      const assessmentMap = unitMap.get(assessmentId)!;
+
+      if (!assessmentMap.has(catKey)) {
+        assessmentMap.set(catKey, new Map());
+      }
+
+      const categoryMap = assessmentMap.get(catKey)!;
+
+      if (!categoryMap.has(broaderAreaId)) {
+        categoryMap.set(broaderAreaId, new Map());
+      }
+
+      const areaMap = categoryMap.get(broaderAreaId)!;
+
+      if (!areaMap.has(riskCategoryId)) {
+        areaMap.set(riskCategoryId, {
+          qualScoreSum: 0,
+          quanScoreSum: 0,
+          totalAnnexRows: 0,
+        });
+      }
+
+      return areaMap.get(riskCategoryId)!;
+    };
+
+    answersResult.rows.forEach((answer: any) => {
+      const assessment = assessmentById.get(Number(answer.assesment_id));
+
+      if (!assessment) {
+        return;
+      }
+
+      const broaderAreaId = Number(answer.audit_area_id);
+      const riskCategoryId = Number(answer.risk_category_id);
+
+      if (!broaderAreaId || !riskCategoryId) {
+        return;
+      }
+
+      const catKey = categoryKey(answer);
+      const stats = statsFor(
+        Number(assessment.audit_unit_id),
+        Number(answer.assesment_id),
+        catKey,
+        broaderAreaId,
+        riskCategoryId,
+      );
+      const score = matrixScore(answer.business_risk, answer.control_risk);
+
+      if (catKey === 'general' && Number(answer.option_id) !== 4) {
+        stats.qualScoreSum += score;
+      } else {
+        stats.quanScoreSum += score;
+      }
+    });
+
+    annexuresResult.rows.forEach((annexure: any) => {
+      const assessment = assessmentById.get(Number(annexure.assesment_id));
+
+      if (!assessment) {
+        return;
+      }
+
+      const broaderAreaId = Number(annexure.audit_area_id);
+      const riskCategoryId = Number(annexure.risk_category_id);
+
+      if (!broaderAreaId || !riskCategoryId) {
+        return;
+      }
+
+      const stats = statsFor(
+        Number(assessment.audit_unit_id),
+        Number(annexure.assesment_id),
+        categoryKey(annexure),
+        broaderAreaId,
+        riskCategoryId,
+      );
+
+      stats.quanScoreSum += matrixScore(
+        annexure.business_risk,
+        annexure.control_risk,
+      );
+      stats.totalAnnexRows++;
+    });
+
+    const ratingYearResult = await this.db.query(
+      `
+      SELECT DISTINCT asm.year_id
+      FROM audit_assesment_master asm
+      INNER JOIN audit_unit_master aum
+        ON aum.id = asm.audit_unit_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY asm.year_id ASC
+      LIMIT 1
+      `,
+      params,
+    );
+
+    const ratingYearId = Number(ratingYearResult.rows[0]?.year_id || 0);
+
+    const ratingsResult = ratingYearId
+      ? await this.db.query(
+        `
+        SELECT audit_unit_id, risk_type_id, range_from, range_to
+        FROM risk_branch_rating
+        WHERE year_id = $1
+          AND audit_type_id = 1
+          AND deleted_at IS NULL
+        `,
+        [ratingYearId],
+      )
+      : { rows: [] };
+
+    const ratingMap = new Map<number, any[]>();
+
+    ratingsResult.rows.forEach((rating: any) => {
+      const auditUnitId = Number(rating.audit_unit_id);
+
+      if (!ratingMap.has(auditUnitId)) {
+        ratingMap.set(auditUnitId, []);
+      }
+
+      ratingMap.get(auditUnitId)!.push(rating);
+    });
+
+    const rows: any[] = [];
+    let totalAllScore = 0;
+    const categoryKeys = ['general', 'deposits', 'advances'];
+
+    unitsResult.rows.forEach((unit: any) => {
+      const auditUnitId = Number(unit.id);
+      const unitAssessmentStats = assessmentStats.get(auditUnitId);
+
+      if (!unitAssessmentStats) {
+        return;
+      }
+
+      const noOfAssessments = Number(
+        assessmentCountByUnit.get(auditUnitId) || 0,
+      );
+
+      if (!noOfAssessments) {
+        return;
+      }
+
+      const unitScores = new Map<number, number>();
+
+      riskCategoriesResult.rows.forEach((riskCategory: any) => {
+        unitScores.set(Number(riskCategory.id), 0);
+      });
+
+      let totalDepositsSampling = 0;
+      let totalAdvancesSampling = 0;
+
+      unitAssessmentStats.forEach(
+        (_assessmentMap: any, assessmentId: number) => {
+          totalDepositsSampling += Number(
+            depositsSamplingByAssessment.get(Number(assessmentId)) || 0,
+          );
+          totalAdvancesSampling += Number(
+            advancesSamplingByAssessment.get(Number(assessmentId)) || 0,
+          );
+        },
+      );
+
+      categoryKeys.forEach((catKey) => {
+        const broaderAreaIds = new Set<number>();
+
+        unitAssessmentStats.forEach((assessmentMap: any) => {
+          const catMap = assessmentMap.get(catKey);
+
+          if (!catMap) {
+            return;
+          }
+
+          catMap.forEach((_riskMap: any, broaderAreaId: number) => {
+            broaderAreaIds.add(Number(broaderAreaId));
+          });
+        });
+
+        broaderAreaIds.forEach((broaderAreaId) => {
+          riskCategoriesResult.rows.forEach((riskCategory: any) => {
+            const riskCategoryId = Number(riskCategory.id);
+            let qualScoreSumAll = 0;
+            let quanScoreSumAll = 0;
+            let totalAnnexRowsAll = 0;
+
+            unitAssessmentStats.forEach((assessmentMap: any) => {
+              const stats = assessmentMap
+                .get(catKey)
+                ?.get(broaderAreaId)
+                ?.get(riskCategoryId);
+
+              if (!stats) {
+                return;
+              }
+
+              qualScoreSumAll += Number(stats.qualScoreSum || 0);
+              quanScoreSumAll += Number(stats.quanScoreSum || 0);
+              totalAnnexRowsAll += Number(stats.totalAnnexRows || 0);
+            });
+
+            if (qualScoreSumAll === 0 && quanScoreSumAll === 0) {
+              return;
+            }
+
+            let noOfAccountsChecked = 0;
+
+            if (catKey === 'advances') {
+              noOfAccountsChecked = totalAdvancesSampling + totalAnnexRowsAll;
+            } else if (catKey === 'deposits') {
+              noOfAccountsChecked = totalDepositsSampling + totalAnnexRowsAll;
+            } else {
+              noOfAccountsChecked = totalAnnexRowsAll;
+            }
+
+            const avgQuanScore =
+              quanScoreSumAll > 0
+                ? quanScoreSumAll / (noOfAccountsChecked || 1)
+                : 0;
+            const totalAvgScore = qualScoreSumAll + avgQuanScore;
+            const avgTotalScorePerAudit = totalAvgScore / noOfAssessments;
+            const riskWeight = Number(riskWeightMap.get(riskCategoryId) || 0);
+            const weightedScore = riskWeight * avgTotalScorePerAudit;
+
+            unitScores.set(
+              riskCategoryId,
+              Number(unitScores.get(riskCategoryId) || 0) + weightedScore,
+            );
+          });
+        });
+      });
+
+      const totalScore = Array.from(unitScores.values()).reduce(
+        (sum, value) => sum + Number(value || 0),
+        0,
+      );
+
+      if (totalScore <= 0) {
+        return;
+      }
+
+      totalAllScore += totalScore;
+
+      rows.push({
+        audit_unit_id: auditUnitId,
+        audit_unit_code: unit.audit_unit_code || '-',
+        audit_unit_name: this.auditUnitName(unit),
+        __total_score_value: totalScore,
+        __rating_rows: ratingMap.get(auditUnitId) || [],
+      });
+    });
+
+    for (const row of rows) {
+      const totalScore = Number(row.__total_score_value || 0);
+
+      row.total_score = this.formatDecimal(totalScore, 2);
+      row.total_score_all_percent =
+        totalAllScore > 0
+          ? this.formatDecimal((totalScore * 100) / totalAllScore, 2)
+          : '0.00';
+
+      row.branch_rating = this.matchBranchRiskRatingByPercent(
+        Number(row.total_score_all_percent || 0),
+        row.__rating_rows || [],
+      );
+
+      delete row.__total_score_value;
+      delete row.__rating_rows;
+    }
+
+    if (!rows.length) {
+      throw new BadRequestException('No data found for selected filters.');
+    }
+
+    const totalRow: any = {
+      audit_unit_code: 'Total',
+      audit_unit_name: '',
+      total_score: this.formatDecimal(totalAllScore, 2),
+      total_score_all_percent: '',
+      branch_rating: '',
+    };
+
+    const outputRows = [...rows, totalRow];
+
+    return {
+      filters: {
+        reportAuditUnit: auditUnit,
+        startDate,
+        endDate,
+        rmv_pending_assesments: removePending ? ['1'] : [],
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      header: {
+        assessmentPeriod: startDate && endDate ? `${startDate} to ${endDate}` : 'All Years',
+      },
+      rows: outputRows,
+      summary: {
+        totalAuditUnits: rows.length,
         totalScore: this.formatDecimal(totalAllScore, 2),
       },
     };

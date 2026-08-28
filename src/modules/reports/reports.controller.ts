@@ -20,9 +20,11 @@ export class ReportsController {
   getReportDefinition(
     @Param('reportSlug') reportSlug: string,
     @Query('freeFlow') freeFlow?: string,
+    @Query('live_manager_compliance') liveManagerCompliance?: string,
   ) {
     const isFreeFlow = freeFlow === 'true' || freeFlow === '1';
-    return this.reportsService.getReportDefinition(reportSlug, isFreeFlow);
+    const isLiveManager = liveManagerCompliance === 'true' || liveManagerCompliance === '1';
+    return this.reportsService.getReportDefinition(reportSlug, isFreeFlow, isLiveManager);
   }
 
   @Get(':reportSlug/data')
