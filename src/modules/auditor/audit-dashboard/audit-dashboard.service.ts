@@ -230,6 +230,44 @@ export class AuditDashboardService {
             return result.rows;
         }
 
+        if (Number(emp.user_type_id) === 10) {
+            const query = `
+            SELECT DISTINCT
+                au.id,
+                au.audit_unit_code,
+                au.name,
+                au.frequency,
+                au.last_audit_date,
+                NULLIF(regexp_replace(au.audit_unit_code, '\\D', '', 'g'), '')::int AS code_num
+            FROM audit_unit_master au
+            INNER JOIN audit_assesment_master aam ON aam.audit_unit_id = au.id AND aam.deleted_at IS NULL
+            WHERE
+                au.is_active = 1
+                AND au.deleted_at IS NULL
+                AND (
+                    EXISTS (
+                        SELECT 1 FROM answers_data ad
+                        WHERE ad.assesment_id = aam.id
+                          AND ad.is_compliance = 1
+                          AND ad.compliance_status_id = 15
+                          AND ad.compliance_maker_emp_id = $1
+                          AND ad.deleted_at IS NULL
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM answers_data_annexure aa
+                        WHERE aa.assesment_id = aam.id
+                          AND aa.compliance_status_id = 15
+                          AND aa.compliance_maker_emp_id = $1
+                          AND aa.deleted_at IS NULL
+                    )
+                )
+            ORDER BY
+                code_num ASC, au.audit_unit_code ASC;
+            `;
+            const result = await this.db.query(query, [employeeId]);
+            return result.rows;
+        }
+
         const query = `
         WITH employee_units AS (
             SELECT
@@ -983,7 +1021,7 @@ LIMIT 1;
             return result.rows.length > 0;
         }
 
-        if (Number(emp.user_type_id) === 3) {
+        if (Number(emp.user_type_id) === 3 || Number(emp.user_type_id) === 10) {
             const branchCheckQuery = `
                 SELECT 1
                 FROM audit_unit_master au

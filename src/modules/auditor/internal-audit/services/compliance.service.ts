@@ -31,6 +31,12 @@ export class ComplianceService {
       employeeId,
     );
 
+    const employee = await this.svc.db.findOne(
+      `SELECT user_type_id FROM employee_master WHERE id = $1 AND deleted_at IS NULL`,
+      [employeeId]
+    );
+    const userTypeId = Number(employee?.user_type_id || 0);
+
     if (
       liveManagerCompliance
     ) {
@@ -60,21 +66,41 @@ export class ComplianceService {
               COUNT(DISTINCT ad.id) FILTER (
                   WHERE ad.is_compliance = 1
                       AND (
-                          COALESCE(ad.compliance_status_id, 0) IN (
-                              3,
-                              7,
-                              ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                          (
+                              $2::int != 10
+                              AND (
+                                  COALESCE(ad.compliance_status_id, 0) IN (
+                                      3,
+                                      7,
+                                      ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                                  )
+                                  OR (
+                                      COALESCE(ad.compliance_status_id, 0) IN (0, 4)
+                                      AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
+                                  )
+                              )
                           )
                           OR (
-                              COALESCE(ad.compliance_status_id, 0) IN (0, 4)
-                              AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
+                              $2::int = 10
+                              AND ad.compliance_status_id = 15
+                              AND ad.compliance_maker_emp_id = $1
                           )
                       )
               )::int AS compliance_points,
               COUNT(DISTINCT ad.id) FILTER (
                   WHERE ad.is_compliance = 1
-                      AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4)
-                      AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+                      AND (
+                          (
+                              $2::int != 10
+                              AND COALESCE(ad.compliance_status_id, 0) IN (0, 3, 4)
+                              AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+                          )
+                          OR (
+                              $2::int = 10
+                              AND ad.compliance_status_id = 16
+                              AND ad.compliance_maker_emp_id = $1
+                          )
+                      )
               )::int AS responded_points,
               true AS live_manager_compliance
           FROM audit_assesment_master aam
@@ -117,20 +143,30 @@ export class ComplianceService {
           HAVING COUNT(DISTINCT ad.id) FILTER (
               WHERE ad.is_compliance = 1
                   AND (
-                      COALESCE(ad.compliance_status_id, 0) IN (
-                          3,
-                          7,
-                          ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                      (
+                          $2::int != 10
+                          AND (
+                              COALESCE(ad.compliance_status_id, 0) IN (
+                                  3,
+                                  7,
+                                  ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                              )
+                              OR (
+                                  COALESCE(ad.compliance_status_id, 0) IN (0, 4)
+                                  AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
+                              )
+                          )
                       )
                       OR (
-                          COALESCE(ad.compliance_status_id, 0) IN (0, 4)
-                          AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
+                          $2::int = 10
+                          AND ad.compliance_status_id = 15
+                          AND ad.compliance_maker_emp_id = $1
                       )
                   )
           ) > 0
           ORDER BY aam.id DESC;
           `,
-          [employeeId],
+          [employeeId, userTypeId],
         );
 
       return {
@@ -170,8 +206,18 @@ export class ComplianceService {
                     WHERE ad.is_compliance = 1
                         AND ad.audit_status_id = 2
                         AND (
-                            aam.audit_status_id = 4
-                            OR ad.compliance_status_id IN (3, 7, 8)
+                            (
+                                $2::int != 10
+                                AND (
+                                    aam.audit_status_id = 4
+                                    OR ad.compliance_status_id IN (3, 7, 8)
+                                )
+                            )
+                            OR (
+                                $2::int = 10
+                                AND ad.compliance_status_id = 15
+                                AND ad.compliance_maker_emp_id = $1
+                            )
                         )
                 )
                 +
@@ -180,8 +226,18 @@ export class ComplianceService {
                         AND ad.audit_status_id = 2
                         AND aa.audit_status_id = 2
                         AND (
-                            aam.audit_status_id = 4
-                            OR aa.compliance_status_id IN (3, 7, 8)
+                            (
+                                $2::int != 10
+                                AND (
+                                    aam.audit_status_id = 4
+                                    OR aa.compliance_status_id IN (3, 7, 8)
+                                )
+                            )
+                            OR (
+                                $2::int = 10
+                                AND aa.compliance_status_id = 15
+                                AND aa.compliance_maker_emp_id = $1
+                            )
                         )
                 )
             )::int AS compliance_points,
@@ -190,13 +246,23 @@ export class ComplianceService {
                     WHERE ad.is_compliance = 1
                         AND ad.audit_status_id = 2
                         AND (
-                            aam.audit_status_id = 4
-                            OR ad.compliance_status_id IN (3, 7, 8)
-                        )
-                        AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
-                        AND (
-                            aam.audit_status_id = 4
-                            OR ad.batch_key = aam.batch_key
+                            (
+                                $2::int != 10
+                                AND (
+                                    aam.audit_status_id = 4
+                                    OR ad.compliance_status_id IN (3, 7, 8)
+                                )
+                                AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
+                                AND (
+                                    aam.audit_status_id = 4
+                                    OR ad.batch_key = aam.batch_key
+                                )
+                            )
+                            OR (
+                                $2::int = 10
+                                AND ad.compliance_status_id = 16
+                                AND ad.compliance_maker_emp_id = $1
+                            )
                         )
                 )
                 +
@@ -205,13 +271,23 @@ export class ComplianceService {
                         AND ad.audit_status_id = 2
                         AND aa.audit_status_id = 2
                         AND (
-                            aam.audit_status_id = 4
-                            OR aa.compliance_status_id IN (3, 7, 8)
-                        )
-                        AND NULLIF(BTRIM(COALESCE(aa.audit_commpliance, '')), '') IS NOT NULL
-                        AND (
-                            aam.audit_status_id = 4
-                            OR aa.batch_key = aam.batch_key
+                            (
+                                $2::int != 10
+                                AND (
+                                    aam.audit_status_id = 4
+                                    OR aa.compliance_status_id IN (3, 7, 8)
+                                )
+                                AND NULLIF(BTRIM(COALESCE(aa.audit_commpliance, '')), '') IS NOT NULL
+                                AND (
+                                    aam.audit_status_id = 4
+                                    OR aa.batch_key = aam.batch_key
+                                )
+                            )
+                            OR (
+                                $2::int = 10
+                                AND aa.compliance_status_id = 16
+                                AND aa.compliance_maker_emp_id = $1
+                            )
                         )
                 )
             )::int AS responded_points
@@ -261,8 +337,18 @@ export class ComplianceService {
                 WHERE ad.is_compliance = 1
                     AND ad.audit_status_id = 2
                     AND (
-                        aam.audit_status_id = 4
-                        OR ad.compliance_status_id IN (3, 7, 8)
+                        (
+                            $2::int != 10
+                            AND (
+                                aam.audit_status_id = 4
+                                OR ad.compliance_status_id IN (3, 7, 8)
+                            )
+                        )
+                        OR (
+                            $2::int = 10
+                            AND ad.compliance_status_id = 15
+                            AND ad.compliance_maker_emp_id = $1
+                        )
                     )
             )
             +
@@ -271,13 +357,24 @@ export class ComplianceService {
                     AND ad.audit_status_id = 2
                     AND aa.audit_status_id = 2
                     AND (
-                        aam.audit_status_id = 4
-                        OR aa.compliance_status_id IN (3, 7, 8)
+                        (
+                            $2::int != 10
+                            AND (
+                                aam.audit_status_id = 4
+                                OR aa.compliance_status_id IN (3, 7, 8)
+                            )
+                        )
+                        OR (
+                            $2::int = 10
+                            AND aa.compliance_status_id = 15
+                            AND aa.compliance_maker_emp_id = $1
+                        )
                     )
             )
         ) > 0
         ORDER BY aam.compliance_start_date DESC NULLS LAST, aam.id DESC;
-        `, [employeeId]
+        `,
+        [employeeId, userTypeId],
       );
 
     return {
@@ -296,6 +393,12 @@ export class ComplianceService {
       assessmentId,
       employeeId,
     );
+
+    const employee = await this.svc.db.findOne(
+      `SELECT user_type_id FROM employee_master WHERE id = $1 AND deleted_at IS NULL`,
+      [employeeId]
+    );
+    const userTypeId = Number(employee?.user_type_id || 0);
 
     const overview =
       await this.svc.findAssessment(
@@ -379,6 +482,10 @@ export class ComplianceService {
             ad.audit_commpliance AS compliance_response,
             ad.compliance_status_id,
             ad.compliance_reviewer_comment,
+            ad.compliance_maker_comment,
+            ad.compliance_maker_emp_id,
+            (SELECT name FROM employee_master WHERE id = ad.compliance_maker_emp_id) AS compliance_maker_name,
+            ad.compliance_maker_date,
             ad.batch_key,
             mm.name AS menu_name,
             cm.name AS category_name,
@@ -454,12 +561,24 @@ export class ComplianceService {
             AND ad.deleted_at IS NULL
             AND (
                 (
+                    $4::int != 10
+                )
+                OR (
+                    $4::int = 10
+                    AND ad.compliance_status_id = 15
+                    AND ad.compliance_maker_emp_id = $2
+                )
+            )
+            AND (
+                (
                     $3::boolean = true
                     AND (
                         COALESCE(ad.compliance_status_id, 0) IN (
                             3,
                             7,
-                            ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                            ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING},
+                            ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+                            ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
                         )
                         OR (
                             COALESCE(ad.compliance_status_id, 0) IN (0, 4)
@@ -471,7 +590,7 @@ export class ComplianceService {
                     $3::boolean = false
                     AND ad.audit_status_id = 2
                     AND (
-                        $2::int = 4
+                        $5::int = 4
                         OR ad.compliance_status_id IN (3, 7, 8)
                         OR EXISTS (
                             SELECT 1
@@ -488,8 +607,10 @@ export class ComplianceService {
         `,
         [
           assessmentId,
-          complianceStatus,
+          employeeId,
           liveManagerCompliance,
+          userTypeId,
+          complianceStatus,
         ],
       );
 
@@ -519,6 +640,10 @@ export class ComplianceService {
               audit_commpliance AS compliance_response,
               compliance_status_id,
               compliance_reviewer_comment,
+              compliance_maker_comment,
+              compliance_maker_emp_id,
+              (SELECT name FROM employee_master WHERE id = compliance_maker_emp_id) AS compliance_maker_name,
+              compliance_maker_date,
               batch_key
           FROM answers_data_annexure
           WHERE assesment_id = $1
@@ -526,11 +651,23 @@ export class ComplianceService {
               AND deleted_at IS NULL
               AND (
                   (
+                      $6::int != 10
+                  )
+                  OR (
+                      $6::int = 10
+                      AND compliance_status_id = 15
+                      AND compliance_maker_emp_id = $5
+                  )
+              )
+              AND (
+                  (
                       $4::boolean = true
                       AND (
                           COALESCE(compliance_status_id, 0) IN (
                               3,
-                              ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                              ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING},
+                              ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+                              ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
                           )
                           OR (
                               COALESCE(compliance_status_id, 0) IN (0, 4)
@@ -554,6 +691,8 @@ export class ComplianceService {
             answerIds,
             complianceStatus,
             liveManagerCompliance,
+            employeeId,
+            userTypeId,
           ],
         );
 
@@ -715,6 +854,33 @@ ORDER BY id DESC;
 
     await this.svc.attachTimelines(answers, assessmentId);
 
+    // Fetch eligible makers (subheads, or people in multi_compliance_ids)
+    const makerIdsSet = new Set<number>();
+    if (overview.branch_subhead_id) {
+      makerIdsSet.add(Number(overview.branch_subhead_id));
+    }
+    if (overview.multi_compliance_ids) {
+      const ids = overview.multi_compliance_ids
+        .split(',')
+        .map((s: string) => Number(s.trim()))
+        .filter((n: number) => !isNaN(n) && n > 0);
+      ids.forEach((id: number) => makerIdsSet.add(id));
+    }
+
+    let makers: any[] = [];
+    if (makerIdsSet.size > 0) {
+      const makerResult = await this.svc.db.query(
+        `
+        SELECT id, emp_code, name, designation
+        FROM employee_master
+        WHERE id = ANY($1::int[])
+          AND deleted_at IS NULL
+        `,
+        [Array.from(makerIdsSet)]
+      );
+      makers = makerResult.rows;
+    }
+
     return {
       overview:
         overviewWithFlow,
@@ -729,6 +895,7 @@ ORDER BY id DESC;
           &&
           complianceStatus === 6,
         ),
+      makers,
     };
   }
 
@@ -1244,6 +1411,10 @@ ORDER BY id DESC;
                                 ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
                             )
                             OR $6::int = 4
+                            OR (
+                                compliance_status_id = ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
+                                AND NULLIF(BTRIM(COALESCE(compliance_reviewer_comment, '')), '') IS NOT NULL
+                            )
                         )
                         THEN ${LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING}
                     WHEN $7::boolean = true
@@ -1264,7 +1435,8 @@ ORDER BY id DESC;
                                 3,
                                 7,
                                 8,
-                                ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                                ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING},
+                                ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
                             )
                             OR (
                                 COALESCE(compliance_status_id, 0) IN (0, 4)
@@ -1308,6 +1480,10 @@ ORDER BY id DESC;
                                 ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
                             )
                             OR $6::int = 4
+                            OR (
+                                aa.compliance_status_id = ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
+                                AND NULLIF(BTRIM(COALESCE(aa.compliance_reviewer_comment, '')), '') IS NOT NULL
+                            )
                         )
                         THEN ${LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING}
                     WHEN $7::boolean = true
@@ -1327,7 +1503,8 @@ ORDER BY id DESC;
                                 3,
                                 7,
                                 8,
-                                ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                                ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING},
+                                ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
                             )
                             OR (
                                 COALESCE(aa.compliance_status_id, 0) IN (0, 4)
@@ -1678,5 +1855,370 @@ ORDER BY id DESC;
   }
 
   // Categor Assessment
+
+  async assignToMaker(
+    assessmentId: number,
+    makerEmpId: number,
+    targetType: string,
+    observationIds: number[],
+    employeeId: number,
+  ) {
+    await this.svc.assertComplianceAuthority(
+      assessmentId,
+      employeeId,
+    );
+
+    const maker = await this.svc.db.findOne(
+      `SELECT id FROM employee_master WHERE id = $1 AND deleted_at IS NULL`,
+      [makerEmpId],
+    );
+    if (!maker) {
+      throw new BadRequestException('Invalid maker selected.');
+    }
+
+    const assessment = await this.svc.findAssessment(assessmentId);
+
+    await this.svc.db.transaction(async (client) => {
+      if (targetType === 'all') {
+        await client.query(
+          `
+          UPDATE answers_data
+          SET compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+              compliance_maker_emp_id = $1,
+              compliance_maker_date = CURRENT_TIMESTAMP,
+              batch_key = $2
+          WHERE assesment_id = $3
+            AND is_compliance = 1
+            AND COALESCE(compliance_status_id, 0) IN (0, 3, 4, ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING})
+            AND deleted_at IS NULL;
+          `,
+          [makerEmpId, assessment.batch_key, assessmentId],
+        );
+
+        await client.query(
+          `
+          UPDATE answers_data_annexure
+          SET compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+              compliance_maker_emp_id = $1,
+              compliance_maker_date = CURRENT_TIMESTAMP,
+              batch_key = $2
+          WHERE assesment_id = $3
+            AND COALESCE(compliance_status_id, 0) IN (0, 3, 4, ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING})
+            AND deleted_at IS NULL;
+          `,
+          [makerEmpId, assessment.batch_key, assessmentId],
+        );
+      } else if (targetType === 'answer') {
+        await client.query(
+          `
+          UPDATE answers_data
+          SET compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+              compliance_maker_emp_id = $1,
+              compliance_maker_date = CURRENT_TIMESTAMP,
+              batch_key = $2
+          WHERE id = ANY($3::int[])
+            AND assesment_id = $4
+            AND is_compliance = 1
+            AND deleted_at IS NULL;
+          `,
+          [makerEmpId, assessment.batch_key, observationIds, assessmentId],
+        );
+
+        await client.query(
+          `
+          UPDATE answers_data_annexure
+          SET compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+              compliance_maker_emp_id = $1,
+              compliance_maker_date = CURRENT_TIMESTAMP,
+              batch_key = $2
+          WHERE answer_id = ANY($3::int[])
+            AND assesment_id = $4
+            AND deleted_at IS NULL;
+          `,
+          [makerEmpId, assessment.batch_key, observationIds, assessmentId],
+        );
+      } else if (targetType === 'annexure') {
+        const res = await client.query(
+          `
+          UPDATE answers_data_annexure
+          SET compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+              compliance_maker_emp_id = $1,
+              compliance_maker_date = CURRENT_TIMESTAMP,
+              batch_key = $2
+          WHERE id = ANY($3::int[])
+            AND assesment_id = $4
+            AND deleted_at IS NULL
+          RETURNING answer_id;
+          `,
+          [makerEmpId, assessment.batch_key, observationIds, assessmentId],
+        );
+
+        if (res.rows.length) {
+          const uniqueAnswerIds = Array.from(new Set(res.rows.map((r: any) => Number(r.answer_id))));
+          for (const answerId of uniqueAnswerIds) {
+            const childRows = await client.query(
+              `SELECT compliance_status_id FROM answers_data_annexure WHERE answer_id = $1 AND deleted_at IS NULL`,
+              [answerId],
+            );
+            const parentStatus = this.svc.getLiveComplianceParentStatusFromRows(
+              childRows.rows.map((r: any) => Number(r.compliance_status_id || 0))
+            );
+            await client.query(
+              `
+              UPDATE answers_data
+              SET compliance_status_id = $1,
+                  batch_key = $2
+              WHERE id = $3
+                AND deleted_at IS NULL;
+              `,
+              [parentStatus, assessment.batch_key, answerId],
+            );
+          }
+        }
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Observations successfully assigned to Maker.',
+    };
+  }
+
+  async saveMakerResponse(
+    assessmentId: number,
+    targetType: string,
+    observationId: number,
+    employeeId: number,
+    comment: string,
+  ) {
+    await this.svc.assertComplianceAuthority(
+      assessmentId,
+      employeeId,
+    );
+
+    if (!['answer', 'annexure'].includes(targetType)) {
+      throw new BadRequestException('Invalid observation type.');
+    }
+
+    const assessment = await this.svc.findAssessment(assessmentId);
+
+    await this.svc.db.transaction(async (client) => {
+      if (targetType === 'answer') {
+        const parentResult = await client.query(
+          `
+          UPDATE answers_data
+          SET compliance_maker_comment = $1,
+              compliance_maker_emp_id = $2,
+              compliance_maker_date = CURRENT_TIMESTAMP,
+              compliance_status_id = ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING},
+              batch_key = $3
+          WHERE id = $4
+            AND assesment_id = $5
+            AND is_compliance = 1
+            AND compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING}
+            AND deleted_at IS NULL
+          RETURNING id;
+          `,
+          [
+            this.svc.cleanString(comment) || null,
+            employeeId,
+            assessment.batch_key,
+            observationId,
+            assessmentId,
+          ],
+        );
+
+        if (!parentResult.rows.length) {
+          throw new NotFoundException('Compliance point is not assigned to you or not pending maker response.');
+        }
+
+        await client.query(
+          `
+          UPDATE answers_data_annexure
+          SET compliance_status_id = ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING},
+              compliance_maker_comment = $1,
+              compliance_maker_emp_id = $2,
+              compliance_maker_date = CURRENT_TIMESTAMP,
+              batch_key = $3
+          WHERE answer_id = $4
+            AND assesment_id = $5
+            AND compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING}
+            AND deleted_at IS NULL;
+          `,
+          [
+            this.svc.cleanString(comment) || null,
+            employeeId,
+            assessment.batch_key,
+            observationId,
+            assessmentId,
+          ],
+        );
+      } else {
+        const annexureResult = await client.query(
+          `
+          UPDATE answers_data_annexure
+          SET compliance_maker_comment = $1,
+              compliance_maker_emp_id = $2,
+              compliance_maker_date = CURRENT_TIMESTAMP,
+              compliance_status_id = ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING},
+              batch_key = $3
+          WHERE id = $4
+            AND assesment_id = $5
+            AND compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING}
+            AND deleted_at IS NULL
+          RETURNING id, answer_id;
+          `,
+          [
+            this.svc.cleanString(comment) || null,
+            employeeId,
+            assessment.batch_key,
+            observationId,
+            assessmentId,
+          ],
+        );
+
+        if (!annexureResult.rows.length) {
+          throw new NotFoundException('Annexure row is not assigned to you or not pending maker response.');
+        }
+
+        const answerId = Number(annexureResult.rows[0].answer_id);
+        const childRows = await client.query(
+          `SELECT compliance_status_id FROM answers_data_annexure WHERE answer_id = $1 AND deleted_at IS NULL`,
+          [answerId],
+        );
+        const parentStatus = this.svc.getLiveComplianceParentStatusFromRows(
+          childRows.rows.map((r: any) => Number(r.compliance_status_id || 0))
+        );
+
+        await client.query(
+          `
+          UPDATE answers_data
+          SET compliance_status_id = $1,
+              batch_key = $2
+          WHERE id = $3
+            AND deleted_at IS NULL;
+          `,
+          [parentStatus, assessment.batch_key, answerId],
+        );
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Draft response successfully submitted to Manager (Checker).',
+    };
+  }
+
+  async returnToMaker(
+    assessmentId: number,
+    targetType: string,
+    observationId: number,
+    employeeId: number,
+    comment: string,
+  ) {
+    await this.svc.assertComplianceAuthority(
+      assessmentId,
+      employeeId,
+    );
+
+    if (!['answer', 'annexure'].includes(targetType)) {
+      throw new BadRequestException('Invalid observation type.');
+    }
+
+    const assessment = await this.svc.findAssessment(assessmentId);
+
+    await this.svc.db.transaction(async (client) => {
+      if (targetType === 'answer') {
+        const parentResult = await client.query(
+          `
+          UPDATE answers_data
+          SET compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+              compliance_reviewer_comment = $1,
+              batch_key = $2
+          WHERE id = $3
+            AND assesment_id = $4
+            AND is_compliance = 1
+            AND compliance_status_id = ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
+            AND deleted_at IS NULL
+          RETURNING id;
+          `,
+          [
+            this.svc.cleanString(comment) || null,
+            assessment.batch_key,
+            observationId,
+            assessmentId,
+          ],
+        );
+
+        if (!parentResult.rows.length) {
+          throw new NotFoundException('Compliance point is not pending Checker review.');
+        }
+
+        await client.query(
+          `
+          UPDATE answers_data_annexure
+          SET compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+              batch_key = $1
+          WHERE answer_id = $2
+            AND assesment_id = $3
+            AND compliance_status_id = ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
+            AND deleted_at IS NULL;
+          `,
+          [
+            assessment.batch_key,
+            observationId,
+            assessmentId,
+          ],
+        );
+      } else {
+        const annexureResult = await client.query(
+          `
+          UPDATE answers_data_annexure
+          SET compliance_status_id = ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+              batch_key = $1
+          WHERE id = $2
+            AND assesment_id = $3
+            AND compliance_status_id = ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
+            AND deleted_at IS NULL
+          RETURNING id, answer_id;
+          `,
+          [
+            assessment.batch_key,
+            observationId,
+            assessmentId,
+          ],
+        );
+
+        if (!annexureResult.rows.length) {
+          throw new NotFoundException('Annexure row is not pending Checker review.');
+        }
+
+        const answerId = Number(annexureResult.rows[0].answer_id);
+        const childRows = await client.query(
+          `SELECT compliance_status_id FROM answers_data_annexure WHERE answer_id = $1 AND deleted_at IS NULL`,
+          [answerId],
+        );
+        const parentStatus = this.svc.getLiveComplianceParentStatusFromRows(
+          childRows.rows.map((r: any) => Number(r.compliance_status_id || 0))
+        );
+
+        await client.query(
+          `
+          UPDATE answers_data
+          SET compliance_status_id = $1,
+              batch_key = $2
+          WHERE id = $3
+            AND deleted_at IS NULL;
+          `,
+          [parentStatus, assessment.batch_key, answerId],
+        );
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Compliance point returned to Maker for rework.',
+    };
+  }
 
 }

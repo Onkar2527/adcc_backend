@@ -372,12 +372,16 @@ export class AuditCalendarService {
               WHERE audit_emp_id = $1 AND deleted_at IS NULL
             )`;
             queryParams.push(userId);
-          } else if (userTypeId === 3) {
-            // Employee
-            queryStr += ` AND id IN (
-              SELECT DISTINCT audit_unit_id 
-              FROM audit_assesment_master 
-              WHERE compliance_emp_id = $1 AND deleted_at IS NULL
+          } else if (userTypeId === 3 || userTypeId === 10) {
+            // Employee / Sub-Head
+            queryStr += ` AND (
+              id IN (
+                SELECT DISTINCT audit_unit_id 
+                FROM audit_assesment_master 
+                WHERE compliance_emp_id = $1 AND deleted_at IS NULL
+              )
+              OR branch_head_id = $1
+              OR branch_subhead_id = $1
             )`;
             queryParams.push(userId);
           } else if (userTypeId === 4) {

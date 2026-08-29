@@ -238,4 +238,67 @@ export class ComplianceController {
       || String(body?.live_manager_compliance) === 'true',
     );
   }
+
+  @Post('compliance/:assessmentId/assign-to-maker')
+  assignToMaker(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Body()
+    body: any,
+  ) {
+    return this.service.assignToMaker(
+      assessmentId,
+      Number(body?.maker_emp_id || 0),
+      String(body?.target_type || 'all'),
+      Array.isArray(body?.observation_ids) ? body.observation_ids.map(Number) : [],
+      Number(body?.employee_id || 0),
+    );
+  }
+
+  @Post('compliance/:assessmentId/observation/:targetType/:observationId/maker-response')
+  saveMakerResponse(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('targetType')
+    targetType: string,
+
+    @Param('observationId', ParseIntPipe)
+    observationId: number,
+
+    @Body()
+    body: any,
+  ) {
+    return this.service.saveMakerResponse(
+      assessmentId,
+      targetType,
+      observationId,
+      Number(body?.employee_id || 0),
+      String(body?.comment || ''),
+    );
+  }
+
+  @Post('compliance/:assessmentId/observation/:targetType/:observationId/return-to-maker')
+  returnToMaker(
+    @Param('assessmentId', ParseIntPipe)
+    assessmentId: number,
+
+    @Param('targetType')
+    targetType: string,
+
+    @Param('observationId', ParseIntPipe)
+    observationId: number,
+
+    @Body()
+    body: any,
+  ) {
+    return this.service.returnToMaker(
+      assessmentId,
+      targetType,
+      observationId,
+      Number(body?.employee_id || 0),
+      String(body?.comment || ''),
+    );
+  }
 }

@@ -1629,7 +1629,7 @@ export class InternalAuditService {
       );
 
     if (
-      userTypeId === 3
+      userTypeId === 3 || userTypeId === 10
     ) {
       await this.assertComplianceAuthority(
         assessmentId,
@@ -9307,6 +9307,8 @@ ORDER BY id DESC;
           ym.year,
           au.name AS audit_unit_name,
           au.audit_unit_code,
+          au.branch_head_id,
+          au.branch_subhead_id,
           sam.title AS special_audit_title,
           asm.name AS section_type_name
       FROM audit_assesment_master aam
@@ -9635,7 +9637,7 @@ SELECT (
         SELECT id
         FROM employee_master
         WHERE id = $1
-            AND user_type_id = 3
+            AND user_type_id IN (3, 10)
             AND deleted_at IS NULL
         LIMIT 1;
         `,
@@ -9646,7 +9648,7 @@ SELECT (
       !employee
     ) {
       throw new BadRequestException(
-        'Only a manager can open compliance.',
+        'Only a manager or sub-head can open compliance.',
       );
     }
   }
