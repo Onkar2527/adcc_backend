@@ -489,6 +489,12 @@ export class ReportsService {
           type: 'date',
         },
         {
+          key: 'audit_extended_days',
+          label: 'Audit Extended Days',
+          width: '5%',
+          align: 'center',
+        },
+        {
           key: 'inspection_days',
           label: 'Inspection Days',
           width: '4%',
@@ -528,6 +534,12 @@ export class ReportsService {
           align: 'center',
         },
         {
+          key: 'compliance_extended_days',
+          label: 'Compliance Extended Days',
+          width: '5%',
+          align: 'center',
+        },
+        {
           key: 'compliance_status_label',
           label: 'Compliance Status',
           width: '6%',
@@ -536,10 +548,9 @@ export class ReportsService {
           dueDateKey: 'compliance_due_date',
         },
         {
-          key: 'expiry_date',
-          label: 'Expiry Date',
-          width: '6%',
-          type: 'date',
+          key: 'extended_by_name',
+          label: 'Extended By',
+          width: '8%',
         },
         {
           key: 'total_audit_days',
@@ -1109,13 +1120,14 @@ export class ReportsService {
       ],
       columns: [
         { key: 'sr_no', label: 'Sr. No', width: '5%', align: 'center' },
-        { key: 'question', label: 'Question', width: '31%' },
+        { key: 'question', label: 'Question', width: '25%' },
         { key: 'answer_given', label: 'Audit Point', width: '10%' },
-        { key: 'audit_comment', label: 'Audit Comment', width: '10%' },
-        { key: 'audit_commpliance', label: 'Compliance', width: '20%' },
-        { key: 'business_risk_label', label: 'Business Risk', width: '8%' },
-        { key: 'control_risk_label', label: 'Control Risk', width: '8%' },
-        { key: 'risk_category', label: 'Risk Type', width: '8%' },
+        { key: 'audit_comment', label: 'Audit Comment', width: '10%', type: 'commentWithAuthor', authorKey: 'auditor_info' },
+        { key: 'audit_commpliance', label: 'Compliance', width: '15%', type: 'commentWithAuthor', authorKey: 'compliance_user_info' },
+        { key: 'compliance_reviewer_comment', label: 'Compliance Reviewer Comment', width: '15%', type: 'commentWithAuthor', authorKey: 'reviewer_info' },
+        { key: 'business_risk_label', label: 'Business Risk', width: '7%' },
+        { key: 'control_risk_label', label: 'Control Risk', width: '7%' },
+        { key: 'risk_category', label: 'Risk Type', width: '6%' },
       ],
       summaryCards: [
         { key: 'total', label: 'Total Points' },
@@ -4473,7 +4485,12 @@ export class ReportsService {
       `
       SELECT
         ad.id,
+        auditor.name AS auditor_name,
         auditor.emp_code AS auditor_emp_code,
+        compliance_user.name AS compliance_user_name,
+        compliance_user.emp_code AS compliance_user_code,
+        reviewer_user.name AS reviewer_name,
+        reviewer_user.emp_code AS reviewer_code,
         aam.is_multiple_auditors,
         ad.menu_id,
         mm.name AS menu_name,
@@ -4491,6 +4508,7 @@ export class ReportsService {
         ad.answer_given,
         ad.audit_comment,
         ad.audit_commpliance,
+        COALESCE(ad.compliance_reviewer_comment, ad.super_reviewer_comment) AS compliance_reviewer_comment,
         ad.is_compliance,
         ad.business_risk,
         ad.control_risk,
@@ -4563,6 +4581,10 @@ export class ReportsService {
         AND au.deleted_at IS NULL
       LEFT JOIN employee_master auditor
         ON auditor.id = ad.audit_emp_id
+      LEFT JOIN employee_master compliance_user
+        ON compliance_user.id = ad.compliance_emp_id
+      LEFT JOIN employee_master reviewer_user
+        ON reviewer_user.id = ad.compliance_reviewer_emp_id
       LEFT JOIN audit_unit_master aum_assesment
         ON aum_assesment.id = aam.audit_unit_id
         AND aum_assesment.deleted_at IS NULL
@@ -4597,7 +4619,17 @@ export class ReportsService {
       question: row.question || 'Assessment observation',
       answer_given: this.auditAnswerLabel(row),
       audit_comment: row.audit_comment || '-',
+      auditor_info: row.audit_comment
+        ? `Auditor: ${row.auditor_name || '-'} (${row.auditor_emp_code || '-'})`
+        : '',
       audit_commpliance: row.audit_commpliance || '-',
+      compliance_user_info: row.audit_commpliance
+        ? `Compliance: ${row.compliance_user_name || '-'} (${row.compliance_user_code || '-'})`
+        : '',
+      compliance_reviewer_comment: row.compliance_reviewer_comment || '-',
+      reviewer_info: row.compliance_reviewer_comment
+        ? `Reviewer: ${row.reviewer_name || '-'} (${row.reviewer_code || '-'})`
+        : '',
       risk_category: row.risk_category || '-',
       business_risk_label: this.riskParameterLabel(row.business_risk),
       control_risk_label: this.riskParameterLabel(row.control_risk),
@@ -4801,7 +4833,7 @@ export class ReportsService {
         ad.answer_given,
         ad.audit_comment,
         ad.audit_commpliance,
-        ad.compliance_reviewer_comment,
+        COALESCE(ad.compliance_reviewer_comment, ad.super_reviewer_comment) AS compliance_reviewer_comment,
         ad.is_compliance,
         ad.business_risk,
         ad.control_risk,
@@ -10794,7 +10826,10 @@ export class ReportsService {
         asm.compliance_start_date,
         asm.compliance_end_date,
         asm.compliance_due_date,
-        COALESCE(asm.is_limit_blocked, 0) AS is_limit_blocked
+        COALESCE(asm.is_limit_blocked, 0) AS is_limit_blocked,
+        ext.name AS extended_by_name,
+        asm.audit_extended_days,
+        asm.compliance_extended_days
       FROM audit_assesment_master asm
       INNER JOIN audit_unit_master aum
         ON aum.id = asm.audit_unit_id
@@ -10808,6 +10843,8 @@ export class ReportsService {
         ON branch_manager.id = asm.branch_head_id
       LEFT JOIN employee_master review
         ON review.id = asm.audit_review_emp_id
+      LEFT JOIN employee_master ext
+        ON ext.id = asm.extended_by_emp_id
       WHERE ${where.join(' AND ')}
       ORDER BY aum.audit_unit_code ASC, asm.audit_unit_id ASC, asm.assesment_period_from ASC
       `,
@@ -11734,6 +11771,9 @@ export class ReportsService {
         : '-',
       compliance_expired: complianceExpired,
       is_limit_blocked: isBlocked ? 1 : 0,
+      extended_by_name: row.extended_by_name || '-',
+      audit_extended_days: row.audit_extended_days ? `${row.audit_extended_days} Days` : '-',
+      compliance_extended_days: row.compliance_extended_days ? `${row.compliance_extended_days} Days` : '-',
     };
   }
 

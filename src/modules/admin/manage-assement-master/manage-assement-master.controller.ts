@@ -22,8 +22,13 @@ export class ManageAssementMastersController {
 
 
     @Put(':id')
-    update(@Param('id') id: string, @Body() dto: ManageAssementMasterDto) {
-        return this.service.update(Number(id), dto)
+    update(
+        @Param('id') id: string,
+        @Body() dto: ManageAssementMasterDto,
+        @Req() req: any
+    ) {
+        const adminId = req.user?.id || 1;
+        return this.service.update(Number(id), dto, adminId)
     }
 
     @Get(':id/eligible-auditors')
