@@ -72,7 +72,9 @@ export class ComplianceService {
                                   COALESCE(ad.compliance_status_id, 0) IN (
                                       3,
                                       7,
-                                      ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
+                                      ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING},
+                                      ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+                                      ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
                                   )
                                   OR (
                                       COALESCE(ad.compliance_status_id, 0) IN (0, 4)
@@ -146,11 +148,13 @@ export class ComplianceService {
                       (
                           $2::int != 10
                           AND (
-                              COALESCE(ad.compliance_status_id, 0) IN (
-                                  3,
-                                  7,
-                                  ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}
-                              )
+                               COALESCE(ad.compliance_status_id, 0) IN (
+                                   3,
+                                   7,
+                                   ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING},
+                                   ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
+                                   ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
+                               )
                               OR (
                                   COALESCE(ad.compliance_status_id, 0) IN (0, 4)
                                   AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NULL
@@ -210,7 +214,7 @@ export class ComplianceService {
                                 $2::int != 10
                                 AND (
                                     aam.audit_status_id = 4
-                                    OR ad.compliance_status_id IN (3, 7, 8)
+                                    OR ad.compliance_status_id IN (3, 7, 8, ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}, ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING}, ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING})
                                 )
                             )
                             OR (
@@ -230,7 +234,7 @@ export class ComplianceService {
                                 $2::int != 10
                                 AND (
                                     aam.audit_status_id = 4
-                                    OR aa.compliance_status_id IN (3, 7, 8)
+                                    OR aa.compliance_status_id IN (3, 7, 8, ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}, ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING}, ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING})
                                 )
                             )
                             OR (
@@ -250,7 +254,7 @@ export class ComplianceService {
                                 $2::int != 10
                                 AND (
                                     aam.audit_status_id = 4
-                                    OR ad.compliance_status_id IN (3, 7, 8)
+                                    OR ad.compliance_status_id IN (3, 7, 8, ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}, ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING}, ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING})
                                 )
                                 AND NULLIF(BTRIM(COALESCE(ad.audit_commpliance, '')), '') IS NOT NULL
                                 AND (
@@ -275,7 +279,7 @@ export class ComplianceService {
                                 $2::int != 10
                                 AND (
                                     aam.audit_status_id = 4
-                                    OR aa.compliance_status_id IN (3, 7, 8)
+                                    OR aa.compliance_status_id IN (3, 7, 8, ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}, ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING}, ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING})
                                 )
                                 AND NULLIF(BTRIM(COALESCE(aa.audit_commpliance, '')), '') IS NOT NULL
                                 AND (
@@ -341,7 +345,7 @@ export class ComplianceService {
                             $2::int != 10
                             AND (
                                 aam.audit_status_id = 4
-                                OR ad.compliance_status_id IN (3, 7, 8)
+                                OR ad.compliance_status_id IN (3, 7, 8, ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}, ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING}, ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING})
                             )
                         )
                         OR (
@@ -361,7 +365,7 @@ export class ComplianceService {
                             $2::int != 10
                             AND (
                                 aam.audit_status_id = 4
-                                OR aa.compliance_status_id IN (3, 7, 8)
+                                OR aa.compliance_status_id IN (3, 7, 8, ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING}, ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING}, ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING})
                             )
                         )
                         OR (
@@ -565,7 +569,7 @@ export class ComplianceService {
                 )
                 OR (
                     $4::int = 10
-                    AND ad.compliance_status_id = 15
+                    AND ad.compliance_status_id IN (15, 16)
                     AND ad.compliance_maker_emp_id = $2
                 )
             )
@@ -655,7 +659,7 @@ export class ComplianceService {
                   )
                   OR (
                       $6::int = 10
-                      AND compliance_status_id = 15
+                      AND compliance_status_id IN (15, 16)
                       AND compliance_maker_emp_id = $5
                   )
               )
@@ -1904,6 +1908,12 @@ ORDER BY id DESC;
               batch_key = $2
           WHERE assesment_id = $3
             AND COALESCE(compliance_status_id, 0) IN (0, 3, 4, ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING})
+            AND answer_id IN (
+              SELECT id FROM answers_data
+              WHERE assesment_id = $3
+                AND is_compliance = 1
+                AND deleted_at IS NULL
+            )
             AND deleted_at IS NULL;
           `,
           [makerEmpId, assessment.batch_key, assessmentId],

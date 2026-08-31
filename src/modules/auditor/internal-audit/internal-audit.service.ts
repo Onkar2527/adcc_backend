@@ -66,6 +66,8 @@ const LIVE_COMPLIANCE_STATUS = {
   MANAGER_REWORK_PENDING: 12,
   AUDITOR_SETTLED: 13,
   REVIEWER_SETTLED: 14,
+  MAKER_PENDING: 15,
+  CHECKER_PENDING: 16,
 } as const;
 
 const LIVE_COMPLIANCE_VISIBLE_STATUSES = [
@@ -219,6 +221,24 @@ export class InternalAuditService {
   ) {
     const normalized =
       statuses.map((status) => Number(status || 0));
+
+    if (
+      normalized.some(
+        (status) =>
+          status === LIVE_COMPLIANCE_STATUS.MAKER_PENDING,
+      )
+    ) {
+      return LIVE_COMPLIANCE_STATUS.MAKER_PENDING;
+    }
+
+    if (
+      normalized.some(
+        (status) =>
+          status === LIVE_COMPLIANCE_STATUS.CHECKER_PENDING,
+      )
+    ) {
+      return LIVE_COMPLIANCE_STATUS.CHECKER_PENDING;
+    }
 
     if (
       normalized.some(
