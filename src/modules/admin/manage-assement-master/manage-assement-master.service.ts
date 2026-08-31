@@ -128,32 +128,67 @@ ORDER BY asm.id DESC;
 
     async update(
         id: number,
-        body: any
+        body: any,
+        adminId = 1
     ) {
+
+        const existingRes = await this.db.query(
+            `SELECT audit_due_date, compliance_due_date, audit_extended_days, compliance_extended_days FROM audit_assesment_master WHERE id = $1`,
+            [id]
+        );
+        const existing = existingRes.rows[0];
 
         const fields = [];
         const values = [];
 
         let index = 1;
+        let extendedByEmpIdSet = false;
 
         // Audit Due Date
         if (body.audit_due_date !== undefined) {
-
             fields.push(
                 `audit_due_date = $${index++}`
             );
-
             values.push(body.audit_due_date);
+
+            if (existing && existing.audit_due_date && body.audit_due_date) {
+                const oldDate = new Date(existing.audit_due_date);
+                const newDate = new Date(body.audit_due_date);
+                const diffTime = newDate.getTime() - oldDate.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays > 0) {
+                    const newExtendedDays = Number(existing.audit_extended_days || 0) + diffDays;
+                    fields.push(`audit_extended_days = $${index++}`);
+                    values.push(newExtendedDays);
+                    extendedByEmpIdSet = true;
+                }
+            }
         }
 
         // Compliance Due Date
         if (body.compliance_due_date !== undefined) {
-
             fields.push(
                 `compliance_due_date = $${index++}`
             );
-
             values.push(body.compliance_due_date);
+
+            if (existing && existing.compliance_due_date && body.compliance_due_date) {
+                const oldDate = new Date(existing.compliance_due_date);
+                const newDate = new Date(body.compliance_due_date);
+                const diffTime = newDate.getTime() - oldDate.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays > 0) {
+                    const newExtendedDays = Number(existing.compliance_extended_days || 0) + diffDays;
+                    fields.push(`compliance_extended_days = $${index++}`);
+                    values.push(newExtendedDays);
+                    extendedByEmpIdSet = true;
+                }
+            }
+        }
+
+        if (extendedByEmpIdSet) {
+            fields.push(`extended_by_emp_id = $${index++}`);
+            values.push(adminId);
         }
 
         // Compliance Review Reject Limit
