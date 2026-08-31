@@ -872,7 +872,7 @@ export class ReviewerService {
                     LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED,
                   ],
                 );
- 
+
               if (parentResult.rows.length) {
                 await client.query(
                   `
@@ -903,10 +903,10 @@ export class ReviewerService {
                   ],
                 );
               }
- 
+
               return parentResult;
             }
- 
+
             const annexureResult =
               await client.query(
                 `
@@ -1235,7 +1235,7 @@ export class ReviewerService {
           FROM answers_data
           WHERE assesment_id = $1
               AND is_compliance = 1
-              AND COALESCE(compliance_status_id, 0) IN ($2, $3, $4, $5, $6, $7, 17)
+              AND COALESCE(compliance_status_id, 0) IN ($2, $3, $4, $5, $6, 17)
               AND deleted_at IS NULL;
           `,
           [
@@ -1245,7 +1245,6 @@ export class ReviewerService {
             LIVE_COMPLIANCE_STATUS.AUDITOR_PENDING,
             LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING,
             LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING,
-            LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
           ],
         );
 
