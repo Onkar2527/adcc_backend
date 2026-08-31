@@ -7,14 +7,13 @@ export class ManageAssementMasterService {
     constructor(private readonly db: DatabaseService) { }
 
     async findAll(
-        assesment_period_from: string,
-        assesment_period_to: string,
+        year_id: number,
         audit_unit_id: number
     ) {
 
-        if (!assesment_period_from || !assesment_period_to) {
+        if (!year_id) {
             throw new BadRequestException(
-                'assesment_period_from and assesment_period_to are required'
+                'year_id is required'
             );
         }
 
@@ -36,6 +35,7 @@ export class ManageAssementMasterService {
     asm.compliance_due_date,
     asm.compliance_review_reject_limit,
     asm.is_limit_blocked,
+    asm.frequency,
 
     em.name AS branch_head_name,
     em1.name AS branch_subhead_name,
@@ -67,14 +67,61 @@ LEFT JOIN LATERAL (
 ) em2 ON true
 
 WHERE asm.deleted_at IS NULL
-  AND DATE(asm.assesment_period_from) >= $1
-  AND DATE(asm.assesment_period_to) <= $2
-  AND asm.audit_unit_id = $3
+  AND asm.year_id = $1
+  AND ($2 = 0 OR asm.audit_unit_id = $2)
 
 ORDER BY asm.id DESC;
     `,
-            [assesment_period_from, assesment_period_to, audit_unit_id]
+            [year_id, audit_unit_id]
         );
+    }
+
+    async getYears() {
+        const result = await this.db.query(
+            `SELECT id, year FROM year_master WHERE deleted_at IS NULL ORDER BY id DESC`
+        );
+        return result.rows;
+    }
+
+    async bulkUpdateDates(
+        ids: number[],
+        auditDueDate?: string,
+        complianceDueDate?: string
+    ) {
+        if (!ids || ids.length === 0) {
+            throw new BadRequestException('No assessment IDs provided');
+        }
+
+        const query = `
+            UPDATE audit_assesment_master
+            SET
+              audit_due_date = CASE WHEN $1::date IS NOT NULL AND audit_due_date < CURRENT_DATE THEN $1::date ELSE audit_due_date END,
+              compliance_due_date = CASE WHEN $2::date IS NOT NULL AND compliance_due_date < CURRENT_DATE THEN $2::date ELSE compliance_due_date END,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ANY($3)
+              AND (
+                ($1::date IS NOT NULL AND audit_due_date < CURRENT_DATE)
+                OR
+                ($2::date IS NOT NULL AND compliance_due_date < CURRENT_DATE)
+              )
+            RETURNING id;
+        `;
+
+        const result = await this.db.query(query, [
+            auditDueDate || null,
+            complianceDueDate || null,
+            ids
+        ]);
+
+        for (const row of result.rows) {
+            try {
+                await syncAssessmentScoring(this.db, row.id);
+            } catch (err) {
+                console.error(`Failed to sync assessment scoring for assessment ${row.id}:`, err);
+            }
+        }
+
+        return { success: true, updatedCount: result.rowCount };
     }
 
 

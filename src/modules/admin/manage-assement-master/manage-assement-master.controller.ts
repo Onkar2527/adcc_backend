@@ -9,14 +9,28 @@ export class ManageAssementMastersController {
 
     @Get()
     findAll(
-        @Query('assesment_period_from') assesment_period_from: string,
-        @Query('assesment_period_to') assesment_period_to: string,
-        @Query('audit_unit_id') audit_unit_id: number
+        @Query('year_id') year_id: string,
+        @Query('audit_unit_id') audit_unit_id: string
     ) {
         return this.service.findAll(
-            assesment_period_from,
-            assesment_period_to,
-            audit_unit_id
+            Number(year_id || 0),
+            Number(audit_unit_id || 0)
+        );
+    }
+
+    @Get('years')
+    getYears() {
+        return this.service.getYears();
+    }
+
+    @Post('bulk-update-dates')
+    bulkUpdateDates(
+        @Body() body: { ids: number[]; audit_due_date?: string; compliance_due_date?: string }
+    ) {
+        return this.service.bulkUpdateDates(
+            body.ids,
+            body.audit_due_date,
+            body.compliance_due_date
         );
     }
 
