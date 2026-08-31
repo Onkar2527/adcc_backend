@@ -68,6 +68,7 @@ const LIVE_COMPLIANCE_STATUS = {
   REVIEWER_SETTLED: 14,
   MAKER_PENDING: 15,
   CHECKER_PENDING: 16,
+  ESCALATED: 17,
 } as const;
 
 const LIVE_COMPLIANCE_VISIBLE_STATUSES = [
@@ -82,6 +83,7 @@ const LIVE_COMPLIANCE_VISIBLE_STATUSES = [
   LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING,
   LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED,
   LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED,
+  LIVE_COMPLIANCE_STATUS.ESCALATED,
 ];
 
 const LIVE_COMPLIANCE_MANAGER_PENDING_STATUSES = [
@@ -256,6 +258,15 @@ export class InternalAuditService {
       )
     ) {
       return LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING;
+    }
+
+    if (
+      normalized.some(
+        (status) =>
+          status === LIVE_COMPLIANCE_STATUS.ESCALATED,
+      )
+    ) {
+      return LIVE_COMPLIANCE_STATUS.ESCALATED;
     }
 
     if (
@@ -1404,6 +1415,7 @@ export class InternalAuditService {
                 ad.audit_comment,
                 ad.audit_commpliance,
                 ad.compliance_reviewer_comment,
+                ad.super_reviewer_comment,
                 ad.business_risk,
                 ad.control_risk,
                 qm.risk_category_id,
@@ -1443,6 +1455,7 @@ export class InternalAuditService {
                 aa.audit_comment,
                 aa.audit_commpliance,
                 aa.compliance_reviewer_comment,
+                aa.super_reviewer_comment,
                 aa.business_risk,
                 aa.control_risk,
                 aa.risk_cat_id AS risk_category_id,
@@ -1536,7 +1549,7 @@ export class InternalAuditService {
         old_audit_compliance:
           row.audit_commpliance || '',
         old_compliance_reviewer_comment:
-          row.compliance_reviewer_comment || '',
+          row.super_reviewer_comment || row.compliance_reviewer_comment || '',
         old_answer_id:
           Number(row.old_answer_id || 0),
         old_annexure_id:
@@ -2938,6 +2951,7 @@ export class InternalAuditService {
                   WHEN COALESCE(ad.compliance_status_id, 0) = ${LIVE_COMPLIANCE_STATUS.AUDITOR_PENDING} THEN 'Pending with Auditor.'
                   WHEN COALESCE(ad.compliance_status_id, 0) = ${LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED} THEN 'Reviewer will complete this live compliance point.'
                   WHEN COALESCE(ad.compliance_status_id, 0) = ${LIVE_COMPLIANCE_STATUS.AUDITOR_SETTLED} THEN 'Live compliance point is settled.'
+                  WHEN COALESCE(ad.compliance_status_id, 0) = 17 THEN 'Escalated to Super Reviewer.'
                   WHEN COALESCE(ad.compliance_status_id, 0) = 0 THEN 'Pending with Manager.'
                   ELSE 'Live compliance point is not resolved.'
               END AS message
@@ -9623,7 +9637,7 @@ SELECT (
         SELECT id
         FROM employee_master
         WHERE id = $1
-            AND user_type_id = 4
+            AND user_type_id IN (4, 11)
             AND deleted_at IS NULL
         LIMIT 1;
         `,
@@ -10686,7 +10700,7 @@ SELECT (
       FROM audit_assesment_master aam
       INNER JOIN employee_master em
           ON em.id = $2
-          AND em.user_type_id = 4
+          AND em.user_type_id IN (4, 11)
           AND em.deleted_at IS NULL
           AND em.audit_unit_authority IS NOT NULL
           AND EXISTS (
@@ -11193,7 +11207,7 @@ SELECT (
             let parameters: any[] = [];
             try {
               parameters = typeof qRow.parameters === 'string' ? JSON.parse(qRow.parameters) : (qRow.parameters || []);
-            } catch {}
+            } catch { }
 
             let defaultAnswer: string | null = null;
             if (!parameters.length) {
@@ -11259,7 +11273,7 @@ SELECT (
                   } else if (suggestionsObj?.english?.default) {
                     auditComment = suggestionsObj.english.default;
                   }
-                } catch {}
+                } catch { }
               }
 
               let isCompliance = 0;

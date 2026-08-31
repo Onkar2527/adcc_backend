@@ -178,7 +178,7 @@ export class EmailService {
 
     const reviewersRes = await this.db.query(`
       SELECT id, email, name FROM employee_master
-      WHERE user_type_id = 4
+      WHERE user_type_id IN (4, 11)
         AND deleted_at IS NULL
         AND EXISTS (
           SELECT 1 FROM unnest(string_to_array(COALESCE(audit_unit_authority, ''), ',')) unit_id

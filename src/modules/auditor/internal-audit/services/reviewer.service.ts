@@ -32,78 +32,95 @@ export class ReviewerService {
       employeeId,
     );
 
-    const result =
-      await this.svc.db.query(
-        `
-        SELECT
-            aam.id,
-            aam.audit_type_id,
-            (
-              SELECT audit_type.name
-              FROM audit_type_master audit_type
-              WHERE audit_type.id = aam.audit_type_id
-                AND audit_type.deleted_at IS NULL
-            ) AS audit_type_name,
-            aam.audit_unit_id,
-            aam.audit_status_id,
-            aam.assesment_period_from,
-            aam.assesment_period_to,
-            aam.audit_end_date,
-            au.audit_unit_code,
-            au.name AS audit_unit_name,
-            sam.title AS special_audit_title,
-            ym.year,
-            COUNT(ad.id) FILTER (
-                WHERE aam.audit_status_id = 2
-                    OR ad.is_compliance = 1
-            )::int AS total_points,
-            COUNT(ad.id) FILTER (WHERE ad.is_compliance = 1)::int AS compliance_points,
-            COUNT(ad.id) FILTER (
-                WHERE (aam.audit_status_id = 2 AND ad.audit_status_id = 3)
-                    OR (aam.audit_status_id = 5 AND ad.compliance_status_id IN (3, 7, 8))
-            )::int AS rejected_points,
-            CASE
-                WHEN aam.audit_status_id = 5 THEN 'Compliance Review'
-                ELSE 'Audit Review'
-            END AS review_stage
-            FROM audit_assesment_master aam
-            INNER JOIN audit_unit_master au
-                ON au.id = aam.audit_unit_id
-            LEFT JOIN special_audit_master sam
-                ON sam.assessment_id = aam.id
-                AND sam.deleted_at IS NULL
-            LEFT JOIN year_master ym
-                ON ym.id = aam.year_id
-            LEFT JOIN answers_data ad
-                ON ad.assesment_id = aam.id
-                AND ad.deleted_at IS NULL
-            WHERE aam.audit_status_id IN (2, 5)
-              AND aam.deleted_at IS NULL
-              AND EXISTS (
-                  SELECT 1
-                  FROM employee_master em
-                  WHERE em.id = $1
-                      AND em.user_type_id = 4
-                      AND em.deleted_at IS NULL
-                      AND em.audit_unit_authority IS NOT NULL
-                      AND EXISTS (
-                          SELECT 1
-                          FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
-                          WHERE trim(unit_id) = aam.audit_unit_id::text
-                  )
-        )
-        GROUP BY
-            aam.id,
-            au.audit_unit_code,
-            au.name,
-            sam.title,
-            ym.year
-        ORDER BY aam.audit_status_id, aam.audit_end_date DESC NULLS LAST, aam.id DESC;
-        `, [employeeId]
-      );
+    const userRes = await this.svc.db.query(
+      `SELECT user_type_id FROM employee_master WHERE id = $1 AND deleted_at IS NULL`,
+      [employeeId]
+    );
+    const userTypeId = Number(userRes.rows[0]?.user_type_id || 0);
 
-    const assessments =
-      result.rows;
+    let reviewerPendingStatuses = [...LIVE_COMPLIANCE_REVIEWER_PENDING_STATUSES];
+    let reviewerQueueStatuses = [...LIVE_COMPLIANCE_REVIEWER_QUEUE_STATUSES];
+
+    if (userTypeId === 11) {
+      reviewerPendingStatuses = [17]; // Escalated
+      reviewerQueueStatuses = [17, 5, 9]; // Escalated, Carry Forward, Partially Pass
+    }
+
+    let assessments: any[] = [];
+
+    if (userTypeId !== 11) {
+      const result =
+        await this.svc.db.query(
+          `
+          SELECT
+              aam.id,
+              aam.audit_type_id,
+              (
+                SELECT audit_type.name
+                FROM audit_type_master audit_type
+                WHERE audit_type.id = aam.audit_type_id
+                  AND audit_type.deleted_at IS NULL
+              ) AS audit_type_name,
+              aam.audit_unit_id,
+              aam.audit_status_id,
+              aam.assesment_period_from,
+              aam.assesment_period_to,
+              aam.audit_end_date,
+              au.audit_unit_code,
+              au.name AS audit_unit_name,
+              sam.title AS special_audit_title,
+              ym.year,
+              COUNT(ad.id) FILTER (
+                  WHERE aam.audit_status_id = 2
+                      OR ad.is_compliance = 1
+              )::int AS total_points,
+              COUNT(ad.id) FILTER (WHERE ad.is_compliance = 1)::int AS compliance_points,
+              COUNT(ad.id) FILTER (
+                  WHERE (aam.audit_status_id = 2 AND ad.audit_status_id = 3)
+                      OR (aam.audit_status_id = 5 AND ad.compliance_status_id IN (3, 7, 8))
+              )::int AS rejected_points,
+              CASE
+                  WHEN aam.audit_status_id = 5 THEN 'Compliance Review'
+                  ELSE 'Audit Review'
+              END AS review_stage
+              FROM audit_assesment_master aam
+              INNER JOIN audit_unit_master au
+                  ON au.id = aam.audit_unit_id
+              LEFT JOIN special_audit_master sam
+                  ON sam.assessment_id = aam.id
+                  AND sam.deleted_at IS NULL
+              LEFT JOIN year_master ym
+                  ON ym.id = aam.year_id
+              LEFT JOIN answers_data ad
+                  ON ad.assesment_id = aam.id
+                  AND ad.deleted_at IS NULL
+              WHERE aam.audit_status_id IN (2, 5)
+                AND aam.deleted_at IS NULL
+                AND EXISTS (
+                    SELECT 1
+                    FROM employee_master em
+                    WHERE em.id = $1
+                        AND em.user_type_id = 4
+                        AND em.deleted_at IS NULL
+                        AND em.audit_unit_authority IS NOT NULL
+                        AND EXISTS (
+                            SELECT 1
+                            FROM unnest(string_to_array(COALESCE(em.audit_unit_authority, ''), ',')) unit_id
+                            WHERE trim(unit_id) = aam.audit_unit_id::text
+                    )
+          )
+          GROUP BY
+              aam.id,
+              au.audit_unit_code,
+              au.name,
+              sam.title,
+              ym.year
+          ORDER BY aam.audit_status_id, aam.audit_end_date DESC NULLS LAST, aam.id DESC;
+          `, [employeeId]
+        );
+
+      assessments = result.rows;
+    }
 
     if (
       liveManagerCompliance
@@ -180,14 +197,14 @@ export class ReviewerService {
                     AND ad2.is_compliance = 1
                     AND ad2.deleted_at IS NULL
                     AND (
-                        COALESCE(ad2.compliance_status_id, 0) IN (${LIVE_COMPLIANCE_REVIEWER_PENDING_STATUSES.join(', ')})
+                        COALESCE(ad2.compliance_status_id, 0) IN (${reviewerPendingStatuses.join(', ')})
                         OR EXISTS (
                             SELECT 1
                             FROM answers_data_annexure aa2
                             WHERE aa2.answer_id = ad2.id
                                 AND aa2.assesment_id = ad2.assesment_id
                                 AND aa2.deleted_at IS NULL
-                                AND COALESCE(aa2.compliance_status_id, 0) IN (${LIVE_COMPLIANCE_REVIEWER_PENDING_STATUSES.join(', ')})
+                                AND COALESCE(aa2.compliance_status_id, 0) IN (${reviewerPendingStatuses.join(', ')})
                         )
                     )
             ) AS rejected_points,
@@ -207,7 +224,7 @@ export class ReviewerService {
                 SELECT 1
                 FROM employee_master em
                 WHERE em.id = $1
-                    AND em.user_type_id = 4
+                    AND em.user_type_id IN (4, 11)
                     AND em.deleted_at IS NULL
                     AND em.audit_unit_authority IS NOT NULL
                     AND EXISTS (
@@ -224,7 +241,7 @@ export class ReviewerService {
                     AND ad2.deleted_at IS NULL
                     AND (
                         (
-                            COALESCE(ad2.compliance_status_id, 0) IN (${LIVE_COMPLIANCE_REVIEWER_QUEUE_STATUSES.join(', ')})
+                            COALESCE(ad2.compliance_status_id, 0) IN (${reviewerQueueStatuses.join(', ')})
                             AND (
                                 COALESCE(ad2.compliance_status_id, 0) IN (0, 4)
                                 OR NULLIF(BTRIM(COALESCE(ad2.audit_commpliance, '')), '') IS NOT NULL
@@ -236,7 +253,7 @@ export class ReviewerService {
                             WHERE aa2.answer_id = ad2.id
                                 AND aa2.assesment_id = ad2.assesment_id
                                 AND aa2.deleted_at IS NULL
-                                AND COALESCE(ad2.compliance_status_id, 0) IN (${LIVE_COMPLIANCE_REVIEWER_QUEUE_STATUSES.join(', ')})
+                                AND COALESCE(ad2.compliance_status_id, 0) IN (${reviewerQueueStatuses.join(', ')})
                                 AND (
                                     COALESCE(aa2.compliance_status_id, 0) IN (0, 4)
                                     OR NULLIF(BTRIM(COALESCE(aa2.audit_commpliance, '')), '') IS NOT NULL
@@ -337,6 +354,7 @@ export class ReviewerService {
             ad.audit_commpliance AS compliance_response,
             ad.compliance_status_id,
             ad.compliance_reviewer_comment,
+            ad.super_reviewer_comment,
             mm.name AS menu_name,
             cm.name AS category_name,
             cm.linked_table_id,
@@ -465,7 +483,8 @@ export class ReviewerService {
               control_risk,
               audit_commpliance AS compliance_response,
               compliance_status_id,
-              compliance_reviewer_comment
+              compliance_reviewer_comment,
+              super_reviewer_comment
           FROM answers_data_annexure
           WHERE assesment_id = $1
               AND answer_id = ANY($2::int[])
@@ -751,10 +770,10 @@ export class ReviewerService {
     }
 
     if (
-      ![2, 3, 5, 7].includes(action)
+      ![2, 3, 5, 7, 8].includes(action)
     ) {
       throw new BadRequestException(
-        'Choose Accepted, Re-Compliance Needed, Carry Forward, or Partially Pass.',
+        'Choose Accepted, Re-Compliance Needed, Carry Forward, Partially Pass, or Escalate.',
       );
     }
 
@@ -789,18 +808,31 @@ export class ReviewerService {
     }
 
     if (liveManagerCompliance) {
+      const userRes = await this.svc.db.query(
+        `SELECT user_type_id FROM employee_master WHERE id = $1 AND deleted_at IS NULL`,
+        [employeeId]
+      );
+      const userTypeId = Number(userRes.rows[0]?.user_type_id || 0);
+
       const nextStatus =
         action === 2
           ? LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED
           : action === 3
-            ? LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING
+            ? (userTypeId === 11 ? LIVE_COMPLIANCE_STATUS.REVIEWER_PENDING : LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING)
             : action === 5
               ? 5
-              : 9;
+              : action === 7
+                ? 9
+                : action === 8
+                  ? 17 // Escalated
+                  : 0;
 
       const result =
         await this.svc.db.transaction(
           async (client) => {
+            const commentColumn =
+              userTypeId === 11 ? 'super_reviewer_comment' : 'compliance_reviewer_comment';
+
             if (targetType === 'answer') {
               const parentResult =
                 await client.query(
@@ -809,19 +841,19 @@ export class ReviewerService {
                   SET
                       compliance_status_id = $1,
                       compliance_reviewer_emp_id = $2,
-                      compliance_reviewer_comment = $3,
+                      ${commentColumn} = $3,
                       batch_key = $4
                   WHERE id = $5
                       AND assesment_id = $6
                       AND is_compliance = 1
                       AND (
-                          COALESCE(compliance_status_id, 0) IN ($7, $8, $9)
+                          COALESCE(compliance_status_id, 0) IN ($7, $8, $9, 17)
                           OR EXISTS (
                               SELECT 1
                               FROM answers_data_annexure aa
                               WHERE aa.answer_id = answers_data.id
                                   AND aa.assesment_id = answers_data.assesment_id
-                                  AND COALESCE(aa.compliance_status_id, 0) IN (7, 8)
+                                  AND COALESCE(aa.compliance_status_id, 0) IN (7, 8, 17)
                                   AND aa.deleted_at IS NULL
                           )
                       )
@@ -840,19 +872,19 @@ export class ReviewerService {
                     LIVE_COMPLIANCE_STATUS.REVIEWER_SETTLED,
                   ],
                 );
-
+ 
               if (parentResult.rows.length) {
                 await client.query(
                   `
                   UPDATE answers_data_annexure
                   SET
                       compliance_status_id = CASE
-                          WHEN COALESCE(compliance_status_id, 0) IN ($1, $8, $9, 7, 8)
+                          WHEN COALESCE(compliance_status_id, 0) IN ($1, $8, $9, 7, 8, 17)
                               THEN $2
                           ELSE compliance_status_id
                       END,
                       compliance_reviewer_emp_id = $3,
-                      compliance_reviewer_comment = $4,
+                      ${commentColumn} = $4,
                       batch_key = $5
                   WHERE answer_id = $6
                       AND assesment_id = $7
@@ -871,10 +903,10 @@ export class ReviewerService {
                   ],
                 );
               }
-
+ 
               return parentResult;
             }
-
+ 
             const annexureResult =
               await client.query(
                 `
@@ -882,11 +914,11 @@ export class ReviewerService {
                 SET
                     compliance_status_id = $1,
                     compliance_reviewer_emp_id = $2,
-                    compliance_reviewer_comment = $3,
+                    ${commentColumn} = $3,
                     batch_key = $4
                 WHERE aa.id = $5
                     AND aa.assesment_id = $6
-                    AND COALESCE(aa.compliance_status_id, 0) IN ($7, $8, $9, 7, 8)
+                    AND COALESCE(aa.compliance_status_id, 0) IN ($7, $8, $9, 7, 8, 17)
                     AND aa.deleted_at IS NULL
                 RETURNING aa.id, aa.answer_id;
                 `,
@@ -961,10 +993,12 @@ export class ReviewerService {
           action === 2
             ? 'Live compliance point settled by Reviewer.'
             : action === 3
-              ? 'Live compliance point returned to Manager.'
+              ? (userTypeId === 11 ? 'Live compliance point rejected to Reviewer.' : 'Live compliance point returned to Manager.')
               : action === 5
                 ? 'Live compliance point marked as carry forward.'
-                : 'Live compliance point marked as Partially Pass.',
+                : action === 7
+                  ? 'Live compliance point marked as Partially Pass.'
+                  : 'Live compliance point escalated.',
       };
     }
     const result =
@@ -1201,7 +1235,7 @@ export class ReviewerService {
           FROM answers_data
           WHERE assesment_id = $1
               AND is_compliance = 1
-              AND COALESCE(compliance_status_id, 0) IN ($2, $3, $4, $5, $6, $7)
+              AND COALESCE(compliance_status_id, 0) IN ($2, $3, $4, $5, $6, $7, 17)
               AND deleted_at IS NULL;
           `,
           [
