@@ -97,6 +97,10 @@ export class ReportsService {
       return this.getAssessmentTimelineDefinition();
     }
 
+    if (reportSlug === 'questionnaire-tracking-report') {
+      return this.getQuestionnaireTrackingDefinition(isFreeFlow);
+    }
+
     if (reportSlug === 'assement-not-started-yet-report') {
       return this.getAssessmentNotStartedDefinition();
     }
@@ -636,6 +640,127 @@ export class ReportsService {
         { key: 'audit', label: 'Audit' },
         { key: 'compliance', label: 'Compliance' },
         { key: 'admin', label: 'Admin' },
+      ],
+    };
+  }
+
+  async getQuestionnaireTrackingLookups() {
+    const baseLookups = await this.getAssessmentTimelineLookups();
+
+    return {
+      ...baseLookups,
+      auditStatuses: [
+        { value: 'all', label: 'All Statuses' },
+        { value: '1', label: 'Audit Pending' },
+        { value: '2', label: 'Review Pending' },
+        { value: '3', label: 'Re-Audit Needed' },
+        { value: '4', label: 'Compliance Pending' },
+        { value: '5', label: 'Compliance Review Pending' },
+        { value: '6', label: 'Re-Compliance Needed' },
+        { value: '7', label: 'Completed' },
+      ],
+      iterationFilter: [
+        { value: 'all', label: 'All Items' },
+        { value: 'rejected_only', label: 'Only Rejected Iterations' },
+        { value: 'iterations_only', label: 'Only Items With Iterations' },
+      ],
+    };
+  }
+
+  private async getQuestionnaireTrackingDefinition(isFreeFlow = false) {
+    const lookups = await this.getQuestionnaireTrackingLookups();
+
+    return {
+      slug: 'questionnaire-tracking-report',
+      title: 'Questionnaire Tracking Report',
+      category: 'Audit Reports',
+      page: 'A4L',
+      fileName: 'questionnaire-tracking-report',
+      brand: {
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
+        bankName: this.getBankName(),
+      },
+      defaultFilters: {
+        reportAuditUnit: 'all',
+        financial_year: 'all',
+        reportAuditAssesment: '',
+        audit_type_id: 'all',
+        search_question: '',
+        search_person: '',
+        audit_status_id: 'all',
+        iteration_filter: 'all',
+      },
+      filters: [
+        {
+          key: 'reportAuditUnit',
+          label: 'Audit Unit / Branch',
+          type: 'select',
+          required: false,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: false,
+          options: lookups.years,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Audit Assessment',
+          type: 'select',
+          required: false,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+        {
+          key: 'search_question',
+          label: 'Search Question',
+          type: 'text',
+          required: false,
+        },
+        {
+          key: 'search_person',
+          label: 'Search User / Person',
+          type: 'text',
+          required: false,
+        },
+        {
+          key: 'audit_status_id',
+          label: 'Audit Status',
+          type: 'select',
+          required: false,
+          options: lookups.auditStatuses,
+        },
+        {
+          key: 'iteration_filter',
+          label: 'Iteration Filter',
+          type: 'select',
+          required: false,
+          options: lookups.iterationFilter,
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No.', width: '4rem', align: 'center' },
+        { key: 'branch_name', label: 'Branch', width: '10rem' },
+        { key: 'assessment_name', label: 'Assessment', width: '10rem' },
+        { key: 'audit_name', label: 'Audit Name', width: '10rem' },
+        { key: 'question', label: 'Question', width: '18rem' },
+        { key: 'auditor_name', label: 'Auditor Name', width: '9rem' },
+        { key: 'reviewer_name', label: 'Reviewer Name', width: '9rem' },
+        { key: 'branch_manager_name', label: 'Branch Manager Name', width: '9rem' },
+        { key: 'iteration_label', label: 'Iteration / Event', width: '9rem', align: 'center' },
+        { key: 'reviewer_comment', label: 'Reviewer / Rejection Comment', width: '14rem' },
+        { key: 'compliance_comment', label: 'Branch Manager Comment', width: '14rem' },
+        { key: 'audit_comment', label: 'Auditor Comment', width: '14rem' },
+        { key: 'timestamp', label: 'Time', width: '9rem', type: 'datetime' },
+        { key: 'status_label', label: 'Status', width: '8rem' },
+      ],
+      summaryCards: [
+        { key: 'total_questions', label: 'Tracked Questions' },
+        { key: 'total_iterations', label: 'Total Iteration Logs' },
+        { key: 'rejected_iterations', label: 'Rejected Iterations' },
       ],
     };
   }
@@ -3061,6 +3186,10 @@ export class ReportsService {
 
     if (reportSlug === 'assesment-timeline-report') {
       return this.getAssessmentTimelineReport(query);
+    }
+
+    if (reportSlug === 'questionnaire-tracking-report') {
+      return this.getQuestionnaireTrackingReport(query);
     }
 
     if (reportSlug === 'assement-not-started-yet-report') {
@@ -10970,6 +11099,273 @@ export class ReportsService {
         audit: rows.filter((row) => row.type_id === 1).length,
         compliance: rows.filter((row) => row.type_id === 2).length,
         admin: rows.filter((row) => row.type_id === 3).length,
+      },
+    };
+  }
+
+  async getQuestionnaireTrackingReport(query: any) {
+    const auditUnitIdStr = query.reportAuditUnit || query.audit_unit_id;
+    const assessmentId = Number(query.reportAuditAssesment || query.assesment_id || 0);
+    const yearIdStr = query.financial_year;
+    const auditTypeId = this.normalizeAuditType(query);
+    const searchQuestion = String(query.search_question || '').trim();
+    const searchPerson = String(query.search_person || '').trim();
+    const auditStatusId = String(query.audit_status_id || 'all').trim();
+    const iterationFilter = String(query.iteration_filter || 'all').trim();
+
+    const where: string[] = [
+      `(ad.is_compliance = 1 OR ad.audit_commpliance = '1')`,
+      `ad.deleted_at IS NULL`,
+      `qm.deleted_at IS NULL`,
+      `asm.deleted_at IS NULL`,
+    ];
+    const params: any[] = [];
+
+    if (auditUnitIdStr && auditUnitIdStr !== 'all' && auditUnitIdStr !== 'all_branches' && auditUnitIdStr !== 'all_head_of_dept') {
+      params.push(Number(auditUnitIdStr));
+      where.push(`asm.audit_unit_id = $${params.length}`);
+    }
+
+    if (assessmentId) {
+      params.push(assessmentId);
+      where.push(`ad.assesment_id = $${params.length}`);
+    }
+
+    if (yearIdStr && yearIdStr !== 'all') {
+      params.push(Number(yearIdStr));
+      where.push(`asm.year_id = $${params.length}`);
+    }
+
+    if (auditTypeId) {
+      params.push(auditTypeId);
+      where.push(`asm.audit_type_id = $${params.length}`);
+    }
+
+    if (searchQuestion) {
+      params.push(`%${searchQuestion}%`);
+      where.push(`qm.question ILIKE $${params.length}`);
+    }
+
+    if (searchPerson) {
+      params.push(`%${searchPerson}%`);
+      where.push(`(auditor.name ILIKE $${params.length} OR reviewer.name ILIKE $${params.length} OR branch_mgr.name ILIKE $${params.length} OR comp_reviewer.name ILIKE $${params.length})`);
+    }
+
+    if (auditStatusId && auditStatusId !== 'all') {
+      params.push(Number(auditStatusId));
+      where.push(`(ad.audit_status_id = $${params.length} OR ad.compliance_status_id = $${params.length})`);
+    }
+
+    const answersResult = await this.db.query(
+      `
+      SELECT
+        ad.id AS answer_id,
+        ad.assesment_id,
+        ad.question_id,
+        ad.answer_given,
+        ad.audit_comment,
+        ad.audit_reviewer_comment,
+        ad.compliance_reviewer_comment,
+        ad.compliance_maker_comment,
+        ad.audit_status_id,
+        ad.compliance_status_id,
+        ad.is_compliance,
+        ad.created_at AS answer_created_at,
+        ad.updated_at AS answer_updated_at,
+        qm.question AS question_text,
+        asm.audit_unit_id,
+        asm.assesment_period_from,
+        asm.assesment_period_to,
+        asm.frequency,
+        aum.name AS branch_name,
+        aum.audit_unit_code,
+        atm.name AS audit_name,
+        auditor.name AS auditor_name,
+        reviewer.name AS reviewer_name,
+        branch_mgr.name AS branch_manager_name,
+        comp_reviewer.name AS comp_reviewer_name
+      FROM answers_data ad
+      INNER JOIN question_master qm ON qm.id = ad.question_id
+      INNER JOIN audit_assesment_master asm ON asm.id = ad.assesment_id
+      INNER JOIN audit_unit_master aum ON aum.id = asm.audit_unit_id
+      LEFT JOIN audit_type_master atm ON atm.id = asm.audit_type_id AND atm.deleted_at IS NULL
+      LEFT JOIN employee_master auditor ON auditor.id = ad.audit_emp_id
+      LEFT JOIN employee_master reviewer ON reviewer.id = COALESCE(ad.audit_reviewer_emp_id, asm.audit_review_emp_id)
+      LEFT JOIN employee_master branch_mgr ON branch_mgr.id = COALESCE(ad.compliance_maker_emp_id, ad.compliance_emp_id, asm.branch_head_id)
+      LEFT JOIN employee_master comp_reviewer ON comp_reviewer.id = ad.compliance_reviewer_emp_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY aum.audit_unit_code ASC, asm.id ASC, qm.id ASC, ad.id ASC
+      `,
+      params,
+    );
+
+    const answerRows = answersResult.rows;
+    if (!answerRows.length) {
+      return {
+        rows: [],
+        summary: {
+          total_questions: 0,
+          total_iterations: 0,
+          rejected_iterations: 0,
+        },
+      };
+    }
+
+    const answerIds = answerRows.map((r: any) => Number(r.answer_id)).filter(Boolean);
+
+    const timelineResult = await this.db.query(
+      `
+      SELECT
+        adt.id AS timeline_id,
+        adt.answer_id,
+        adt.annex_id,
+        adt.assesment_id,
+        adt.answer_given,
+        adt.audit_comment,
+        adt.audit_status_id,
+        adt.audit_reviewer_comment,
+        adt.audit_reviewer_emp_id,
+        adt.compliance_reviewer_comment,
+        adt.compliance_reviewer_emp_id,
+        adt.compliance_maker_comment,
+        adt.compliance_maker_emp_id,
+        adt.compliance_status_id,
+        adt.created_at AS timeline_created_at,
+        reviewer.name AS timeline_reviewer_name,
+        branch_mgr.name AS timeline_branch_manager_name,
+        auditor.name AS timeline_auditor_name
+      FROM answers_data_timeline adt
+      LEFT JOIN employee_master auditor ON auditor.id = adt.audit_emp_id
+      LEFT JOIN employee_master reviewer ON reviewer.id = COALESCE(adt.audit_reviewer_emp_id, adt.compliance_reviewer_emp_id)
+      LEFT JOIN employee_master branch_mgr ON branch_mgr.id = COALESCE(adt.compliance_maker_emp_id, adt.compliance_emp_id)
+      WHERE adt.answer_id = ANY($1::bigint[])
+        AND adt.deleted_at IS NULL
+      ORDER BY adt.answer_id ASC, adt.id ASC
+      `,
+      [answerIds],
+    );
+
+    const timelineMap = new Map<number, any[]>();
+    for (const tRow of timelineResult.rows) {
+      const ansId = Number(tRow.answer_id);
+      if (!timelineMap.has(ansId)) {
+        timelineMap.set(ansId, []);
+      }
+      timelineMap.get(ansId)!.push(tRow);
+    }
+
+    let outputRows: any[] = [];
+    let totalIterationsCount = 0;
+    let rejectedIterationsCount = 0;
+    let srNo = 1;
+
+    for (const ans of answerRows) {
+      const ansId = Number(ans.answer_id);
+      const timelines = timelineMap.get(ansId) || [];
+
+      if (iterationFilter === 'iterations_only' && timelines.length === 0) {
+        continue;
+      }
+
+      const branchStr = ans.audit_unit_code
+        ? `${ans.audit_unit_code} - ${ans.branch_name}`
+        : ans.branch_name || '-';
+
+      const assessmentStr = ans.assesment_period_from
+        ? `${this.dateOnly(ans.assesment_period_from)} to ${this.dateOnly(ans.assesment_period_to)}`
+        : `Assessment #${ans.assesment_id}`;
+
+      const questionStr = ans.question_text
+        ? `[Q#${ans.question_id}] ${ans.question_text}`
+        : '-';
+
+      if (timelines.length > 0) {
+        timelines.forEach((t: any, idx: number) => {
+          totalIterationsCount++;
+
+          const isRejected =
+            (t.audit_reviewer_comment && t.audit_reviewer_comment.trim() !== '') ||
+            (t.compliance_reviewer_comment && t.compliance_reviewer_comment.trim() !== '') ||
+            Number(t.audit_status_id) === 3 ||
+            Number(t.compliance_status_id) === 6;
+
+          if (isRejected) {
+            rejectedIterationsCount++;
+          }
+
+          if (iterationFilter === 'rejected_only' && !isRejected) {
+            return;
+          }
+
+          const iterationTag = isRejected
+            ? `Iteration ${idx + 1} (Rejected)`
+            : `Iteration ${idx + 1}`;
+
+          const revComment =
+            t.audit_reviewer_comment || t.compliance_reviewer_comment || ans.audit_reviewer_comment || ans.compliance_reviewer_comment || '-';
+
+          const compComment =
+            t.compliance_maker_comment || ans.compliance_maker_comment || '-';
+
+          const audComment = t.audit_comment || ans.audit_comment || '-';
+
+          const reviewerName = t.timeline_reviewer_name || ans.reviewer_name || ans.comp_reviewer_name || '-';
+          const branchMgrName = t.timeline_branch_manager_name || ans.branch_manager_name || '-';
+          const auditorName = t.timeline_auditor_name || ans.auditor_name || '-';
+          const currentStatusId = t.audit_status_id || t.compliance_status_id || ans.audit_status_id || ans.compliance_status_id;
+
+          outputRows.push({
+            sr_no: srNo++,
+            branch_name: branchStr,
+            assessment_name: assessmentStr,
+            audit_name: ans.audit_name || 'Internal Audit',
+            question: questionStr,
+            auditor_name: auditorName,
+            reviewer_name: reviewerName,
+            branch_manager_name: branchMgrName,
+            iteration_label: iterationTag,
+            reviewer_comment: revComment,
+            compliance_comment: compComment,
+            audit_comment: audComment,
+            timestamp: t.timeline_created_at || ans.answer_updated_at || ans.answer_created_at,
+            status_label: this.auditTimelineStatusLabel(Number(currentStatusId || 1)),
+          });
+        });
+      } else {
+        if (iterationFilter === 'rejected_only') {
+          continue;
+        }
+
+        const revComment = ans.audit_reviewer_comment || ans.compliance_reviewer_comment || '-';
+        const compComment = ans.compliance_maker_comment || '-';
+        const audComment = ans.audit_comment || '-';
+        const currentStatusId = ans.audit_status_id || ans.compliance_status_id;
+
+        outputRows.push({
+          sr_no: srNo++,
+          branch_name: branchStr,
+          assessment_name: assessmentStr,
+          audit_name: ans.audit_name || 'Internal Audit',
+          question: questionStr,
+          auditor_name: ans.auditor_name || '-',
+          reviewer_name: ans.reviewer_name || ans.comp_reviewer_name || '-',
+          branch_manager_name: ans.branch_manager_name || '-',
+          iteration_label: 'Main Record',
+          reviewer_comment: revComment,
+          compliance_comment: compComment,
+          audit_comment: audComment,
+          timestamp: ans.answer_updated_at || ans.answer_created_at,
+          status_label: this.auditTimelineStatusLabel(Number(currentStatusId || 1)),
+        });
+      }
+    }
+
+    return {
+      rows: outputRows,
+      summary: {
+        total_questions: answerRows.length,
+        total_iterations: totalIterationsCount,
+        rejected_iterations: rejectedIterationsCount,
       },
     };
   }
