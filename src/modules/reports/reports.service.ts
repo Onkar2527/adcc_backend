@@ -173,6 +173,10 @@ export class ReportsService {
       return this.getQuestionWiseScoringDefinition(isFreeFlow);
     }
 
+    if (reportSlug === 'questionwise-consolidate-summary') {
+      return this.getQuestionWiseConsolidateSummaryDefinition();
+    }
+
     if (reportSlug === 'audit-observation-count-report') {
       return this.getAuditObservationCountDefinition();
     }
@@ -2933,6 +2937,55 @@ export class ReportsService {
     };
   }
 
+  private async getQuestionWiseConsolidateSummaryDefinition() {
+    const lookups = await this.getAuditCompleteLookups();
+
+    return {
+      slug: 'questionwise-consolidate-summary',
+      title: 'Questionwise Consolidate Summary',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'questionwise-consolidate-summary',
+      brand: {
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
+        bankName: this.getBankName(),
+      },
+      defaultFilters: {
+        reportAuditUnit: '',
+        search_question: '',
+      },
+      filters: [
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Audit Unit / Branch',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'search_question',
+          label: 'Enter Question / Search Keyword',
+          type: 'text',
+          required: true,
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: '#', width: '4%', align: 'center' },
+        { key: 'category_name', label: 'Category', width: '10%' },
+        { key: 'branch_name', label: 'Branch', width: '10%' },
+        { key: 'assessment_period', label: 'Assessment Period', width: '12%' },
+        { key: 'question_text', label: 'A Question', width: '18%' },
+        { key: 'account_info', label: 'Account Details', width: '12%' },
+        { key: 'answer_given', label: 'Audit Points', width: '7%' },
+        { key: 'audit_comment', label: 'Audit Comment', width: '10%' },
+        { key: 'compliance', label: 'Compliance', width: '7%' },
+        { key: 'business_risk_label', label: 'Business Risk', width: '6%' },
+        { key: 'control_risk_label', label: 'Control Risk', width: '6%' },
+        { key: 'status_label', label: 'Status', width: '8%' },
+      ],
+    };
+  }
+
   private async getAuditObservationCountDefinition() {
     const lookups = await this.getAuditStatusLookups();
 
@@ -3162,6 +3215,10 @@ export class ReportsService {
 
     if (reportSlug === 'question-wise-scoring-report') {
       return this.getQuestionWiseScoringReport(query);
+    }
+
+    if (reportSlug === 'questionwise-consolidate-summary') {
+      return this.getQuestionWiseConsolidateSummaryReport(query);
     }
 
     if (reportSlug === 'audit-observation-count-report') {
@@ -10477,6 +10534,181 @@ export class ReportsService {
         auditUnit: combinedName,
       },
       rows: menuWiseList,
+    };
+  }
+
+  async getQuestionWiseConsolidateSummaryReport(query: any) {
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const searchQuestion = String(query.search_question || '').trim();
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    const assessmentsRes = await this.db.query(
+      `
+      SELECT 
+        asm.id AS assesment_id,
+        asm.audit_unit_id,
+        aum.name AS branch_name,
+        aum.audit_unit_code,
+        asm.assesment_period_from,
+        asm.assesment_period_to,
+        asm.audit_status_id
+      FROM audit_assesment_master asm
+      INNER JOIN audit_unit_master aum ON asm.audit_unit_id = aum.id
+      WHERE asm.deleted_at IS NULL
+        AND asm.audit_unit_id = $1
+      ORDER BY asm.id DESC
+      `,
+      [auditUnitId],
+    );
+
+    if (!assessmentsRes.rows.length) {
+      return {
+        filters: {
+          reportAuditUnit: String(auditUnitId),
+          search_question: searchQuestion,
+        },
+        total: 0,
+        generatedAt: new Date().toISOString(),
+        rows: [],
+        assessmentGroups: [],
+      };
+    }
+
+    const assessmentIds = assessmentsRes.rows.map((r: any) => Number(r.assesment_id));
+    const assessmentMap = new Map<number, any>();
+    assessmentsRes.rows.forEach((r: any) => {
+      const branchCode = r.audit_unit_code ? ` - ( BR. ${r.audit_unit_code} )` : '';
+      const combinedBranchName = `${r.branch_name || 'Selected Audit Unit'}${branchCode}`;
+      assessmentMap.set(Number(r.assesment_id), {
+        assesment_id: Number(r.assesment_id),
+        branch_name: combinedBranchName,
+        assesment_period_from: this.dateOnly(r.assesment_period_from),
+        assesment_period_to: this.dateOnly(r.assesment_period_to),
+        audit_status_id: Number(r.audit_status_id || 0),
+        status_label: this.timelineStatusLabel(r.audit_status_id),
+        answers: [],
+      });
+    });
+
+    let answerWhere = `ad.deleted_at IS NULL AND ad.assesment_id = ANY($1::int[])`;
+    const params: any[] = [assessmentIds];
+
+    if (searchQuestion) {
+      params.push(`%${searchQuestion}%`);
+      answerWhere += ` AND qm.question ILIKE $${params.length}`;
+    }
+
+    const answersRes = await this.db.query(
+      `
+      SELECT 
+        ad.id,
+        ad.assesment_id,
+        ad.question_id,
+        ad.dump_id,
+        COALESCE(qm.question, 'Question') AS question_text,
+        ad.answer_given,
+        ad.audit_comment,
+        ad.audit_commpliance,
+        ad.compliance_reviewer_comment,
+        ad.business_risk,
+        ad.control_risk,
+        COALESCE(cm.name, '-') AS category_name,
+        cm.linked_table_id,
+        COALESCE(dd.account_no, da.account_no, dd_fallback.account_no, da_fallback.account_no, '') AS account_no,
+        COALESCE(dd.account_holder_name, da.account_holder_name, dd_fallback.account_holder_name, da_fallback.account_holder_name, '') AS account_holder_name
+      FROM answers_data ad
+      LEFT JOIN question_master qm ON qm.id = ad.question_id
+      LEFT JOIN category_master cm ON cm.id = ad.category_id
+      LEFT JOIN dump_deposits dd ON cm.linked_table_id = 1 AND dd.id = ad.dump_id AND dd.deleted_at IS NULL
+      LEFT JOIN dump_advances da ON cm.linked_table_id = 2 AND da.id = ad.dump_id AND da.deleted_at IS NULL
+      LEFT JOIN dump_deposits dd_fallback ON (cm.linked_table_id IS NULL OR cm.linked_table_id NOT IN (1, 2)) AND ad.dump_id IS NOT NULL AND dd_fallback.id = ad.dump_id AND dd_fallback.deleted_at IS NULL
+      LEFT JOIN dump_advances da_fallback ON (cm.linked_table_id IS NULL OR cm.linked_table_id NOT IN (1, 2)) AND ad.dump_id IS NOT NULL AND da_fallback.id = ad.dump_id AND da_fallback.deleted_at IS NULL
+      WHERE ${answerWhere}
+      ORDER BY ad.assesment_id DESC, ad.id ASC
+      `,
+      params,
+    );
+
+    const rows: any[] = [];
+    const assessmentGroupsMap = new Map<number, any>();
+
+    answersRes.rows.forEach((ansRow: any) => {
+      const assId = Number(ansRow.assesment_id);
+      const assInfo = assessmentMap.get(assId);
+      if (!assInfo) return;
+
+      if (!assessmentGroupsMap.has(assId)) {
+        assessmentGroupsMap.set(assId, {
+          assesment_id: assId,
+          branch_name: assInfo.branch_name,
+          assesment_period_from: assInfo.assesment_period_from,
+          assesment_period_to: assInfo.assesment_period_to,
+          audit_status_id: assInfo.audit_status_id,
+          status_label: assInfo.status_label,
+          answers: [],
+        });
+      }
+
+      const businessRiskLabel = this.riskParameterLabel(ansRow.business_risk);
+      const controlRiskLabel = this.riskParameterLabel(ansRow.control_risk);
+      const compliance = ansRow.audit_commpliance || ansRow.compliance_reviewer_comment || '-';
+      const accountNo = String(ansRow.account_no || '').trim();
+      const accountHolderName = String(ansRow.account_holder_name || '').trim();
+      const accountInfo = accountNo
+        ? `${accountNo}${accountHolderName ? ' - ' + accountHolderName : ''}`
+        : '-';
+
+      const answerItem = {
+        id: Number(ansRow.id),
+        assesment_id: assId,
+        category_name: ansRow.category_name,
+        question_text: ansRow.question_text,
+        account_no: accountNo,
+        account_holder_name: accountHolderName,
+        account_info: accountInfo,
+        answer_given: ansRow.answer_given || '-',
+        audit_comment: ansRow.audit_comment || '-',
+        compliance: compliance,
+        business_risk_label: businessRiskLabel,
+        control_risk_label: controlRiskLabel,
+      };
+
+      assessmentGroupsMap.get(assId).answers.push(answerItem);
+
+      rows.push({
+        sr_no: rows.length + 1,
+        category_name: ansRow.category_name,
+        branch_name: assInfo.branch_name,
+        assesment_period_from: assInfo.assesment_period_from,
+        assesment_period_to: assInfo.assesment_period_to,
+        assessment_period: `${assInfo.assesment_period_from} to ${assInfo.assesment_period_to}`,
+        question_text: ansRow.question_text,
+        account_no: accountNo,
+        account_holder_name: accountHolderName,
+        account_info: accountInfo,
+        answer_given: ansRow.answer_given || '-',
+        audit_comment: ansRow.audit_comment || '-',
+        compliance: compliance,
+        business_risk_label: businessRiskLabel,
+        control_risk_label: controlRiskLabel,
+        status_label: assInfo.status_label,
+      });
+    });
+
+    const assessmentGroups = Array.from(assessmentGroupsMap.values());
+
+    return {
+      filters: {
+        reportAuditUnit: String(auditUnitId),
+        search_question: searchQuestion,
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      rows,
+      assessmentGroups,
     };
   }
 
