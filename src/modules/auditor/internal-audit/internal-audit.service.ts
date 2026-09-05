@@ -4285,7 +4285,6 @@ export class InternalAuditService {
             ||
             answer?.is_compliance === 1
           )
-            && Number(question?.option_id) !== 3
             ? 1
             : 0,
         audit_compulsary_ev_upload:

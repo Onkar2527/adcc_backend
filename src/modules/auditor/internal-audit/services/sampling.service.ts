@@ -172,6 +172,7 @@ export class SamplingService {
         kyc: row.kyc || '',
         scheme_name: row.scheme_name,
         scheme_code: row.scheme_code,
+        sampling_filter: Number(row.sampling_filter || 0),
         is_sampled: Number(row.sampling_filter || 0) === 1,
         is_completed: row.is_completed === true || row.is_completed === 'true' || row.is_completed === 1,
         has_answers: row.has_answers === true || row.has_answers === 'true' || row.has_answers === 1,
@@ -215,21 +216,6 @@ export class SamplingService {
           detail.category,
           detail.overview,
         );
-
-        const candidateIds = candidates.accounts.map((acc: any) => Number(acc.id));
-
-        if (candidateIds.length) {
-          await client.query(
-            `
-            UPDATE ${table}
-            SET sampling_filter = 0
-            WHERE id = ANY($1::int[])
-                AND (assesment_period_id IS NULL OR assesment_period_id <> $2)
-                AND deleted_at IS NULL;
-            `,
-            [candidateIds, assessmentId],
-          );
-        }
 
         if (selectedIds.length) {
           await client.query(
@@ -526,7 +512,7 @@ export class SamplingService {
               string_to_array($6, ',')
           )
           AND ${periodCondition}
-          AND (COALESCE(d.sampling_filter, 0) = 0 OR d.sampling_filter = 1)
+          AND COALESCE(d.sampling_filter, 0) = 0
           AND d.deleted_at IS NULL
           ${filterClause}
       ORDER BY

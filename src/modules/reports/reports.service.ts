@@ -197,6 +197,10 @@ export class ReportsService {
       return this.getInternalAssessmentDefinition();
     }
 
+    if (reportSlug === 'closure-report') {
+      return this.getClosureReportDefinition(isFreeFlow);
+    }
+
     throw new NotFoundException('Report is not implemented yet');
   }
 
@@ -2986,6 +2990,96 @@ export class ReportsService {
     };
   }
 
+  private async getClosureReportDefinition(isFreeFlow = false) {
+    const lookups = await this.getAuditCompleteLookups(isFreeFlow);
+
+    return {
+      slug: 'closure-report',
+      title: 'Closure Report',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'closure-report',
+      brand: {
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
+        bankName: this.getBankName(),
+      },
+      defaultFilters: {
+        reportAuditUnit: '',
+        reportAuditAssesment: '',
+        financial_year: 'all',
+        compliance_status: 'all',
+        search_question: '',
+      },
+      filters: [
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Audit Unit / Branch',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Select Financial Year',
+          type: 'select',
+          options: [
+            { value: 'all', label: 'All Financial Years' },
+            ...lookups.years,
+          ],
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Select Assessment Period',
+          type: 'select',
+          dependsOn: 'reportAuditUnit',
+          options: [
+            { value: '', label: 'All Assessments' },
+            ...lookups.assessments,
+          ],
+        },
+        {
+          key: 'compliance_status',
+          label: 'Select Closure / Compliance Status',
+          type: 'select',
+          options: [
+            { value: 'all', label: 'All Statuses' },
+            { value: 'pending', label: 'Pending' },
+            { value: 'review_pending', label: 'Review Pending' },
+            { value: 're_compliance', label: 'Re-Compliance Needed' },
+            { value: 'completed', label: 'Closed / Completed' },
+          ],
+        },
+        {
+          key: 'search_question',
+          label: 'Search Question / Keyword',
+          type: 'text',
+        },
+      ],
+      columns: [
+        { key: 'sr_no', label: 'Sr. No', width: '3%', align: 'center' },
+        { key: 'question_text', label: 'Question', width: '13%' },
+        { key: 'broader_area', label: 'Broader Area', width: '6%' },
+        { key: 'risk_level', label: 'Risk', width: '4%', align: 'center' },
+        { key: 'business_risk_label', label: 'BR', width: '3.5%', align: 'center' },
+        { key: 'control_risk_label', label: 'CR', width: '3.5%', align: 'center' },
+        { key: 'risk_type', label: 'Risk Type', width: '5%' },
+        { key: 'answer_given', label: 'Audit Pts', width: '4%' },
+        { key: 'question_score', label: 'Score', width: '4%', align: 'center' },
+        { key: 'max_score', label: 'Max Score', width: '4%', align: 'center' },
+        { key: 'audit_comment', label: 'Auditor Comm.', width: '7%' },
+        { key: 'compliance_comment', label: 'Compliance Comm.', width: '7%' },
+        { key: 'reviewer_comment', label: 'Reviewer Comm.', width: '7%' },
+        { key: 'action_label', label: 'Action', width: '6%' },
+        { key: 'audit_start_date', label: 'Audit Start', width: '5.5%', align: 'center' },
+        { key: 'audit_end_date', label: 'Audit End', width: '5.5%', align: 'center' },
+        { key: 'compliance_start_date', label: 'Comp. Start', width: '5.5%', align: 'center' },
+        { key: 'compliance_end_date', label: 'Comp. End', width: '5.5%', align: 'center' },
+        { key: 'reviewer_start_date', label: 'Rev. Start', width: '5.5%', align: 'center' },
+        { key: 'reviewer_end_date', label: 'Rev. End', width: '5.5%', align: 'center' },
+      ],
+    };
+  }
+
   private async getAuditObservationCountDefinition() {
     const lookups = await this.getAuditStatusLookups();
 
@@ -3255,6 +3349,10 @@ export class ReportsService {
 
     if (reportSlug === 'internal-assesment-report') {
       return this.getInternalAssessmentReport(query);
+    }
+
+    if (reportSlug === 'closure-report') {
+      return this.getClosureReport(query);
     }
 
     if (reportSlug !== 'audit-status-report') {
@@ -10712,6 +10810,561 @@ export class ReportsService {
     };
   }
 
+  private getClosureStatusLabel(statusId: any, isCompliance?: any) {
+    const id = Number(statusId || 0);
+    const labels: Record<number, string> = {
+      1: 'Audit Pending',
+      2: 'Review Pending',
+      3: 'Re-Audit Needed',
+      4: 'Compliance Pending',
+      5: 'Compliance Review Pending',
+      6: 'Re-Compliance Needed',
+      7: 'Closed / Completed',
+      8: 'Compliance Review Pending',
+      9: 'Closed / Completed',
+      10: 'Compliance Blocked',
+      12: 'Audit Blocked',
+    };
+
+    if (labels[id]) {
+      return labels[id];
+    }
+    if (Number(isCompliance) === 1) {
+      return 'Compliance Pending';
+    }
+    return 'Audit Pending';
+  }
+
+  private getActionLabel(
+    statusId: any,
+    reviewerName?: string,
+    reviewerComment?: string,
+    complianceComment?: string,
+  ) {
+    const id = Number(statusId || 0);
+    const user = reviewerName ? String(reviewerName).trim() : '';
+    const revComment = reviewerComment ? String(reviewerComment).trim() : '';
+
+    if (id === 3 || id === 6) {
+      return user ? `Reviewer Rejected (${user})` : 'Reviewer Rejected';
+    }
+
+    if (id === 7 || id === 9 || (revComment && revComment !== '-')) {
+      return user ? `Reviewer Accepted (${user})` : 'Reviewer Accepted';
+    }
+
+    if (id === 5 || id === 8) {
+      return user ? `Reviewer Pending (${user})` : 'Reviewer Pending';
+    }
+
+    if (id === 4 || (complianceComment && complianceComment !== '-')) {
+      return 'Branch Manager Submitted';
+    }
+
+    if (id === 1 || id === 2) {
+      return 'Auditor Pending';
+    }
+
+    if (id === 10 || id === 12) {
+      return 'Blocked';
+    }
+
+    return 'Auditor Pending';
+  }
+
+  private getRiskLevelLabel(businessRisk: any, controlRisk: any) {
+    const b = this.riskParameterLabel(businessRisk);
+    const c = this.riskParameterLabel(controlRisk);
+    if (b.toLowerCase().includes('high') || c.toLowerCase().includes('high')) return 'High';
+    if (b.toLowerCase().includes('medium') || c.toLowerCase().includes('medium')) return 'Medium';
+    if (b.toLowerCase().includes('low') || c.toLowerCase().includes('low')) return 'Low';
+    if (b.toLowerCase().includes('no risk') || c.toLowerCase().includes('no risk')) return 'No Risk';
+    if (b !== '-' && b !== '') return b;
+    if (c !== '-' && c !== '') return c;
+    return 'No Risk';
+  }
+
+  private calculateQuestionScore(businessRisk: any, controlRisk: any, riskWeight: any, answerGiven: any, riskType?: string) {
+    const ans = String(answerGiven || '').trim().toUpperCase();
+    const rt = String(riskType || '').trim().toUpperCase();
+
+    if (
+      ans.includes('NOT APPLICABLE') || 
+      ans.includes('N.A') || 
+      ans === 'NA' || 
+      ans === 'YES' || 
+      ans === 'COMPLIANT' || 
+      rt.includes('NOT APPLICABLE') ||
+      rt.includes('N.A') ||
+      rt === 'NA'
+    ) {
+      return 0;
+    }
+
+    const br = Number(businessRisk || 0);
+    const cr = Number(controlRisk || 0);
+    const weight = Number(riskWeight || 1);
+
+    let baseScore = 0;
+    if (br === 1 || cr === 1) baseScore = 10;
+    else if (br === 2 || cr === 2) baseScore = 5;
+    else if (br === 3 || cr === 3) baseScore = 2;
+    else baseScore = 0;
+
+    const finalScore = baseScore * (weight > 0 ? weight : 1);
+    return Number(finalScore.toFixed(2));
+  }
+
+  async getClosureReport(query: any) {
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+    const financialYear = String(query.financial_year || 'all').trim();
+    const complianceStatusFilter = String(query.compliance_status || 'all').trim();
+    const searchQuestion = String(query.search_question || '').trim();
+
+    if (!auditUnitId && auditUnitId !== 0) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    const where: string[] = ['asm.deleted_at IS NULL'];
+    const params: any[] = [];
+
+    if (auditUnitId) {
+      params.push(auditUnitId);
+      where.push(`asm.audit_unit_id = $${params.length}`);
+    } else {
+      this.applyUserAuthorityRestriction(where, params, query, 'asm.audit_unit_id');
+    }
+
+    if (assessmentId) {
+      params.push(assessmentId);
+      where.push(`asm.id = $${params.length}`);
+    }
+
+    if (financialYear !== 'all' && !isNaN(Number(financialYear))) {
+      params.push(Number(financialYear));
+      where.push(`asm.year_id = $${params.length}`);
+    }
+
+    const assessmentsRes = await this.db.query(
+      `
+      SELECT 
+        asm.id AS assesment_id,
+        asm.audit_unit_id,
+        aum.name AS branch_name,
+        aum.audit_unit_code,
+        asm.assesment_period_from,
+        asm.assesment_period_to,
+        asm.audit_status_id,
+        asm.audit_start_date,
+        asm.audit_end_date,
+        asm.compliance_start_date,
+        asm.compliance_end_date
+      FROM audit_assesment_master asm
+      INNER JOIN audit_unit_master aum ON asm.audit_unit_id = aum.id
+      WHERE ${where.join(' AND ')}
+      ORDER BY aum.audit_unit_code ASC, asm.id DESC
+      `,
+      params,
+    );
+
+    if (!assessmentsRes.rows.length) {
+      return {
+        filters: {
+          reportAuditUnit: String(auditUnitId),
+          reportAuditAssesment: String(assessmentId),
+          financial_year: financialYear,
+          compliance_status: complianceStatusFilter,
+          search_question: searchQuestion,
+        },
+        total: 0,
+        generatedAt: new Date().toISOString(),
+        rows: [],
+        assessmentGroups: [],
+      };
+    }
+
+    const assessmentIds = assessmentsRes.rows.map((r: any) => Number(r.assesment_id));
+    const auditUnitIds = Array.from(new Set(assessmentsRes.rows.map((r: any) => Number(r.audit_unit_id)).filter(Boolean)));
+    const assessmentMap = new Map<number, any>();
+    assessmentsRes.rows.forEach((r: any) => {
+      const branchCode = r.audit_unit_code ? ` - ( BR. ${r.audit_unit_code} )` : '';
+      const combinedBranchName = `${r.branch_name || 'Selected Audit Unit'}${branchCode}`;
+      assessmentMap.set(Number(r.assesment_id), {
+        assesment_id: Number(r.assesment_id),
+        audit_unit_id: Number(r.audit_unit_id),
+        branch_name: combinedBranchName,
+        assesment_period_from: this.dateOnly(r.assesment_period_from),
+        assesment_period_to: this.dateOnly(r.assesment_period_to),
+        assessment_period: `${this.dateOnly(r.assesment_period_from)} to ${this.dateOnly(r.assesment_period_to)}`,
+        audit_status_id: Number(r.audit_status_id || 0),
+        status_label: this.getClosureStatusLabel(r.audit_status_id),
+        audit_start_date: this.dateOnly(r.audit_start_date),
+        audit_end_date: this.dateOnly(r.audit_end_date),
+        compliance_start_date: this.dateOnly(r.compliance_start_date),
+        compliance_end_date: this.dateOnly(r.compliance_end_date),
+        reviewer_start_date: this.dateOnly(r.compliance_end_date || r.compliance_start_date || r.audit_end_date),
+        reviewer_end_date: this.dateOnly(r.compliance_end_date || r.audit_end_date),
+        answers: [],
+      });
+    });
+
+    let answerWhere = `ad.deleted_at IS NULL AND ad.assesment_id = ANY($1::int[]) AND (ad.is_compliance = 1 OR ad.business_risk IN (1, 2, 3) OR ad.control_risk IN (1, 2, 3))`;
+    const ansParams: any[] = [assessmentIds];
+
+    if (searchQuestion) {
+      ansParams.push(`%${searchQuestion}%`);
+      answerWhere += ` AND qm.question ILIKE $${ansParams.length}`;
+    }
+
+    if (complianceStatusFilter !== 'all') {
+      if (complianceStatusFilter === 'pending') {
+        ansParams.push([1, 4]);
+        answerWhere += ` AND COALESCE(ad.compliance_status_id, 4) = ANY($${ansParams.length}::int[])`;
+      } else if (complianceStatusFilter === 'review_pending') {
+        ansParams.push(5);
+        answerWhere += ` AND ad.compliance_status_id = $${ansParams.length}`;
+      } else if (complianceStatusFilter === 're_compliance') {
+        ansParams.push(6);
+        answerWhere += ` AND ad.compliance_status_id = $${ansParams.length}`;
+      } else if (complianceStatusFilter === 'completed') {
+        ansParams.push(7);
+        answerWhere += ` AND ad.compliance_status_id = $${ansParams.length}`;
+      }
+    }
+
+    const answersRes = await this.db.query(
+      `
+      SELECT 
+        ad.id,
+        ad.assesment_id,
+        ad.header_id,
+        ad.category_id,
+        ad.question_id,
+        ad.dump_id,
+        COALESCE(mm.name, 'General Menu') AS menu_name,
+        COALESCE(qhm.name, 'General Header') AS header_name,
+        COALESCE(cm.name, 'General Category') AS category_name,
+        COALESCE(qm.question, 'Question') AS question_text,
+        ad.answer_given,
+        ad.audit_comment,
+        ad.audit_commpliance,
+        COALESCE(
+          ad.compliance_reviewer_comment, 
+          ad.audit_reviewer_comment, 
+          ad.super_reviewer_comment,
+          (
+            SELECT COALESCE(ada.compliance_reviewer_comment, ada.audit_reviewer_comment)
+            FROM answers_data_annexure ada
+            WHERE ada.answer_id = ad.id AND ada.deleted_at IS NULL
+              AND (ada.compliance_reviewer_comment IS NOT NULL OR ada.audit_reviewer_comment IS NOT NULL)
+            LIMIT 1
+          )
+        ) AS compliance_reviewer_comment,
+        auditor_user.name AS auditor_name,
+        compliance_user.name AS compliance_user_name,
+        reviewer_user.name AS reviewer_name,
+        ad.is_compliance,
+        ad.compliance_status_id,
+        ad.business_risk,
+        ad.control_risk,
+        cm.linked_table_id,
+        COALESCE(dd.account_no, da.account_no, dd_fallback.account_no, da_fallback.account_no, '') AS account_no,
+        COALESCE(dd.account_holder_name, da.account_holder_name, dd_fallback.account_holder_name, da_fallback.account_holder_name, '') AS account_holder_name,
+        COALESCE(dd.ucic, da.ucic) AS ucic,
+        COALESCE(dd.customer_type, da.customer_type) AS customer_type,
+        COALESCE(dd.account_opening_date, da.account_opening_date) AS account_opening_date,
+        da.renewal_date,
+        COALESCE(dd.principal_amount, da.sanction_amount) AS account_amount,
+        COALESCE(dd.intrest_rate, da.intrest_rate) AS interest_rate,
+        COALESCE(dd.balance, da.outstanding_balance) AS outstanding_balance,
+        COALESCE(dd.balance_date, da.balance_date) AS balance_date,
+        da.due_date,
+        da.npa_status,
+        COALESCE(dd.account_status, da.account_status) AS account_status,
+        au.name AS account_branch_name,
+        au.audit_unit_code AS account_branch_code,
+        sm.name AS scheme_name,
+        sm.scheme_code,
+        COALESCE(rcm.risk_category, 'General Risk') AS risk_type,
+        COALESCE(rcw.risk_weight, 1) AS risk_weight,
+        COALESCE(area_master.name, '-') AS broader_area
+      FROM answers_data ad
+      INNER JOIN audit_assesment_master asm ON asm.id = ad.assesment_id
+      LEFT JOIN menu_master mm ON mm.id = ad.menu_id
+      LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
+      LEFT JOIN category_master cm ON cm.id = ad.category_id
+      LEFT JOIN question_master qm ON qm.id = ad.question_id
+      LEFT JOIN risk_category_master rcm ON rcm.id = qm.risk_category_id AND rcm.deleted_at IS NULL
+      LEFT JOIN risk_category_weights rcw ON rcw.risk_category_id = qm.risk_category_id AND rcw.year_id = asm.year_id AND rcw.is_active = 1 AND rcw.deleted_at IS NULL
+      LEFT JOIN audit_area_master area_master ON area_master.id = qm.area_of_audit_id AND area_master.deleted_at IS NULL
+      LEFT JOIN dump_deposits dd ON cm.linked_table_id = 1 AND dd.id = ad.dump_id AND dd.deleted_at IS NULL
+      LEFT JOIN dump_advances da ON cm.linked_table_id = 2 AND da.id = ad.dump_id AND da.deleted_at IS NULL
+      LEFT JOIN dump_deposits dd_fallback ON (cm.linked_table_id IS NULL OR cm.linked_table_id NOT IN (1, 2)) AND ad.dump_id IS NOT NULL AND dd_fallback.id = ad.dump_id AND dd_fallback.deleted_at IS NULL
+      LEFT JOIN dump_advances da_fallback ON (cm.linked_table_id IS NULL OR cm.linked_table_id NOT IN (1, 2)) AND ad.dump_id IS NOT NULL AND da_fallback.id = ad.dump_id AND da_fallback.deleted_at IS NULL
+      LEFT JOIN scheme_master sm ON sm.id = COALESCE(dd.scheme_id, da.scheme_id) AND sm.deleted_at IS NULL
+      LEFT JOIN audit_unit_master au ON au.id = COALESCE(dd.branch_id, da.branch_id) AND au.deleted_at IS NULL
+      LEFT JOIN employee_master auditor_user ON auditor_user.id = ad.audit_emp_id
+      LEFT JOIN employee_master compliance_user ON compliance_user.id = COALESCE(ad.compliance_maker_emp_id, ad.compliance_emp_id)
+      LEFT JOIN employee_master reviewer_user ON reviewer_user.id = COALESCE(
+        ad.compliance_reviewer_emp_id, 
+        ad.audit_reviewer_emp_id
+      )
+      WHERE ${answerWhere}
+      ORDER BY ad.assesment_id DESC, ad.header_id ASC, ad.category_id ASC, ad.id ASC
+      `,
+      ansParams,
+    );
+
+    const allRows: any[] = [];
+    let srNo = 1;
+
+    answersRes.rows.forEach((row: any) => {
+      const assessment = assessmentMap.get(Number(row.assesment_id));
+      if (!assessment) return;
+
+      const accountInfo = row.account_no
+        ? `${row.account_no}${row.account_holder_name ? ' (' + row.account_holder_name + ')' : ''}`
+        : '-';
+
+      const statusLabel = this.getClosureStatusLabel(row.compliance_status_id, row.is_compliance);
+
+      const auditorCommentRaw = row.audit_comment ? String(row.audit_comment).trim() : '';
+      const auditorName = row.auditor_name ? String(row.auditor_name).trim() : '';
+      const auditorComment = (auditorCommentRaw && auditorCommentRaw !== '-')
+        ? (auditorName ? `${auditorCommentRaw} (${auditorName})` : auditorCommentRaw)
+        : '-';
+
+      const complianceCommentRaw = row.audit_commpliance ? String(row.audit_commpliance).trim() : '';
+      const complianceUserName = row.compliance_user_name ? String(row.compliance_user_name).trim() : '';
+      const complianceComment = (complianceCommentRaw && complianceCommentRaw !== '-')
+        ? (complianceUserName ? `${complianceCommentRaw} (${complianceUserName})` : complianceCommentRaw)
+        : '-';
+
+      const reviewerCommentRaw = row.compliance_reviewer_comment ? String(row.compliance_reviewer_comment).trim() : '';
+      const reviewerName = row.reviewer_name ? String(row.reviewer_name).trim() : '';
+      const reviewerComment = (reviewerCommentRaw && reviewerCommentRaw !== '-')
+        ? (reviewerName ? `${reviewerCommentRaw} (${reviewerName})` : reviewerCommentRaw)
+        : '-';
+
+      const actionLabel = this.getActionLabel(
+        row.compliance_status_id,
+        reviewerName,
+        reviewerCommentRaw,
+        complianceCommentRaw,
+      );
+
+      const businessRiskLabel = this.riskParameterLabel(row.business_risk);
+      const controlRiskLabel = this.riskParameterLabel(row.control_risk);
+
+      const riskLevel = this.getRiskLevelLabel(row.business_risk, row.control_risk);
+      const riskType = row.risk_type ? String(row.risk_type).trim() : 'General Risk';
+
+      const obtainedScore = this.calculateQuestionScore(row.business_risk, row.control_risk, row.risk_weight, row.answer_given, riskType);
+      const maxScore = Number((10 * Number(row.risk_weight || 1)).toFixed(2));
+
+      const formattedRow = {
+        ...row,
+        sr_no: srNo++,
+        assesment_id: row.assesment_id,
+        branch_name: assessment.branch_name,
+        branch_code: assessment.audit_unit_code,
+        assesment_period_from: assessment.assesment_period_from,
+        assesment_period_to: assessment.assesment_period_to,
+        menu_name: row.menu_name,
+        header_name: row.header_name,
+        category_name: row.category_name,
+        question_text: row.question_text,
+        broader_area: row.broader_area || '-',
+        account_no: row.account_no,
+        account_holder_name: row.account_holder_name,
+        account_info: accountInfo,
+        risk_level: riskLevel,
+        business_risk_label: businessRiskLabel,
+        control_risk_label: controlRiskLabel,
+        risk_type: riskType,
+        answer_given: row.answer_given || '-',
+        question_score: obtainedScore,
+        max_score: maxScore,
+        audit_comment: auditorComment,
+        compliance_comment: complianceComment,
+        reviewer_comment: reviewerComment,
+        action_label: actionLabel,
+        audit_start_date: assessment.audit_start_date || '-',
+        audit_end_date: assessment.audit_end_date || '-',
+        compliance_start_date: assessment.compliance_start_date || '-',
+        compliance_end_date: assessment.compliance_end_date || '-',
+        reviewer_start_date: assessment.reviewer_start_date || '-',
+        reviewer_end_date: assessment.reviewer_end_date || '-',
+        compliance_status_id: row.compliance_status_id,
+        status_label: statusLabel,
+        __account_key: (row.dump_id || row.account_no) ? `${row.category_id || 0}_${row.dump_id || row.account_no}` : '',
+        __account_details: this.accountDetailRows(row),
+      };
+
+      assessment.answers.push(formattedRow);
+      allRows.push(formattedRow);
+    });
+
+    const answeredRows = allRows.filter(
+      (r) => r.answer_given && r.answer_given !== '-' && r.answer_given.trim() !== '',
+    );
+    const unansweredQuestionRows = allRows.filter(
+      (r) => !r.answer_given || r.answer_given === '-' || r.answer_given.trim() === '',
+    );
+
+    const answeredTotalScore = answeredRows.reduce((sum, r) => sum + Number(r.question_score || 0), 0);
+    const unansweredTotalScore = unansweredQuestionRows.reduce((sum, r) => sum + Number(r.question_score || 0), 0);
+    const grandTotalScore = answeredTotalScore + unansweredTotalScore;
+
+    const finalRows = this.buildAuditCompleteGroupedRows(allRows, true);
+
+    const highRiskCount = allRows.filter(r => String(r.risk_level).toLowerCase() === 'high').length;
+    const mediumRiskCount = allRows.filter(r => String(r.risk_level).toLowerCase() === 'medium').length;
+    const lowRiskCount = allRows.filter(r => String(r.risk_level).toLowerCase() === 'low').length;
+    const closedCount = answeredRows.filter(r => r.compliance_status_id === 7 || r.compliance_status_id === 9).length;
+    const closureRate = answeredRows.length > 0 ? ((closedCount / answeredRows.length) * 100).toFixed(1) : '0.0';
+
+    const categoryScoreMap = new Map<string, any>();
+    allRows.forEach((r: any) => {
+      const catKey = `${r.menu_name || 'General Menu'} > ${r.category_name || 'General Category'}`;
+      if (!categoryScoreMap.has(catKey)) {
+        categoryScoreMap.set(catKey, {
+          category_name: catKey,
+          total_questions: 0,
+          answered_count: 0,
+          unanswered_count: 0,
+          answered_score: 0,
+          unanswered_score: 0,
+          total_score: 0,
+        });
+      }
+      const item = categoryScoreMap.get(catKey)!;
+      item.total_questions += 1;
+      const score = Number(r.question_score || 0);
+      const isAns = r.answer_given && r.answer_given !== '-' && r.answer_given.trim() !== '';
+      if (isAns) {
+        item.answered_count += 1;
+        item.answered_score += score;
+      } else {
+        item.unanswered_count += 1;
+        item.unanswered_score += score;
+      }
+      item.total_score += score;
+    });
+
+    const categoryScores = Array.from(categoryScoreMap.values()).map(item => ({
+      ...item,
+      answered_score: Number(item.answered_score.toFixed(2)),
+      unanswered_score: Number(item.unanswered_score.toFixed(2)),
+      total_score: Number(item.total_score.toFixed(2)),
+    }));
+
+    let sampledCount = 0;
+    let unsampledCount = 0;
+
+    if (assessmentIds.length > 0) {
+      const countsRes = await this.db.query(
+        `
+        SELECT 
+          (
+            SELECT COUNT(DISTINCT dump_id) 
+            FROM answers_data 
+            WHERE assesment_id = ANY($1::int[]) AND dump_id IS NOT NULL AND deleted_at IS NULL
+          ) AS sampled_count,
+          (
+            SELECT 
+              (SELECT COUNT(*) FROM dump_deposits WHERE (assesment_period_id = ANY($1::int[]) OR branch_id = ANY($2::int[])) AND deleted_at IS NULL AND id NOT IN (SELECT DISTINCT dump_id FROM answers_data WHERE assesment_id = ANY($1::int[]) AND dump_id IS NOT NULL AND deleted_at IS NULL))
+              +
+              (SELECT COUNT(*) FROM dump_advances WHERE (assesment_period_id = ANY($1::int[]) OR branch_id = ANY($2::int[])) AND deleted_at IS NULL AND id NOT IN (SELECT DISTINCT dump_id FROM answers_data WHERE assesment_id = ANY($1::int[]) AND dump_id IS NOT NULL AND deleted_at IS NULL))
+          ) AS unsampled_count
+        `,
+        [assessmentIds, auditUnitIds.length > 0 ? auditUnitIds : assessmentIds],
+      );
+      if (countsRes.rows.length > 0) {
+        sampledCount = Number(countsRes.rows[0].sampled_count || 0);
+        unsampledCount = Number(countsRes.rows[0].unsampled_count || 0);
+      }
+    }
+
+    let totalWeightedScore = 0;
+    let totalMaxScore = 0;
+
+    if (assessmentIds.length > 0) {
+      const scoreSumRes = await this.db.query(
+        `
+        SELECT 
+          COALESCE(SUM(
+            CASE 
+              WHEN (ad.business_risk = 1 OR ad.control_risk = 1) THEN 10 * COALESCE(rcw.risk_weight, 1)
+              WHEN (ad.business_risk = 2 OR ad.control_risk = 2) THEN 5 * COALESCE(rcw.risk_weight, 1)
+              WHEN (ad.business_risk = 3 OR ad.control_risk = 3) THEN 2 * COALESCE(rcw.risk_weight, 1)
+              ELSE 0
+            END
+          ), 0) AS total_weighted_score,
+          COALESCE(SUM(10 * COALESCE(rcw.risk_weight, 1)), 0) AS total_max_score
+        FROM answers_data ad
+        JOIN question_master qm ON ad.question_id = qm.id
+        LEFT JOIN risk_category_weights rcw ON qm.risk_category_id = rcw.risk_category_id AND rcw.deleted_at IS NULL
+        WHERE ad.deleted_at IS NULL AND ad.assesment_id = ANY($1::int[])
+        `,
+        [assessmentIds],
+      );
+      if (scoreSumRes.rows.length > 0) {
+        totalWeightedScore = Number(scoreSumRes.rows[0].total_weighted_score || 0);
+        totalMaxScore = Number(scoreSumRes.rows[0].total_max_score || 0);
+      }
+    }
+
+    const creditScoreMarks = Math.max(0, totalMaxScore - totalWeightedScore);
+    const creditScorePercent = totalMaxScore > 0 ? ((creditScoreMarks / totalMaxScore) * 100).toFixed(2) : '100.00';
+    let broaderAreaScoringTable: any[] = [];
+    try {
+      const broaderScoringResult = await this.getBroaderAreaWiseScoringReport({
+        selectSearchTypeFilter: '3',
+        reportAuditUnit: auditUnitId,
+        reportAuditAssesment: assessmentId || assessmentIds[0],
+        financial_year: financialYear,
+      });
+      broaderAreaScoringTable = broaderScoringResult?.rows || [];
+    } catch (e) {
+      broaderAreaScoringTable = [];
+    }
+
+    return {
+      filters: {
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: String(assessmentId),
+        financial_year: financialYear,
+        compliance_status: complianceStatusFilter,
+        search_question: searchQuestion,
+      },
+      summary: {
+        total_questions_count: allRows.length,
+        answered_questions_count: answeredRows.length,
+        answered_total_score: Number(answeredTotalScore.toFixed(2)),
+        total_weighted_score: Number(totalWeightedScore.toFixed(2)),
+        total_max_score: Number(totalMaxScore.toFixed(2)),
+        credit_score_marks: Number(creditScoreMarks.toFixed(2)),
+        credit_score_percent: creditScorePercent,
+        unanswered_questions_count: unansweredQuestionRows.length,
+        unanswered_total_score: Number(unansweredTotalScore.toFixed(2)),
+        grand_total_score: Number(grandTotalScore.toFixed(2)),
+        high_risk_count: highRiskCount,
+        medium_risk_count: mediumRiskCount,
+        low_risk_count: lowRiskCount,
+        closure_rate: closureRate,
+        categoryScores: categoryScores,
+        sampled_accounts_count: sampledCount,
+        unsampled_accounts_count: unsampledCount,
+      },
+      total: allRows.length,
+      generatedAt: new Date().toISOString(),
+      rows: finalRows,
+      broaderAreaScoringTable,
+    };
+  }
+
   async getBroaderAreaWiseScoringReport(query: any) {
     const searchType = String(query.selectSearchTypeFilter || '3').trim();
     const auditUnitId = Number(query.reportAuditUnit || 0);
@@ -12662,7 +13315,7 @@ export class ReportsService {
     );
   }
 
-  private buildAuditCompleteGroupedRows(questionRows: any[]) {
+  private buildAuditCompleteGroupedRows(questionRows: any[], skipBranchGroup = false) {
     const rows: any[] = [];
     let currentBranch = '';
     let currentMenu = '';
@@ -12678,7 +13331,7 @@ export class ReportsService {
       const header = String(row.header_name || '-').trim();
       const account = String(row.__account_key || '').trim();
 
-      if (branch && branch !== currentBranch) {
+      if (!skipBranchGroup && branch && branch !== currentBranch) {
         let label = `Branch: ${branch}`;
         if (row.assesment_period_from && row.assesment_period_to) {
           const period = `${this.dateOnly(row.assesment_period_from)} to ${this.dateOnly(row.assesment_period_to)}`;
@@ -12993,21 +13646,16 @@ export class ReportsService {
   }
 
   private accountDetailRows(row: any) {
-    if (!Number(row.dump_id || 0)) {
+    if (!Number(row.dump_id || 0) && !row.account_no) {
       return null;
     }
+
+    const branchName = row.account_branch_name || row.branch_name || '-';
+    const branchCode = row.account_branch_code || row.branch_code || '';
 
     return {
       title: `Account Details: ${String(row.account_holder_name || row.account_no || '').trim() || '-'}`,
       rows: [
-        [
-          this.detailCell(
-            'Branch Name',
-            `${row.account_branch_name || '-'}${row.account_branch_code ? ` (BR. CODE: ${row.account_branch_code})` : ''}`,
-          ),
-          this.detailCell('Scheme Code', row.scheme_code),
-          this.detailCell('Scheme Name', row.scheme_name),
-        ],
         [
           this.detailCell('Account Number', row.account_no),
           this.detailCell('UCIC', row.ucic),
@@ -13017,19 +13665,9 @@ export class ReportsService {
           ),
         ],
         [
-          this.detailCell('Interest Rate', row.interest_rate),
-          this.detailCell('Sanction Amount', row.account_amount),
-          this.detailCell('Outstanding Balance', row.outstanding_balance),
-        ],
-        [
-          this.detailCell('Customer Type', row.customer_type),
-          this.detailCell('Due Date', this.dateOnly(row.due_date)),
-          this.detailCell('Balance As On', this.dateOnly(row.balance_date)),
-        ],
-        [
-          this.detailCell('NPA Status', row.npa_status),
+          this.detailCell('Scheme Code', row.scheme_code),
+          this.detailCell('Scheme Name', row.scheme_name),
           this.detailCell('Renewal Date', this.dateOnly(row.renewal_date)),
-          this.detailCell('Account Status', row.account_status),
         ],
       ],
     };
