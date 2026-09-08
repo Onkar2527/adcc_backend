@@ -201,6 +201,10 @@ export class ReportsService {
       return this.getClosureReportDefinition(isFreeFlow);
     }
 
+    if (reportSlug === 'risk-mitigation-report') {
+      return this.getRiskMitigationDefinition(true);
+    }
+
     throw new NotFoundException('Report is not implemented yet');
   }
 
@@ -3353,6 +3357,10 @@ export class ReportsService {
 
     if (reportSlug === 'closure-report') {
       return this.getClosureReport(query);
+    }
+
+    if (reportSlug === 'risk-mitigation-report') {
+      return this.getRiskMitigationReport(query);
     }
 
     if (reportSlug !== 'audit-status-report') {
@@ -14380,5 +14388,309 @@ export class ReportsService {
         where.push('1 = 0');
       }
     }
+  }
+
+  private async getRiskMitigationDefinition(isFreeFlow = true) {
+    const lookups = await this.getAuditCompleteLookups(true);
+
+    return {
+      slug: 'risk-mitigation-report',
+      title: 'Risk Mitigation Report',
+      category: 'Advanced Reports',
+      page: 'A4L',
+      fileName: 'risk-mitigation-report',
+      brand: {
+        logoUrl: '/assets/images/logos/assurepro-logo.svg',
+        bankName: this.getBankName(),
+      },
+      defaultFilters: {
+        selectSearchTypeFilter: '3',
+        reportAuditUnit: '',
+        financial_year: 'all',
+        reportAuditAssesment: '',
+        startDate: '',
+        endDate: '',
+      },
+      filters: [
+        {
+          key: 'selectSearchTypeFilter',
+          label: 'Search Type',
+          type: 'select',
+          required: true,
+          options: [
+            { value: '3', label: 'Single Branch (Assessment Wise)' },
+            { value: '4', label: 'Single Department (Assessment Wise)' },
+            { value: '5', label: 'Single Branch (Date Range Wise)' },
+            { value: '6', label: 'Single Department (Date Range Wise)' },
+          ],
+        },
+        {
+          key: 'reportAuditUnit',
+          label: 'Select Branch / Department',
+          type: 'select',
+          required: true,
+          options: lookups.auditUnits,
+        },
+        {
+          key: 'financial_year',
+          label: 'Financial Year',
+          type: 'select',
+          required: true,
+          options: lookups.years,
+        },
+        {
+          key: 'reportAuditAssesment',
+          label: 'Select Assessment',
+          type: 'select',
+          required: true,
+          dependsOn: 'reportAuditUnit',
+          optionParentKey: 'audit_unit_id',
+          options: lookups.assessments,
+        },
+        {
+          key: 'startDate',
+          label: 'Start Date',
+          type: 'date',
+        },
+        {
+          key: 'endDate',
+          label: 'End Date',
+          type: 'date',
+        },
+      ],
+      columns: [
+        { key: 'audit_unit', label: 'Audit Unit', width: '12%' },
+        { key: 'category_name', label: 'Category', width: '10%' },
+        { key: 'question', label: 'Question', width: '25%' },
+        { key: 'auditor_point', label: 'Auditor Point (Answer)', width: '8%' },
+        { key: 'status', label: 'Status', width: '12%' },
+        { key: 'audit_comment', label: 'Auditor Comment', width: '10%' },
+        { key: 'reviewer_comment', label: 'Reviewer Comment', width: '10%' },
+        { key: 'compliance_comment', label: 'Compliance Comment', width: '10%' },
+        { key: 'total_score', label: 'Total Score', width: '6%', align: 'right' },
+        { key: 'obtained_score', label: 'Obtained Score', width: '6%', align: 'right' },
+      ],
+      summaryCards: [
+        { key: 'totalQuestions', label: 'Total Compliance Questions' },
+        { key: 'totalMaxScore', label: 'Total Max Score' },
+        { key: 'totalObtainedScore', label: 'Total Obtained Score' },
+        { key: 'scorePercentage', label: 'Score Percentage (%)' },
+      ],
+    };
+  }
+
+  async getRiskMitigationReport(query: any) {
+    const searchType = String(query.selectSearchTypeFilter || '3').trim();
+    const auditUnitId = Number(query.reportAuditUnit || 0);
+    const assessmentId = Number(query.reportAuditAssesment || 0);
+    const startDate = query.startDate ? String(query.startDate).trim() : '';
+    const endDate = query.endDate ? String(query.endDate).trim() : '';
+
+    if (!auditUnitId) {
+      throw new BadRequestException('Audit unit is required');
+    }
+
+    if ((searchType === '3' || searchType === '4') && !assessmentId) {
+      throw new BadRequestException('Audit assessment is required');
+    }
+
+    if ((searchType === '5' || searchType === '6') && (!startDate || !endDate)) {
+      throw new BadRequestException('Date range (Start Date & End Date) is required');
+    }
+
+    const assessmentParams: any[] = [auditUnitId];
+    const assessmentWhere = ['audit_unit_id = $1', 'deleted_at IS NULL'];
+
+    if (searchType === '3' || searchType === '4') {
+      assessmentParams.push(assessmentId);
+      assessmentWhere.push(`id = $${assessmentParams.length}`);
+    } else {
+      assessmentParams.push(startDate, endDate);
+      assessmentWhere.push(`assesment_period_from >= $${assessmentParams.length - 1}`);
+      assessmentWhere.push(`assesment_period_to <= $${assessmentParams.length}`);
+    }
+
+    const assessmentResult = await this.db.query(
+      `
+      SELECT id
+      FROM audit_assesment_master
+      WHERE ${assessmentWhere.join(' AND ')}
+      ORDER BY assesment_period_from ASC, id ASC
+      `,
+      assessmentParams,
+    );
+
+    const assessmentIds = assessmentResult.rows.map((row: any) => Number(row.id));
+
+    if (!assessmentIds.length) {
+      return {
+        filters: {
+          selectSearchTypeFilter: searchType,
+          reportAuditUnit: String(auditUnitId),
+          reportAuditAssesment: assessmentId ? String(assessmentId) : '',
+          startDate,
+          endDate,
+        },
+        total: 0,
+        generatedAt: new Date().toISOString(),
+        rows: [],
+        summary: {
+          totalQuestions: 0,
+          totalMaxScore: 0,
+          totalObtainedScore: 0,
+          scorePercentage: '0.00%',
+        },
+      };
+    }
+
+    const answersResult = await this.db.query(
+      `
+      SELECT
+        ad.id AS answer_id,
+        ad.assesment_id,
+        ad.question_id,
+        ad.answer_given,
+        ad.is_compliance,
+        ad.audit_status_id,
+        ad.audit_comment,
+        ad.audit_reviewer_emp_id,
+        ad.audit_reviewer_comment,
+        ad.audit_commpliance,
+        ad.compliance_reviewer_comment,
+        ad.compliance_status_id,
+        ad.business_risk,
+        ad.control_risk,
+        COALESCE(rcm.risk_category, 'General Risk') AS risk_type,
+        COALESCE(rcw.risk_weight, 1) AS risk_weight,
+        qm.id AS question_code,
+        qm.question,
+        cm.name AS category_name,
+        mm.name AS menu_name,
+        aum.audit_unit_code,
+        aum.name AS audit_unit_name
+      FROM answers_data ad
+      INNER JOIN audit_assesment_master asm ON ad.assesment_id = asm.id
+      INNER JOIN audit_unit_master aum ON asm.audit_unit_id = aum.id
+      LEFT JOIN question_master qm ON ad.question_id = qm.id
+      LEFT JOIN risk_category_master rcm ON rcm.id = qm.risk_category_id AND rcm.deleted_at IS NULL
+      LEFT JOIN risk_category_weights rcw ON rcw.risk_category_id = qm.risk_category_id AND rcw.year_id = asm.year_id AND rcw.is_active = 1 AND rcw.deleted_at IS NULL
+      LEFT JOIN category_master cm ON ad.category_id = cm.id
+      LEFT JOIN menu_master mm ON ad.menu_id = mm.id
+      WHERE ad.assesment_id = ANY($1::int[])
+        AND (ad.is_compliance = 1 OR ad.audit_commpliance = '1')
+        AND COALESCE(ad.audit_status_id, 0) <> 2
+        AND COALESCE(ad.compliance_status_id, 0) NOT IN (9, 13, 14)
+        AND ad.deleted_at IS NULL
+        AND asm.deleted_at IS NULL
+      ORDER BY ad.assesment_id ASC, cm.name ASC, qm.id ASC, ad.id ASC
+      `,
+      [assessmentIds],
+    );
+
+    let sumTotalScore = 0;
+    let sumObtainedScore = 0;
+
+    const rows = answersResult.rows.map((row: any) => {
+      const auditorPoint = row.answer_given || '-';
+      const auditorComment = row.audit_comment || '-';
+      const reviewerComment = row.audit_reviewer_comment || '-';
+      const complianceComment = row.compliance_reviewer_comment || row.audit_commpliance || '-';
+
+      const complianceStatusId = Number(row.compliance_status_id || 0);
+      const auditStatusId = Number(row.audit_status_id || 1);
+
+      const compLabels: Record<number, string> = {
+        1: 'Complied',
+        2: 'Non-Complied',
+        3: 'Pending Manager',
+        4: 'Compliance Pending',
+        5: 'Compliance Review Pending',
+        6: 'Re-Compliance Needed',
+        7: 'Settled / Closed',
+        8: 'Compliance Review Pending',
+        9: 'Settled / Closed',
+        10: 'Pending Auditor Verification',
+        11: 'Pending Reviewer Verification',
+        12: 'Pending Manager Rework',
+        13: 'Auditor Settled',
+        14: 'Reviewer Settled',
+        15: 'Pending Maker Compliance',
+        16: 'Pending Checker Compliance',
+        17: 'Escalated',
+      };
+
+      const auditLabels: Record<number, string> = {
+        1: 'Audit Pending',
+        2: 'Audit Review Pending',
+        3: 'Re-Audit Needed',
+        4: 'Compliance Pending',
+        5: 'Compliance Review Pending',
+        6: 'Re-Compliance Needed',
+        7: 'Assessment Completed',
+      };
+
+      const currentStatus = (complianceStatusId > 0 && compLabels[complianceStatusId])
+        ? compLabels[complianceStatusId]
+        : (auditLabels[auditStatusId] || 'Pending');
+
+      const riskWeight = Number(row.risk_weight || 1);
+      const totalScore = Number((10 * (riskWeight > 0 ? riskWeight : 1)).toFixed(2));
+      let obtainedScore = 0;
+
+      const parsedScore = parseFloat(auditorPoint);
+      if (!isNaN(parsedScore)) {
+        obtainedScore = Number((parsedScore * (riskWeight > 0 ? riskWeight : 1)).toFixed(2));
+      } else {
+        const br = Number(row.business_risk || 0);
+        const cr = Number(row.control_risk || 0);
+        let baseScore = 0;
+
+        if (br === 1 || cr === 1) baseScore = 10;
+        else if (br === 2 || cr === 2) baseScore = 5;
+        else if (br === 3 || cr === 3) baseScore = 2;
+        else baseScore = 0;
+
+        obtainedScore = Number((baseScore * (riskWeight > 0 ? riskWeight : 1)).toFixed(2));
+      }
+
+      sumTotalScore += totalScore;
+      sumObtainedScore += obtainedScore;
+
+      return {
+        answer_id: row.answer_id,
+        assessment_id: row.assesment_id,
+        audit_unit: `${row.audit_unit_code || ''} - ${row.audit_unit_name || ''}`.trim(),
+        category_name: row.category_name || row.menu_name || '-',
+        question: row.question || '-',
+        auditor_point: auditorPoint,
+        status: currentStatus,
+        audit_comment: auditorComment,
+        reviewer_comment: reviewerComment,
+        compliance_comment: complianceComment,
+        total_score: totalScore,
+        obtained_score: obtainedScore,
+      };
+    });
+
+    const scorePercentage = sumTotalScore > 0 ? ((sumObtainedScore / sumTotalScore) * 100).toFixed(2) + '%' : '0.00%';
+
+    return {
+      filters: {
+        selectSearchTypeFilter: searchType,
+        reportAuditUnit: String(auditUnitId),
+        reportAuditAssesment: assessmentId ? String(assessmentId) : '',
+        startDate,
+        endDate,
+      },
+      total: rows.length,
+      generatedAt: new Date().toISOString(),
+      rows,
+      summary: {
+        totalQuestions: rows.length,
+        totalMaxScore: sumTotalScore,
+        totalObtainedScore: sumObtainedScore,
+        scorePercentage,
+      },
+    };
   }
 }
