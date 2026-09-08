@@ -2146,12 +2146,10 @@ export class ReportsService {
       },
       defaultFilters: {
         audit_unit_id: 'all_branches',
-        financial_year: 'all',
-        trend: '',
-        startMonth: '',
-        endMonth: '',
-        startMonth2: '',
-        endMonth2: '',
+        financial_year: lookups.years.find((y: any) => y.value !== 'all')?.value || 'all',
+        trend: 'rwt',
+        period1_quarter: 'Q1',
+        period2_quarter: 'Q2',
       },
       filters: [
         {
@@ -2166,7 +2164,7 @@ export class ReportsService {
           label: 'Financial Year',
           type: 'select',
           required: true,
-          options: lookups.years,
+          options: lookups.years.filter((y: any) => y.value !== 'all'),
         },
         {
           key: 'trend',
@@ -2174,34 +2172,33 @@ export class ReportsService {
           type: 'select',
           required: true,
           options: [
-            { value: '', label: 'Please select trend' },
             { value: 'rwt', label: 'Risk Wise Trend' },
             { value: 'rswt', label: 'Risk Score Wise Trend' },
           ],
         },
         {
-          key: 'startMonth',
-          label: 'Trend Period - 1 Start Month [YYYY-MM]',
-          type: 'text',
+          key: 'period1_quarter',
+          label: 'Trend Period - 1 Quarter',
+          type: 'select',
           required: true,
+          options: [
+            { value: 'Q1', label: 'Q1 (Apr - Jun)' },
+            { value: 'Q2', label: 'Q2 (Jul - Sep)' },
+            { value: 'Q3', label: 'Q3 (Oct - Dec)' },
+            { value: 'Q4', label: 'Q4 (Jan - Mar)' },
+          ],
         },
         {
-          key: 'endMonth',
-          label: 'Trend Period - 1 End Month [YYYY-MM]',
-          type: 'text',
+          key: 'period2_quarter',
+          label: 'Trend Period - 2 Quarter',
+          type: 'select',
           required: true,
-        },
-        {
-          key: 'startMonth2',
-          label: 'Trend Period - 2 Start Month [YYYY-MM]',
-          type: 'text',
-          required: true,
-        },
-        {
-          key: 'endMonth2',
-          label: 'Trend Period - 2 End Month [YYYY-MM]',
-          type: 'text',
-          required: true,
+          options: [
+            { value: 'Q1', label: 'Q1 (Apr - Jun)' },
+            { value: 'Q2', label: 'Q2 (Jul - Sep)' },
+            { value: 'Q3', label: 'Q3 (Oct - Dec)' },
+            { value: 'Q4', label: 'Q4 (Jan - Mar)' },
+          ],
         },
       ],
       columns: [
@@ -8753,11 +8750,71 @@ export class ReportsService {
     const auditUnitFilter = String(
       query.audit_unit_id || 'all_branches',
     ).trim();
-    const trend = String(query.trend || '').trim();
-    const startMonth = String(query.startMonth || '').trim();
-    const endMonth = String(query.endMonth || '').trim();
-    const startMonth2 = String(query.startMonth2 || '').trim();
-    const endMonth2 = String(query.endMonth2 || '').trim();
+    const trend = String(query.trend || 'rwt').trim();
+    const financialYearFilter = String(query.financial_year || '').trim();
+    const period1Quarter = String(query.period1_quarter || query.quarter1 || 'Q1').trim().toUpperCase();
+    const period2Quarter = String(query.period2_quarter || query.quarter2 || 'Q2').trim().toUpperCase();
+
+    let startMonth = String(query.startMonth || '').trim();
+    let endMonth = String(query.endMonth || '').trim();
+    let startMonth2 = String(query.startMonth2 || '').trim();
+    let endMonth2 = String(query.endMonth2 || '').trim();
+
+    if (!startMonth || !endMonth || !startMonth2 || !endMonth2) {
+      let yearName = '';
+      if (financialYearFilter && financialYearFilter !== 'all') {
+        const yearRow = await this.db.query(
+          `SELECT year FROM year_master WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+          [Number(financialYearFilter)],
+        );
+        if (yearRow.rows.length) {
+          yearName = String(yearRow.rows[0].year || '');
+        }
+      }
+
+      if (!yearName) {
+        const latestYear = await this.db.query(
+          `SELECT year FROM year_master WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 1`,
+        );
+        if (latestYear.rows.length) {
+          yearName = String(latestYear.rows[0].year || '');
+        }
+      }
+
+      const matchYear = yearName.match(/(\d{4})/);
+      const startYearNum = matchYear ? parseInt(matchYear[1], 10) : new Date().getFullYear();
+
+      const quarterToMonths = (q: string, fyStartYear: number) => {
+        switch (q) {
+          case 'Q1':
+          case '1':
+            return { start: `${fyStartYear}-04`, end: `${fyStartYear}-06` };
+          case 'Q2':
+          case '2':
+            return { start: `${fyStartYear}-07`, end: `${fyStartYear}-09` };
+          case 'Q3':
+          case '3':
+            return { start: `${fyStartYear}-10`, end: `${fyStartYear}-12` };
+          case 'Q4':
+          case '4':
+            return { start: `${fyStartYear + 1}-01`, end: `${fyStartYear + 1}-03` };
+          default:
+            return null;
+        }
+      };
+
+      const q1Dates = quarterToMonths(period1Quarter, startYearNum);
+      const q2Dates = quarterToMonths(period2Quarter, startYearNum);
+
+      if (q1Dates) {
+        startMonth = q1Dates.start;
+        endMonth = q1Dates.end;
+      }
+      if (q2Dates) {
+        startMonth2 = q2Dates.start;
+        endMonth2 = q2Dates.end;
+      }
+    }
 
     if (!['rwt', 'rswt'].includes(trend)) {
       throw new BadRequestException('Trend on is required');
@@ -8784,9 +8841,9 @@ export class ReportsService {
     const unitWhere: string[] = ['aum.deleted_at IS NULL'];
     const unitParams: any[] = [];
 
-    if (auditUnitFilter === 'all_branches') {
+    if (auditUnitFilter === 'all_branches' || auditUnitFilter === '1') {
       unitWhere.push('aum.section_type_id = 1');
-    } else if (auditUnitFilter === 'all_head_of_dept') {
+    } else if (auditUnitFilter === 'all_head_of_dept' || auditUnitFilter === '2') {
       unitWhere.push('aum.section_type_id > 1');
     } else {
       unitParams.push(Number(auditUnitFilter));
@@ -9059,7 +9116,10 @@ export class ReportsService {
     return {
       filters: {
         audit_unit_id: auditUnitFilter,
+        financial_year: financialYearFilter,
         trend,
+        period1_quarter: period1Quarter,
+        period2_quarter: period2Quarter,
         startMonth,
         endMonth,
         startMonth2,
