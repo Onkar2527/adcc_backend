@@ -1407,6 +1407,10 @@ export class AuditQuestionMasterService {
 
             compliance_ev_upload,
 
+            mr_question,
+
+            suggestions,
+
             is_active,
 
             admin_id
@@ -1432,7 +1436,9 @@ export class AuditQuestionMasterService {
             $15,
             $16,
             $17,
-            $18
+            $18,
+            $19,
+            $20
 
         )
 
@@ -1471,6 +1477,10 @@ export class AuditQuestionMasterService {
                 data.audit_ev_upload ?? 0,
 
                 data.compliance_ev_upload ?? 0,
+
+                data.mr_question ?? null,
+
+                data.suggestions ?? null,
 
                 data.is_active ?? 1,
 
@@ -1593,8 +1603,18 @@ export class AuditQuestionMasterService {
         compliance_ev_upload
         ),
 
-        parameters = COALESCE(
+        mr_question = COALESCE(
         $20,
+        mr_question
+        ),
+
+        suggestions = COALESCE(
+        $21,
+        suggestions
+        ),
+
+        parameters = COALESCE(
+        $22,
         parameters
         ),
 
@@ -1642,6 +1662,10 @@ export class AuditQuestionMasterService {
                 data.audit_ev_upload,
 
                 data.compliance_ev_upload,
+
+                data.mr_question,
+
+                data.suggestions,
 
                 data.parameters,
             ]

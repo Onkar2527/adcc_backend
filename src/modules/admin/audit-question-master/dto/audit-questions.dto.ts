@@ -141,6 +141,14 @@ export class CreateQuestionDto {
     compliance_ev_upload?: number;
 
     @IsOptional()
+    @IsString()
+    mr_question?: string;
+
+    @IsOptional()
+    @IsString()
+    suggestions?: string;
+
+    @IsOptional()
     @IsInt()
     is_active?: number;
 
@@ -215,6 +223,14 @@ export class UpdateQuestionDto {
     @IsOptional()
     @IsInt()
     compliance_ev_upload?: number;
+
+    @IsOptional()
+    @IsString()
+    mr_question?: string;
+
+    @IsOptional()
+    @IsString()
+    suggestions?: string;
 
     @IsOptional()
     @IsInt()
