@@ -10,7 +10,7 @@ import {
 export class CreateQuestionSetDto {
     @IsNotEmpty()
     @IsString()
-    @Matches(/^[a-zA-Z0-9\s\-_\/&()\[\]\.,+::'"#]+$/)
+    // @Matches(/^[a-zA-Z0-9\s\-_\/&()\[\]\.,+::'"#]+$/)
     name!: string;
 
     @IsInt()
@@ -29,7 +29,7 @@ export class CreateQuestionSetDto {
 export class UpdateQuestionSetDto {
     @IsOptional()
     @IsString()
-    @Matches(/^[a-zA-Z0-9\s\-_\/&()\[\]\.,+::'"#]+$/)
+    //@Matches(/^[a-zA-Z0-9\s\-_\/&()\[\]\.,+::'"#]+$/)
     name?: string;
 
     @IsOptional()
@@ -52,7 +52,7 @@ export class CreateQuestionHeaderDto {
 
     @IsNotEmpty()
     @IsString()
-    @Matches(/^[a-zA-Z0-9\s\-_\/&()\[\]\.,+::'"#]+$/)
+    //@Matches(/^[a-zA-Z0-9\s\-_\/&()\[\]\.,+::'"#]+$/)
     name!: string;
 
     @IsOptional()
@@ -71,7 +71,7 @@ export class UpdateQuestionHeaderDto {
 
     @IsOptional()
     @IsString()
-    @Matches(/^[a-zA-Z0-9\s\-_\/&()\[\]\.,+::'"#]+$/)
+    //@Matches(/^[a-zA-Z0-9\s\-_\/&()\[\]\.,+::'"#]+$/)
     name?: string;
 
     @IsOptional()
