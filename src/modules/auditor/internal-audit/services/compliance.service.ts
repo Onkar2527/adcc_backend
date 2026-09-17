@@ -498,6 +498,15 @@ export class ComplianceService {
             qm.question,
             qm.option_id,
             qm.annexure_id,
+            qm.compliance_ev_upload,
+            ad.audit_compulsary_ev_upload,
+            ad.compliance_compulsary_ev_upload,
+            CASE
+                WHEN COALESCE(ad.audit_compulsary_ev_upload, 0) = 1 THEN 1
+                WHEN COALESCE(ad.compliance_compulsary_ev_upload, 0) IN (1, 2) THEN 1
+                WHEN COALESCE(qm.compliance_ev_upload, 0) = 1 THEN 1
+                ELSE 0
+            END AS compliance_evidence_upload,
             ac.columns_json AS annexure_columns,
             au.name AS account_branch_name,
             COALESCE(dd.account_no, da.account_no) AS account_no,
@@ -648,7 +657,14 @@ export class ComplianceService {
               compliance_maker_emp_id,
               (SELECT name FROM employee_master WHERE id = compliance_maker_emp_id) AS compliance_maker_name,
               compliance_maker_date,
-              batch_key
+              batch_key,
+              audit_compulsary_ev_upload,
+              compliance_compulsary_ev_upload,
+              CASE
+                  WHEN COALESCE(audit_compulsary_ev_upload, 0) = 1 THEN 1
+                  WHEN COALESCE(compliance_compulsary_ev_upload, 0) IN (1, 2) THEN 1
+                  ELSE 0
+              END AS compliance_evidence_upload
           FROM answers_data_annexure
           WHERE assesment_id = $1
               AND answer_id = ANY($2::int[])
