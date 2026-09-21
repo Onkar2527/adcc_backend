@@ -26,4 +26,4 @@ import { ComplianceController } from './controllers/compliance.controller';
     SamplingService,
   ],
 })
-export class InternalAuditModule { }
+export class InternalAuditModule {}

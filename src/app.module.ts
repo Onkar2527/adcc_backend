@@ -40,7 +40,7 @@ import { AuditTypeModule } from './modules/admin/audit-type-master/audit-type.mo
 import { IncidentManagementModule } from './modules/incident-management/incident-management.module';
 import { TranslationModule } from './modules/translation/translation.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
-
+import { NonAgriStatementModule } from './modules/auditor/non-agri-statement/non-agri-statement.module';
 
 @Module({
   imports: [
@@ -64,7 +64,6 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     RiskCompositeModule,
     RiskMatrixModule,
     BranchRatingModule,
-    BranchRatingModule,
     PeriodwiseQuestionsMasterModule,
     AuditDashboardModule,
     InternalAuditModule,
@@ -83,10 +82,10 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     MasterBulkUploadModule,
     AuditTypeModule,
     IncidentManagementModule,
-    NotificationsModule
+    NotificationsModule,
+    NonAgriStatementModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
-
+export class AppModule {}
