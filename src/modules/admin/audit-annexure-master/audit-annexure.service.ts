@@ -42,6 +42,7 @@ export class AuditAnnexureMasterService {
           ELSE '-'
         END AS control_risk_name,
         am.is_active,
+        COALESCE(am.layout_type, 'grid') AS layout_type,
 
         rcm.risk_category AS risk_category_name,
 

@@ -3602,6 +3602,8 @@ export class InternalAuditService {
               END AS suggestions,
               rcm.risk_category AS risk_category_name,
               am.name AS annexure_name,
+              COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+              am.matrix_columns AS annexure_matrix_columns,
               am.risk_defination_id AS annexure_risk_defination_id,
               ac.columns_json AS annexure_columns,
               ans.id AS answer_id,
@@ -3726,6 +3728,8 @@ export class InternalAuditService {
               qm.suggestions,
               rcm.risk_category AS risk_category_name,
               am.name AS annexure_name,
+              COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+              am.matrix_columns AS annexure_matrix_columns,
               am.risk_defination_id AS annexure_risk_defination_id,
               ac.columns_json AS annexure_columns,
               ans.id AS answer_id,
@@ -4046,6 +4050,8 @@ export class InternalAuditService {
         END AS suggestions,
         rcm.risk_category AS risk_category_name,
         am.name AS annexure_name,
+              COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+              am.matrix_columns AS annexure_matrix_columns,
         am.risk_defination_id AS annexure_risk_defination_id,
         ac.columns_json AS annexure_columns,
         ans.id AS answer_id,
@@ -11366,3 +11372,5 @@ SELECT (
     };
   }
 }
+
+// Matrix columns updated: 1789992822072
