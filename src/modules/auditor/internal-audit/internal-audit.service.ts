@@ -5693,18 +5693,15 @@ export class InternalAuditService {
           row.risk_category_name,
         annexure_id:
           row.annexure_id,
-        annexure:
-          row.annexure_id
+        annexure: row.annexure_id
             ? {
-              id:
-                row.annexure_id,
-              name:
-                row.annexure_name,
-              risk_defination_id:
-                row.annexure_risk_defination_id,
-              columns:
-                row.annexure_columns || [],
-            }
+                id: row.annexure_id,
+                name: row.annexure_name,
+                layout_type: row.annexure_layout_type || 'grid',
+                matrix_columns: row.annexure_matrix_columns || null,
+                risk_defination_id: row.annexure_risk_defination_id,
+                columns: row.annexure_columns || [],
+              }
             : null,
         subset_multi_id:
           row.subset_multi_id,

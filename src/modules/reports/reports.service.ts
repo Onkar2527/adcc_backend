@@ -4093,6 +4093,9 @@ export class ReportsService {
         qm.question,
         qm.option_id,
         qm.annexure_id,
+        am.name AS annexure_name,
+        COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+        am.matrix_columns AS annexure_matrix_columns,
         cm.linked_table_id,
         qm.risk_category_id,
         rc.risk_category,
@@ -4133,6 +4136,9 @@ export class ReportsService {
         ON qhm.id = ad.header_id
       LEFT JOIN question_master qm
         ON qm.id = ad.question_id
+      LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
       LEFT JOIN risk_category_master rc
         ON rc.id = qm.risk_category_id
       LEFT JOIN (
@@ -4199,6 +4205,12 @@ export class ReportsService {
       __annexure_rows: this.formatAnnexureRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
         row.annexure_columns || [],
+        {
+          layout_type: row.annexure_layout_type,
+          matrix_columns: row.annexure_matrix_columns,
+          annexure_name: row.annexure_name,
+          annexure_id: row.annexure_id,
+        },
       ),
       __vouching_rows: this.formatVouchingRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
@@ -4346,6 +4358,9 @@ export class ReportsService {
         qm.question,
         qm.option_id,
         qm.annexure_id,
+        am.name AS annexure_name,
+        COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+        am.matrix_columns AS annexure_matrix_columns,
         cm.linked_table_id,
         qm.risk_category_id,
         rc.risk_category,
@@ -4384,6 +4399,9 @@ export class ReportsService {
         ON qhm.id = ad.header_id
       LEFT JOIN question_master qm
         ON qm.id = ad.question_id
+      LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
       LEFT JOIN risk_category_master rc
         ON rc.id = qm.risk_category_id
       LEFT JOIN (
@@ -4449,6 +4467,12 @@ export class ReportsService {
       __annexure_rows: this.formatAnnexureRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
         row.annexure_columns || [],
+        {
+          layout_type: row.annexure_layout_type,
+          matrix_columns: row.annexure_matrix_columns,
+          annexure_name: row.annexure_name,
+          annexure_id: row.annexure_id,
+        },
       ),
       __vouching_rows: this.formatVouchingRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
@@ -4791,6 +4815,9 @@ export class ReportsService {
         qm.question,
         qm.option_id,
         qm.annexure_id,
+        am.name AS annexure_name,
+        COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+        am.matrix_columns AS annexure_matrix_columns,
         cm.linked_table_id,
         qm.risk_category_id,
         rc.risk_category,
@@ -4836,6 +4863,9 @@ export class ReportsService {
         ON qhm.id = ad.header_id
       LEFT JOIN question_master qm
         ON qm.id = ad.question_id
+      LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
       LEFT JOIN risk_category_master rc
         ON rc.id = qm.risk_category_id
       LEFT JOIN (
@@ -4929,6 +4959,12 @@ export class ReportsService {
       __annexure_rows: this.formatAnnexureRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
         row.annexure_columns || [],
+        {
+          layout_type: row.annexure_layout_type,
+          matrix_columns: row.annexure_matrix_columns,
+          annexure_name: row.annexure_name,
+          annexure_id: row.annexure_id,
+        },
       ),
       __vouching_rows: this.formatVouchingRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
@@ -5116,6 +5152,9 @@ export class ReportsService {
         qm.question,
         qm.option_id,
         qm.annexure_id,
+        am.name AS annexure_name,
+        COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+        am.matrix_columns AS annexure_matrix_columns,
         cm.linked_table_id,
         qm.risk_category_id,
         rc.risk_category,
@@ -5156,6 +5195,9 @@ export class ReportsService {
         ON qhm.id = ad.header_id
       LEFT JOIN question_master qm
         ON qm.id = ad.question_id
+      LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
       LEFT JOIN risk_category_master rc
         ON rc.id = qm.risk_category_id
       LEFT JOIN (
@@ -5249,6 +5291,12 @@ export class ReportsService {
       __annexure_rows: this.formatAnnexureRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
         row.annexure_columns || [],
+        {
+          layout_type: row.annexure_layout_type,
+          matrix_columns: row.annexure_matrix_columns,
+          annexure_name: row.annexure_name,
+          annexure_id: row.annexure_id,
+        },
       ),
       __vouching_rows: this.formatVouchingRows(
         annexureRowsByAnswer.get(Number(row.id)) || [],
@@ -11162,7 +11210,11 @@ export class ReportsService {
       LEFT JOIN menu_master mm ON mm.id = ad.menu_id
       LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
       LEFT JOIN category_master cm ON cm.id = ad.category_id
-      LEFT JOIN question_master qm ON qm.id = ad.question_id
+      LEFT JOIN question_master qm
+        ON qm.id = ad.question_id
+      LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
       LEFT JOIN risk_category_master rcm ON rcm.id = qm.risk_category_id AND rcm.deleted_at IS NULL
       LEFT JOIN risk_category_weights rcw ON rcw.risk_category_id = qm.risk_category_id AND rcw.year_id = asm.year_id AND rcw.is_active = 1 AND rcw.deleted_at IS NULL
       LEFT JOIN audit_area_master area_master ON area_master.id = qm.area_of_audit_id AND area_master.deleted_at IS NULL
@@ -12480,8 +12532,12 @@ export class ReportsService {
           LEFT JOIN menu_master mm ON mm.id = ad.menu_id
           LEFT JOIN category_master cm ON cm.id = ad.category_id
           LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
-          LEFT JOIN question_master qm ON qm.id = ad.question_id
-          LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
+          LEFT JOIN question_master qm
+        ON qm.id = ad.question_id
+      LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
+      LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
           LEFT JOIN (
               SELECT columns_source.annexure_id,
                   jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
@@ -12535,8 +12591,12 @@ export class ReportsService {
           LEFT JOIN menu_master mm ON mm.id = ad.menu_id
           LEFT JOIN category_master cm ON cm.id = ad.category_id
           LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
-          LEFT JOIN question_master qm ON qm.id = ad.question_id
-          LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
+          LEFT JOIN question_master qm
+        ON qm.id = ad.question_id
+      LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
+      LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
           LEFT JOIN (
               SELECT columns_source.annexure_id,
                   jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
@@ -12737,8 +12797,12 @@ export class ReportsService {
           LEFT JOIN menu_master mm ON mm.id = ad.menu_id
           LEFT JOIN category_master cm ON cm.id = ad.category_id
           LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
-          LEFT JOIN question_master qm ON qm.id = ad.question_id
-          LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
+          LEFT JOIN question_master qm
+        ON qm.id = ad.question_id
+      LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
+      LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
           LEFT JOIN (
               SELECT columns_source.annexure_id,
                   jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
@@ -12791,8 +12855,12 @@ export class ReportsService {
           LEFT JOIN menu_master mm ON mm.id = ad.menu_id
           LEFT JOIN category_master cm ON cm.id = ad.category_id
           LEFT JOIN question_header_master qhm ON qhm.id = ad.header_id
-          LEFT JOIN question_master qm ON qm.id = ad.question_id
-          LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
+          LEFT JOIN question_master qm
+        ON qm.id = ad.question_id
+      LEFT JOIN annexure_master am
+        ON am.id = qm.annexure_id
+        AND am.deleted_at IS NULL
+      LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
           LEFT JOIN (
               SELECT columns_source.annexure_id,
                   jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
@@ -13475,10 +13543,15 @@ export class ReportsService {
         (row.__annexure_rows || []).length
         && !(row.__vouching_rows || []).length
       ) {
+        const firstAnnex = row.__annexure_rows[0];
         rows.push({
           __report_annexure: true,
+          __is_form_annexure: !!firstAnnex?.is_form,
+          __annexure_name: firstAnnex?.title || 'Annexure Details',
           __annexure_title:
-            row.__annexure_rows[0]?.title || 'Annexure Details',
+            firstAnnex?.title || 'Annexure Details',
+          __matrix_columns: firstAnnex?.matrix_columns || [],
+          __form_particulars: firstAnnex?.form_particulars || [],
           __annexure_rows: row.__annexure_rows,
         });
       }
@@ -13534,6 +13607,12 @@ export class ReportsService {
         __annexure_rows: this.formatAnnexureRows(
           annexureRows,
           base.annexure_columns || [],
+          {
+            layout_type: base.annexure_layout_type,
+            matrix_columns: base.annexure_matrix_columns,
+            annexure_name: base.annexure_name,
+            annexure_id: base.question_annexure_id || base.annexure_id,
+          },
         ),
         __vouching_rows: this.isVouchingTransactionRow(base)
           ? this.formatVouchingRows(
@@ -13638,8 +13717,81 @@ export class ReportsService {
     return rowsByAnswer;
   }
 
-  private formatAnnexureRows(rows: any[], columns: any[]) {
+  private formatAnnexureRows(
+    rows: any[],
+    columns: any[],
+    annexureInfo?: { layout_type?: string; matrix_columns?: any; annexure_name?: string; annexure_id?: number },
+  ) {
     const annexureColumns = this.parseJsonArray(columns);
+    const isForm =
+      annexureInfo?.layout_type === 'form' ||
+      Number(annexureInfo?.annexure_id || 0) === 36 ||
+      (rows.length > 0 && Array.isArray(this.parseJsonArray(rows[0]?.answer_given)) && typeof this.parseJsonArray(rows[0]?.answer_given)[0] === 'object');
+
+    if (isForm) {
+      let matrixCols = annexureInfo?.matrix_columns;
+      if (typeof matrixCols === 'string') {
+        try {
+          matrixCols = JSON.parse(matrixCols);
+        } catch {
+          matrixCols = null;
+        }
+      }
+      if (!Array.isArray(matrixCols) || matrixCols.length === 0) {
+        matrixCols = [
+          { key: 'value', label: 'शेरा / माहिती (Details / Remarks)', type: 'text' }
+        ];
+      }
+
+      return rows.map((row, index) => {
+        const rawAnswers = this.parseJsonArray(row.answer_given);
+        const particularRows = annexureColumns.map((col: any, pIdx: number) => {
+          const particularName = String(col.name || `Particular ${pIdx + 1}`).trim();
+          const rowVal = rawAnswers[pIdx];
+          const cellValues: Record<string, string> = {};
+          const displayParts: string[] = [];
+
+          matrixCols.forEach((mCol: any, mIdx: number) => {
+            let v: any = '-';
+            if (rowVal !== undefined && rowVal !== null) {
+              if (typeof rowVal === 'object' && !Array.isArray(rowVal)) {
+                v = rowVal[mCol.key] !== undefined ? rowVal[mCol.key] : (rowVal[mIdx] !== undefined ? rowVal[mIdx] : '-');
+              } else if (Array.isArray(rowVal)) {
+                v = rowVal[mIdx] !== undefined ? rowVal[mIdx] : '-';
+              } else if (mIdx === 0 || mCol.key === 'value') {
+                v = rowVal;
+              }
+            }
+            const valStr = v !== null && v !== undefined && String(v).trim() !== '' ? String(v).trim() : '-';
+            cellValues[mCol.key || String(mIdx)] = valStr;
+            if (valStr !== '-') {
+              displayParts.push(`${mCol.label || mCol.key}: ${valStr}`);
+            }
+          });
+
+          return {
+            sr_no: pIdx + 1,
+            particular: particularName,
+            cell_values: cellValues,
+            display_text: displayParts.length ? `${particularName} (${displayParts.join(', ')})` : `${particularName}: -`,
+          };
+        });
+
+        return {
+          is_form: true,
+          title: annexureInfo?.annexure_name || 'Annexure Form Details',
+          matrix_columns: matrixCols,
+          form_particulars: particularRows,
+          description: particularRows.map((p) => `${p.sr_no}) ${p.display_text}`).join(' | '),
+          business_risk_label: this.riskParameterLabel(row.business_risk),
+          control_risk_label: this.riskParameterLabel(row.control_risk),
+          risk_category: row.risk_category || '-',
+          audit_commpliance: row.audit_commpliance || '-',
+          compliance_reviewer_comment: row.compliance_reviewer_comment || '-',
+        };
+      });
+    }
+
     const firstColumnName = String(
       annexureColumns[0]?.name || 'Annexure Details',
     ).trim();
@@ -13650,10 +13802,17 @@ export class ReportsService {
         ? values.slice(0, annexureColumns.length)
         : values.slice(0, 1);
       const descriptionParts = displayValues
-        .map((value) => String(value || '').trim())
+        .map((value) => {
+          if (value === null || value === undefined) return '';
+          if (typeof value === 'object') {
+            return Object.values(value).filter((v) => v !== null && v !== undefined && String(v).trim() !== '').join(' | ');
+          }
+          return String(value).trim();
+        })
         .filter(Boolean);
 
       return {
+        is_form: false,
         title: firstColumnName,
         description: descriptionParts.length
           ? `${index + 1}) ${descriptionParts.join(' | ')}`

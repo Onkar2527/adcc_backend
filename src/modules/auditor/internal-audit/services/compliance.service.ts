@@ -496,15 +496,18 @@ export class ComplianceService {
             cm.linked_table_id,
             qhm.name AS header_name,
             qm.question,
+            qm.mr_question,
             qm.option_id,
             qm.annexure_id,
+            am.name AS annexure_name,
+            COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+            am.matrix_columns AS annexure_matrix_columns,
             qm.compliance_ev_upload,
             ad.audit_compulsary_ev_upload,
             ad.compliance_compulsary_ev_upload,
             CASE
                 WHEN COALESCE(ad.audit_compulsary_ev_upload, 0) = 1 THEN 1
                 WHEN COALESCE(ad.compliance_compulsary_ev_upload, 0) IN (1, 2) THEN 1
-                WHEN COALESCE(qm.compliance_ev_upload, 0) = 1 THEN 1
                 ELSE 0
             END AS compliance_evidence_upload,
             ac.columns_json AS annexure_columns,
@@ -533,6 +536,9 @@ export class ComplianceService {
             ON qhm.id = ad.header_id
         LEFT JOIN question_master qm
             ON qm.id = ad.question_id
+        LEFT JOIN annexure_master am
+            ON am.id = qm.annexure_id
+            AND am.deleted_at IS NULL
         LEFT JOIN (
             SELECT
                 ac.annexure_id,
@@ -643,68 +649,69 @@ export class ComplianceService {
         await this.svc.db.query(
           `
           SELECT
-              id,
-              answer_id,
-              answer_given,
-              business_risk,
-              control_risk,
-              audit_status_id,
-              audit_reviewer_comment,
-              audit_commpliance AS compliance_response,
-              compliance_status_id,
-              compliance_reviewer_comment,
-              compliance_maker_comment,
-              compliance_maker_emp_id,
-              (SELECT name FROM employee_master WHERE id = compliance_maker_emp_id) AS compliance_maker_name,
-              compliance_maker_date,
-              batch_key,
-              audit_compulsary_ev_upload,
-              compliance_compulsary_ev_upload,
+              aa.id,
+              aa.answer_id,
+              aa.answer_given,
+              aa.business_risk,
+              aa.control_risk,
+              aa.audit_status_id,
+              aa.audit_reviewer_comment,
+              aa.audit_commpliance AS compliance_response,
+              aa.compliance_status_id,
+              aa.compliance_reviewer_comment,
+              aa.compliance_maker_comment,
+              aa.compliance_maker_emp_id,
+              (SELECT name FROM employee_master WHERE id = aa.compliance_maker_emp_id) AS compliance_maker_name,
+              aa.compliance_maker_date,
+              aa.batch_key,
+              COALESCE(aa.audit_compulsary_ev_upload, ad.audit_compulsary_ev_upload, 0) AS audit_compulsary_ev_upload,
+              COALESCE(aa.compliance_compulsary_ev_upload, ad.compliance_compulsary_ev_upload, 0) AS compliance_compulsary_ev_upload,
               CASE
-                  WHEN COALESCE(audit_compulsary_ev_upload, 0) = 1 THEN 1
-                  WHEN COALESCE(compliance_compulsary_ev_upload, 0) IN (1, 2) THEN 1
+                  WHEN COALESCE(aa.audit_compulsary_ev_upload, ad.audit_compulsary_ev_upload, 0) = 1 THEN 1
+                  WHEN COALESCE(aa.compliance_compulsary_ev_upload, ad.compliance_compulsary_ev_upload, 0) IN (1, 2) THEN 1
                   ELSE 0
               END AS compliance_evidence_upload
-          FROM answers_data_annexure
-          WHERE assesment_id = $1
-              AND answer_id = ANY($2::int[])
-              AND deleted_at IS NULL
+          FROM answers_data_annexure aa
+          LEFT JOIN answers_data ad ON ad.id = aa.answer_id
+          WHERE aa.assesment_id = $1
+              AND aa.answer_id = ANY($2::int[])
+              AND aa.deleted_at IS NULL
               AND (
                   (
                       $6::int != 10
                   )
                   OR (
                       $6::int = 10
-                      AND compliance_status_id IN (15, 16)
-                      AND compliance_maker_emp_id = $5
+                      AND aa.compliance_status_id IN (15, 16)
+                      AND aa.compliance_maker_emp_id = $5
                   )
               )
               AND (
                   (
                       $4::boolean = true
                       AND (
-                          COALESCE(compliance_status_id, 0) IN (
+                          COALESCE(aa.compliance_status_id, 0) IN (
                               3,
                               ${LIVE_COMPLIANCE_STATUS.MANAGER_REWORK_PENDING},
                               ${LIVE_COMPLIANCE_STATUS.MAKER_PENDING},
                               ${LIVE_COMPLIANCE_STATUS.CHECKER_PENDING}
                           )
                           OR (
-                              COALESCE(compliance_status_id, 0) IN (0, 4)
-                              AND NULLIF(BTRIM(COALESCE(audit_commpliance, '')), '') IS NULL
+                              COALESCE(aa.compliance_status_id, 0) IN (0, 4)
+                              AND NULLIF(BTRIM(COALESCE(aa.audit_commpliance, '')), '') IS NULL
                           )
                       )
                   )
                   OR (
                       $4::boolean = false
-                      AND audit_status_id = 2
+                      AND aa.audit_status_id = 2
                       AND (
                           $3::int = 4
-                          OR compliance_status_id IN (3, 7, 8)
+                          OR aa.compliance_status_id IN (3, 7, 8)
                       )
                   )
               )
-          ORDER BY answer_id, id;
+          ORDER BY aa.answer_id, aa.id;
           `,
           [
             assessmentId,

@@ -360,8 +360,12 @@ export class ReviewerService {
             cm.linked_table_id,
             qhm.name AS header_name,
             qm.question,
+            qm.mr_question,
             qm.option_id,
             qm.annexure_id,
+            am.name AS annexure_name,
+            COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+            am.matrix_columns AS annexure_matrix_columns,
             qm.compliance_ev_upload AS compliance_evidence_upload,
             ac.columns_json AS annexure_columns,
             COALESCE(au_dd.name, au_da.name) AS account_branch_name,
@@ -389,6 +393,9 @@ export class ReviewerService {
             ON qhm.id = ad.header_id
         LEFT JOIN question_master qm
             ON qm.id = ad.question_id
+        LEFT JOIN annexure_master am
+            ON am.id = qm.annexure_id
+            AND am.deleted_at IS NULL
         LEFT JOIN (
             SELECT
                 ac.annexure_id,
@@ -1684,8 +1691,12 @@ export class ReviewerService {
             cm.linked_table_id,
             qhm.name AS header_name,
             qm.question,
+            qm.mr_question,
             qm.option_id,
             qm.annexure_id,
+            am.name AS annexure_name,
+            COALESCE(am.layout_type, 'grid') AS annexure_layout_type,
+            am.matrix_columns AS annexure_matrix_columns,
             qm.compliance_ev_upload AS compliance_evidence_upload,
             ac.columns_json AS annexure_columns,
             au.name AS account_branch_name,
@@ -1713,6 +1724,9 @@ export class ReviewerService {
             ON qhm.id = ad.header_id
         LEFT JOIN question_master qm
             ON qm.id = ad.question_id
+        LEFT JOIN annexure_master am
+            ON am.id = qm.annexure_id
+            AND am.deleted_at IS NULL
         LEFT JOIN (
             SELECT
                 ac.annexure_id,
