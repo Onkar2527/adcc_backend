@@ -9,6 +9,7 @@ import { DatabaseService } from '../../../core/database/database.service';
 import {
   CreateAuditSchemeDto,
   UpdateSchemeDto,
+  UpdateSchemeQuestionMappingDto,
 } from './dto/audit-schemes.dto';
 
 interface SchemeRow {
@@ -17,6 +18,7 @@ interface SchemeRow {
   category_id: number;
   scheme_code: string;
   name: string;
+  question_set_ids?: string;
   is_active: number;
   admin_id: number;
   created_at: string;
@@ -283,5 +285,36 @@ export class AuditSchemeMasterService {
     );
 
     return rows[0] ?? null;
+  }
+
+  async getQuestionMapping(id: number) {
+    const scheme = await this.findOne(id);
+    const questionSets = await this.queryRows(
+      `
+      SELECT id::int AS value, name AS label
+      FROM question_set_master
+      WHERE set_type_id = 1
+        AND deleted_at IS NULL
+        AND is_active = 1
+      ORDER BY name
+      `
+    );
+    return {
+      scheme,
+      questionSets,
+    };
+  }
+
+  async updateQuestionMapping(id: number, data: UpdateSchemeQuestionMappingDto) {
+    await this.findOne(id);
+    return this.queryOne(
+      `
+      UPDATE scheme_master
+      SET question_set_ids = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING *
+      `,
+      [data.question_set_ids ?? '', id],
+    );
   }
 }

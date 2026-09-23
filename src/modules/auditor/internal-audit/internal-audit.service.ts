@@ -3573,6 +3573,21 @@ export class InternalAuditService {
       );
     }
 
+    let activeQuestionSetIds = category.question_set_ids || '';
+    if (dumpId > 0 && [1, 2].includes(Number(category.linked_table_id))) {
+      const dumpTable = Number(category.linked_table_id) === 1 ? 'dump_deposits' : 'dump_advances';
+      const dumpAccount = await this.db.findOne(
+        `SELECT d.scheme_id, sm.question_set_ids AS scheme_question_set_ids
+         FROM ${dumpTable} d
+         LEFT JOIN scheme_master sm ON sm.id = d.scheme_id AND sm.deleted_at IS NULL
+         WHERE d.id = $1 LIMIT 1`,
+        [dumpId]
+      );
+      if (dumpAccount?.scheme_question_set_ids && String(dumpAccount.scheme_question_set_ids).trim()) {
+        activeQuestionSetIds = String(dumpAccount.scheme_question_set_ids).trim();
+      }
+    }
+
     const questionResult =
       await this.db.query(
         `
@@ -3678,9 +3693,9 @@ export class InternalAuditService {
               qm.id;
         `,
         [
-          category.question_set_ids || '',
+          activeQuestionSetIds,
           this.getSetIdsFromQuestionScope(
-            category.question_set_ids || '',
+            activeQuestionSetIds,
           ),
           overview.header_ids || '',
           overview.question_ids || '',

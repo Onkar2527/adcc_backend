@@ -26,6 +26,10 @@ export class CreateAuditSchemeDto {
 
   @IsOptional()
   @IsInt()
+  question_set_ids?: string;
+
+  @IsOptional()
+  @IsInt()
   is_active?: number;
 
   @IsOptional()
@@ -59,4 +63,9 @@ export class UpdateSchemeDto {
   @IsOptional()
   @IsInt()
   admin_id?: number;
+}
+export class UpdateSchemeQuestionMappingDto {
+  @IsOptional()
+  @IsString()
+  question_set_ids?: string;
 }

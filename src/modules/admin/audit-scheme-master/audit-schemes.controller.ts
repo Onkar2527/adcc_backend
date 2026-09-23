@@ -14,7 +14,8 @@ import { Request } from 'express';
 import { AuditSchemeMasterService } from './audit-schemes.service';
 import {
   CreateAuditSchemeDto,
-  UpdateSchemeDto
+  UpdateSchemeDto,
+  UpdateSchemeQuestionMappingDto,
 } from './dto/audit-schemes.dto';
 
 interface AuthRequest extends Request {
@@ -28,7 +29,20 @@ interface AuthRequest extends Request {
 export class AuditSchemeMasterController {
   constructor(private readonly service: AuditSchemeMasterService) { }
 
-  @Get()
+    @Get('question-mapping/:id')
+  getQuestionMapping(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getQuestionMapping(id);
+  }
+
+  @Patch('question-mapping/:id')
+  updateQuestionMapping(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSchemeQuestionMappingDto,
+  ) {
+    return this.service.updateQuestionMapping(id, dto);
+  }
+
+@Get()
   findAll() {
     return this.service.findAll();
   }
