@@ -914,6 +914,28 @@ export class ReviewerService {
               return parentResult;
             }
 
+            // Acquire lock on parent answers_data first to maintain consistent lock order and eliminate deadlocks
+            const annexureMeta = await client.query(
+              `
+              SELECT answer_id
+              FROM answers_data_annexure
+              WHERE id = $1 AND assesment_id = $2 AND deleted_at IS NULL;
+              `,
+              [observationId, assessmentId],
+            );
+
+            if (annexureMeta.rows.length) {
+              await client.query(
+                `
+                SELECT id
+                FROM answers_data
+                WHERE id = $1 AND assesment_id = $2
+                FOR UPDATE;
+                `,
+                [Number(annexureMeta.rows[0].answer_id), assessmentId],
+              );
+            }
+
             const annexureResult =
               await client.query(
                 `
@@ -1074,6 +1096,28 @@ export class ReviewerService {
             }
 
             return parentResult;
+          }
+
+          // Acquire lock on parent answers_data first to maintain consistent lock order and eliminate deadlocks
+          const annexureMeta = await client.query(
+            `
+            SELECT answer_id
+            FROM answers_data_annexure
+            WHERE id = $1 AND assesment_id = $2 AND deleted_at IS NULL;
+            `,
+            [observationId, assessmentId],
+          );
+
+          if (annexureMeta.rows.length) {
+            await client.query(
+              `
+              SELECT id
+              FROM answers_data
+              WHERE id = $1 AND assesment_id = $2
+              FOR UPDATE;
+              `,
+              [Number(annexureMeta.rows[0].answer_id), assessmentId],
+            );
           }
 
           const annexureResult =
@@ -1883,21 +1927,31 @@ export class ReviewerService {
 
     const answers =
       answerResult.rows.map(
-        (row: any) => ({
-          ...row,
-          evidences:
-            evidenceMap.get(
-              `${Number(row.id)}:0`,
-            ) || [],
-          evidence:
-            evidenceMap.get(
-              `${Number(row.id)}:0`,
-            )?.[0] || null,
-          annexure_rows:
-            annexureMap.get(
-              Number(row.id),
-            ) || [],
-        }),
+        (row: any) => {
+          const rows = annexureMap.get(Number(row.id)) || [];
+          let computedStatus = row.audit_status_id;
+          if (rows.length > 0) {
+            const statuses = rows.map((r: any) => Number(r.audit_status_id || 0));
+            computedStatus = statuses.some((s: number) => s === 3)
+              ? 3
+              : statuses.every((s: number) => s === 2)
+                ? 2
+                : row.audit_status_id;
+          }
+          return {
+            ...row,
+            audit_status_id: computedStatus,
+            evidences:
+              evidenceMap.get(
+                `${Number(row.id)}:0`,
+              ) || [],
+            evidence:
+              evidenceMap.get(
+                `${Number(row.id)}:0`,
+              )?.[0] || null,
+            annexure_rows: rows,
+          };
+        },
       );
 
     await this.svc.attachTimelines(answers, assessmentId);
@@ -2080,6 +2134,35 @@ export class ReviewerService {
     ) {
       throw new NotFoundException(
         'Observation not found for this assessment.',
+      );
+    }
+
+    if (targetType === 'annexure') {
+      const annexRow = await this.svc.db.findOne(
+        `SELECT answer_id FROM answers_data_annexure WHERE id = $1 AND assesment_id = $2 AND deleted_at IS NULL`,
+        [observationId, assessmentId],
+      );
+      if (annexRow?.answer_id) {
+        const rowsRes = await this.svc.db.query(
+          `SELECT audit_status_id FROM answers_data_annexure WHERE answer_id = $1 AND assesment_id = $2 AND deleted_at IS NULL`,
+          [Number(annexRow.answer_id), assessmentId],
+        );
+        const statuses = rowsRes.rows.map((r: any) => Number(r.audit_status_id || 0));
+        const parentStatus = statuses.some((s: number) => s === 3)
+          ? 3
+          : statuses.every((s: number) => s === 2)
+            ? 2
+            : 0;
+
+        await this.svc.db.query(
+          `UPDATE answers_data SET audit_status_id = $1, audit_reviewer_emp_id = $2 WHERE id = $3 AND assesment_id = $4 AND deleted_at IS NULL`,
+          [parentStatus, employeeId, Number(annexRow.answer_id), assessmentId],
+        );
+      }
+    } else if (targetType === 'answer') {
+      await this.svc.db.query(
+        `UPDATE answers_data_annexure SET audit_status_id = $1, audit_reviewer_emp_id = $2 WHERE answer_id = $3 AND assesment_id = $4 AND deleted_at IS NULL`,
+        [action, employeeId, observationId, assessmentId],
       );
     }
 

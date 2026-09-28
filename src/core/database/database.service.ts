@@ -99,7 +99,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
                 NEW.business_risk, NEW.control_risk, NEW.batch_key, NOW(), NOW()
             );
             RETURN NEW;
-        END IF;
+        END;
         $$ LANGUAGE plpgsql;
       `);
 
@@ -146,7 +146,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
                 NEW.business_risk, NEW.control_risk, NEW.batch_key, NOW(), NOW()
             );
             RETURN NEW;
-        END IF;
+        END;
         $$ LANGUAGE plpgsql;
       `);
 

@@ -2782,7 +2782,11 @@ export class InternalAuditService {
     WHERE ad.assesment_id = $1
         AND ad.deleted_at IS NULL
         AND qm.option_id = 4
-        AND COALESCE(ad.answer_given, '') = qm.annexure_id::text
+        AND (
+            COALESCE(ad.answer_given, '') = qm.annexure_id::text
+            OR COALESCE(ad.answer_given, '') = '72'
+            OR UPPER(COALESCE(ad.answer_given, '')) IN ('OTHER_DISCREPANCIES', 'OTHER DISCREPANCIES')
+        )
         AND NOT EXISTS (
             SELECT 1
             FROM answers_data_annexure ada
@@ -4305,6 +4309,8 @@ export class InternalAuditService {
             answer?.is_compliance === true
             ||
             answer?.is_compliance === 1
+            ||
+            validation.is_compliance === true
           )
             ? 1
             : 0,
@@ -4698,22 +4704,41 @@ export class InternalAuditService {
     const columns =
       question.annexure?.columns || [];
 
-    const validationError =
-      this.validateAnnexureValues(
-        columns,
-        values,
-      );
+    const isOtherDiscrepancies =
+      Number(body?.annexure_id) === 72 ||
+      String(body?.answer_value || '') === '72' ||
+      String(body?.answer_given || '') === '72' ||
+      String(question.answer?.answer_given || '') === '72' ||
+      Boolean(body?.is_other_discrepancies) ||
+      ['OTHER_DISCREPANCIES', 'OTHER DISCREPANCIES'].includes(String(body?.answer_value || '').toUpperCase()) ||
+      ['OTHER_DISCREPANCIES', 'OTHER DISCREPANCIES'].includes(String(body?.answer_given || '').toUpperCase()) ||
+      ['OTHER_DISCREPANCIES', 'OTHER DISCREPANCIES'].includes(String(question.answer?.answer_given || '').toUpperCase()) ||
+      (columns.length > 1 && !!this.cleanString(values[0]) && values.slice(1).every((v: any) => !this.cleanString(v)));
 
-    if (
-      validationError
-    ) {
+    if (isOtherDiscrepancies) {
+      if (!this.cleanString(values[0])) {
+        return {
+          success: false,
+          message: 'Please enter discrepancy details.',
+        };
+      }
+    } else {
+      const validationError =
+        this.validateAnnexureValues(
+          columns,
+          values,
+        );
 
-      return {
-        success:
-          false,
-        message:
-          validationError,
-      };
+      if (
+        validationError
+      ) {
+        return {
+          success:
+            false,
+          message:
+            validationError,
+        };
+      }
     }
 
     const risk =
@@ -4740,6 +4765,7 @@ export class InternalAuditService {
         detail,
         question,
         employeeId,
+        isOtherDiscrepancies,
       );
 
     const payload =
@@ -5806,6 +5832,7 @@ export class InternalAuditService {
     detail: any,
     question: any,
     employeeId: number,
+    isOther = false,
   ) {
 
     const assessmentId =
@@ -5820,6 +5847,10 @@ export class InternalAuditService {
 
     const dumpId =
       Number(detail.dump_id || 0);
+
+    const parentAnswerGiven = isOther
+      ? '72'
+      : String(question.annexure_id);
 
     const existing =
       await this.db.findOne(
@@ -5860,7 +5891,7 @@ export class InternalAuditService {
         WHERE id = $4;
         `,
         [
-          String(question.annexure_id),
+          parentAnswerGiven,
           employeeId,
           detail.overview.batch_key,
           existing.id,
@@ -5914,7 +5945,7 @@ export class InternalAuditService {
           question.header_id,
           question.id,
           dumpId,
-          String(question.annexure_id),
+          parentAnswerGiven,
           employeeId,
           detail.overview.batch_key,
         ],
@@ -7468,8 +7499,13 @@ ORDER BY id DESC;
             &&
             question.annexure_id
             &&
-            String(answer.answer_given || '')
-            === String(question.annexure_id);
+            (
+              String(answer.answer_given || '') === String(question.annexure_id)
+              ||
+              String(answer.answer_given || '') === '72'
+              ||
+              ['OTHER_DISCREPANCIES', 'OTHER DISCREPANCIES'].includes(String(answer.answer_given || '').toUpperCase())
+            );
 
           if (
             Number(answer.is_compliance || 0) === 1
@@ -7712,7 +7748,11 @@ ORDER BY id DESC;
                 WHEN ad.id IS NULL THEN 'answer'
                 WHEN qm.option_id = 4
                     AND qm.annexure_id IS NOT NULL
-                    AND ad.answer_given::text = qm.annexure_id::text
+                    AND (
+                        ad.answer_given::text = qm.annexure_id::text
+                        OR ad.answer_given::text = '72'
+                        OR UPPER(ad.answer_given::text) IN ('OTHER_DISCREPANCIES', 'OTHER DISCREPANCIES')
+                    )
                     AND NOT EXISTS (
                         SELECT 1
                         FROM answers_data_annexure ada
@@ -8088,18 +8128,28 @@ ORDER BY id DESC;
       return result;
     }
 
+    const isOtherDiscrepancies =
+      answer === '72'
+      || ['OTHER_DISCREPANCIES', 'OTHER DISCREPANCIES'].includes(String(answer || '').toUpperCase());
+
     if (
       optionId === 4
       &&
       answer
       &&
-      answer ===
-      this.cleanString(
-        question.annexure_id,
+      (
+        answer ===
+        this.cleanString(
+          question.annexure_id,
+        )
+        ||
+        isOtherDiscrepancies
       )
     ) {
 
       result.is_compliance = true;
+      result.business_risk = 1;
+      result.control_risk = 1;
       return result;
     }
 
@@ -8128,6 +8178,13 @@ ORDER BY id DESC;
 
         return result;
       }
+    }
+
+    if (isOtherDiscrepancies) {
+      result.is_compliance = true;
+      result.business_risk = 1;
+      result.control_risk = 1;
+      return result;
     }
 
     result.error =
@@ -9738,16 +9795,20 @@ SELECT (
         compliance++;
       }
 
-      applyStatus(
-        Number(answer.audit_status_id || 0),
-      );
+      const hasAnnexures = (answer.annexure_rows || []).length > 0;
 
-      for (
-        const annexure
-        of answer.annexure_rows || []
-      ) {
+      if (hasAnnexures) {
+        for (
+          const annexure
+          of answer.annexure_rows
+        ) {
+          applyStatus(
+            Number(annexure.audit_status_id || 0),
+          );
+        }
+      } else {
         applyStatus(
-          Number(annexure.audit_status_id || 0),
+          Number(answer.audit_status_id || 0),
         );
       }
     }
@@ -9868,13 +9929,17 @@ SELECT (
       };
 
     for (const answer of answers) {
-      applyStatus(
-        Number(answer.compliance_status_id || 0),
-      );
+      const hasAnnexures = (answer.annexure_rows || []).length > 0;
 
-      for (const annexure of answer.annexure_rows || []) {
+      if (hasAnnexures) {
+        for (const annexure of answer.annexure_rows) {
+          applyStatus(
+            Number(annexure.compliance_status_id || 0),
+          );
+        }
+      } else {
         applyStatus(
-          Number(annexure.compliance_status_id || 0),
+          Number(answer.compliance_status_id || 0),
         );
       }
     }
