@@ -2169,8 +2169,10 @@ export class InternalAuditService {
       SELECT
           mm.id AS menu_id,
           mm.name AS menu_name,
+          mm.mr_name AS mr_menu_name,
           cm.id AS category_id,
           cm.name AS category_name,
+          cm.mr_name AS mr_category_name,
           cm.linked_table_id,
           COALESCE(q_agg.question_count, 0) AS question_count,
           COALESCE(ans_agg.answered_count, 0) AS answered_count,
@@ -2302,14 +2304,10 @@ export class InternalAuditService {
         menuMap.set(
           row.menu_id,
           {
-            id:
-              row.menu_id,
-
-            name:
-              row.menu_name,
-
-            categories:
-              [],
+            id: row.menu_id,
+            name: row.menu_name,
+            mr_name: row.mr_menu_name,
+            categories: [],
           },
         );
       }
@@ -2342,15 +2340,10 @@ export class InternalAuditService {
       ) {
 
         category = {
-
-          id:
-            row.category_id,
-
-          name:
-            row.category_name,
-
-          linked_table_id:
-            row.linked_table_id,
+          id: row.category_id,
+          name: row.category_name,
+          mr_name: row.mr_category_name,
+          linked_table_id: row.linked_table_id,
 
           question_count:
             reAuditScope && reAuditScope.categories.size > 0
@@ -3489,9 +3482,11 @@ export class InternalAuditService {
             cm.id,
             cm.menu_id,
             cm.name,
+            cm.mr_name,
             cm.linked_table_id,
             cm.question_set_ids,
             mm.name AS menu_name,
+            mm.mr_name AS mr_menu_name,
             mm.section_type_id
         FROM category_master cm
         LEFT JOIN menu_master mm
@@ -3598,8 +3593,10 @@ export class InternalAuditService {
           SELECT
               qsm.id AS set_id,
               qsm.name AS set_name,
+              qsm.mr_name AS set_mr_name,
               qhm.id AS header_id,
               qhm.name AS header_name,
+              qhm.mr_name AS header_mr_name,
               qm.id AS question_id,
               CASE 
                   WHEN (SELECT code FROM language_master WHERE id = $8) = 'mr' 
@@ -5672,12 +5669,10 @@ export class InternalAuditService {
         setMap.set(
           row.set_id,
           {
-            id:
-              row.set_id,
-            name:
-              row.set_name,
-            headers:
-              [],
+            id: row.set_id,
+            name: row.set_name,
+            mr_name: row.set_mr_name || row.mr_name,
+            headers: [],
           },
         );
       }
@@ -5698,12 +5693,10 @@ export class InternalAuditService {
       ) {
 
         header = {
-          id:
-            row.header_id,
-          name:
-            row.header_name,
-          questions:
-            [],
+          id: row.header_id,
+          name: row.header_name,
+          mr_name: row.header_mr_name || row.mr_name,
+          questions: [],
         };
 
         set.headers.push(
