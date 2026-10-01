@@ -411,6 +411,9 @@ export class AuditorController {
 
     @Query('secondary_value')
     secondaryValue?: string,
+
+    @Query('scheme_code')
+    schemeCode?: string,
   ) {
     return this.samplingService.getAccountSampling(
       assessmentId,
@@ -419,6 +422,7 @@ export class AuditorController {
       Number(filterType || 0),
       primaryValue || '',
       secondaryValue || '',
+      schemeCode || '',
     );
   }
 

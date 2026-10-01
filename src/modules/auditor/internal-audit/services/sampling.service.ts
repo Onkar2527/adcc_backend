@@ -12,7 +12,7 @@ export class SamplingService {
   constructor(
     @Inject(forwardRef(() => InternalAuditService))
     private readonly svc: InternalAuditService,
-  ) {}
+  ) { }
 
   async getAccountSampling(
     assessmentId: number,
@@ -21,101 +21,133 @@ export class SamplingService {
     filterType = 0,
     primaryValue = '',
     secondaryValue = '',
+    schemeCode = '',
   ) {
-    const detail = await this.svc.getCategory(
-      assessmentId,
-      categoryId,
-      employeeId,
-    );
+    // 1. Fetch overview and category in parallel without loading full questions/answers tree
+    const [overview, category] = await Promise.all([
+      this.svc.getOverview(assessmentId, employeeId),
+      this.svc.db.findOne(
+        `
+        SELECT
+            cm.id,
+            cm.menu_id,
+            cm.name,
+            cm.mr_name,
+            cm.linked_table_id
+        FROM category_master cm
+        WHERE cm.id = $1
+            AND cm.is_active = 1
+            AND cm.deleted_at IS NULL
+        LIMIT 1;
+        `,
+        [categoryId],
+      ),
+    ]);
 
+    if (!category) {
+      throw new NotFoundException('Category not found for this assessment');
+    }
+
+    const detail = { overview, category };
     await this.assertSamplingAllowed(detail);
 
-    const candidateData = await this.getSamplingCandidates(
-      detail.category,
-      detail.overview,
+    const linkedTableId = Number(category.linked_table_id);
+    const table = linkedTableId === 1 ? 'dump_deposits' : 'dump_advances';
+    const schemeIds =
+      linkedTableId === 1
+        ? overview.deposits_scheme_ids || ''
+        : overview.advances_scheme_ids || '';
+    const periodCondition =
+      linkedTableId === 1
+        ? 'd.account_opening_date BETWEEN $1 AND $2'
+        : '(d.account_opening_date BETWEEN $1 AND $2 OR d.renewal_date BETWEEN $1 AND $2)';
+
+    // 2. Fetch candidates, schemes, NPA, and KYC in PARALLEL
+    const candidatesPromise = this.getSamplingCandidates(
+      category,
+      overview,
       filterType,
       primaryValue,
       secondaryValue,
+      schemeCode,
     );
 
-    let npaOptions: string[] = [];
-    let kycOptions: string[] = [];
-
-    const linkedTableId = Number(detail.category.linked_table_id);
-    if ([1, 2].includes(linkedTableId)) {
-      const table = linkedTableId === 1 ? 'dump_deposits' : 'dump_advances';
-      const schemeIds =
-        linkedTableId === 1
-          ? detail.overview.deposits_scheme_ids || ''
-          : detail.overview.advances_scheme_ids || '';
-      const periodCondition =
-        linkedTableId === 1
-          ? 'd.account_opening_date BETWEEN $2 AND $3'
-          : '(d.account_opening_date BETWEEN $2 AND $3 OR d.renewal_date BETWEEN $2 AND $3)';
-
-      if (String(schemeIds).trim()) {
-        if (linkedTableId === 2) {
-          const npaRes = await this.svc.db.query(
-            `
-            SELECT DISTINCT d.npa_classification
-            FROM dump_advances d
-            INNER JOIN scheme_master sm 
-                ON sm.id = d.scheme_id 
-                AND sm.scheme_type_id = 2 
-                AND sm.category_id = $1 
-                AND sm.is_active = 1 
-                AND sm.deleted_at IS NULL
-            WHERE d.branch_id = $4
-              AND d.scheme_id::text = ANY(string_to_array($5, ','))
-              AND ${periodCondition}
-              AND (COALESCE(d.sampling_filter, 0) = 0 OR d.sampling_filter = 1)
-              AND d.deleted_at IS NULL
-              AND d.npa_classification IS NOT NULL AND TRIM(d.npa_classification) <> ''
-            `,
-            [
-              categoryId,
-              detail.overview.assesment_period_from,
-              detail.overview.assesment_period_to,
-              detail.overview.audit_unit_id,
-              String(schemeIds),
-            ],
-          );
-
-          const mapped = npaRes.rows.map((r) => standardizeNpa(r.npa_classification)).filter(Boolean);
-          npaOptions = Array.from(new Set(mapped)).sort();
-        }
-
-        const kycRes = await this.svc.db.query(
+    const schemesPromise = String(schemeIds).trim()
+      ? this.svc.db.query(
           `
-          SELECT DISTINCT d.kyc
-          FROM ${table} d
-          INNER JOIN scheme_master sm 
-              ON sm.id = d.scheme_id 
-              AND sm.scheme_type_id = $6 
-              AND sm.category_id = $1 
-              AND sm.is_active = 1 
-              AND sm.deleted_at IS NULL
-          WHERE d.branch_id = $4
-            AND d.scheme_id::text = ANY(string_to_array($5, ','))
+          SELECT DISTINCT sm.id, sm.name, sm.scheme_code
+          FROM scheme_master sm
+          WHERE sm.scheme_type_id = $2
+            AND sm.category_id = $1
+            AND sm.is_active = 1
+            AND sm.deleted_at IS NULL
+            AND sm.id::text = ANY(string_to_array($3, ','))
+          ORDER BY sm.name ASC;
+          `,
+          [categoryId, linkedTableId, String(schemeIds)],
+        )
+      : Promise.resolve({ rows: [] });
+
+    const npaPromise = (linkedTableId === 2 && String(schemeIds).trim())
+      ? this.svc.db.query(
+          `
+          SELECT DISTINCT d.npa_classification
+          FROM dump_advances d
+          WHERE d.branch_id = $3
+            AND d.scheme_id::text = ANY(string_to_array($4, ','))
             AND ${periodCondition}
             AND (COALESCE(d.sampling_filter, 0) = 0 OR d.sampling_filter = 1)
             AND d.deleted_at IS NULL
-            AND d.kyc IS NOT NULL AND TRIM(d.kyc) <> ''
+            AND d.npa_classification IS NOT NULL AND TRIM(d.npa_classification) <> '';
           `,
           [
-            categoryId,
-            detail.overview.assesment_period_from,
-            detail.overview.assesment_period_to,
-            detail.overview.audit_unit_id,
+            overview.assesment_period_from,
+            overview.assesment_period_to,
+            overview.audit_unit_id,
             String(schemeIds),
-            linkedTableId,
           ],
-        );
+        )
+      : Promise.resolve({ rows: [] });
 
-        const mappedKyc = kycRes.rows.map((r) => standardizeKyc(r.kyc)).filter(Boolean);
-        kycOptions = Array.from(new Set(mappedKyc)).sort();
-      }
-    }
+    const kycPromise = String(schemeIds).trim()
+      ? this.svc.db.query(
+          `
+          SELECT DISTINCT d.kyc
+          FROM ${table} d
+          WHERE d.branch_id = $3
+            AND d.scheme_id::text = ANY(string_to_array($4, ','))
+            AND ${periodCondition}
+            AND (COALESCE(d.sampling_filter, 0) = 0 OR d.sampling_filter = 1)
+            AND d.deleted_at IS NULL
+            AND d.kyc IS NOT NULL AND TRIM(d.kyc) <> '';
+          `,
+          [
+            overview.assesment_period_from,
+            overview.assesment_period_to,
+            overview.audit_unit_id,
+            String(schemeIds),
+          ],
+        )
+      : Promise.resolve({ rows: [] });
+
+    const [candidateData, schemeRes, npaRes, kycRes] = await Promise.all([
+      candidatesPromise,
+      schemesPromise,
+      npaPromise,
+      kycPromise,
+    ]);
+
+    const schemeOptions = schemeRes.rows || [];
+    const npaOptions = Array.from(
+      new Set(
+        (npaRes.rows || []).map((r: any) => standardizeNpa(r.npa_classification)).filter(Boolean)
+      )
+    ).sort();
+    const kycOptions = Array.from(
+      new Set(
+        (kycRes.rows || []).map((r: any) => standardizeKyc(r.kyc)).filter(Boolean)
+      )
+    ).sort();
 
     const filterTypes = [
       {
@@ -140,11 +172,11 @@ export class SamplingService {
       },
       ...(linkedTableId === 2
         ? [
-            {
-              id: 6,
-              name: 'NPA Classification',
-            },
-          ]
+          {
+            id: 6,
+            name: 'NPA Classification',
+          },
+        ]
         : []),
       {
         id: 7,
@@ -158,6 +190,7 @@ export class SamplingService {
       filter_types: filterTypes,
       npa_options: npaOptions,
       kyc_options: kycOptions,
+      scheme_options: schemeOptions,
       candidates: candidateData.accounts.map((row: any) => ({
         id: row.id,
         account_no: row.account_no,
@@ -381,6 +414,7 @@ export class SamplingService {
     filterType = 0,
     primaryValue = '',
     secondaryValue = '',
+    schemeCode = '',
   ) {
     const linkedTableId = Number(category.linked_table_id);
 
@@ -388,7 +422,7 @@ export class SamplingService {
       throw new BadRequestException('Sampling is available only for account-based categories.');
     }
 
-    if (filterType && ![1, 2, 3, 4, 5, 6, 7].includes(filterType)) {
+    if (filterType && ![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(filterType)) {
       throw new BadRequestException('Select a valid sampling filter.');
     }
 
@@ -396,7 +430,7 @@ export class SamplingService {
       throw new BadRequestException('NPA Classification filter is available only for Advances.');
     }
 
-    if ([6, 7].includes(filterType) && !String(primaryValue).trim()) {
+    if ([6, 7, 8, 9].includes(filterType) && !String(primaryValue).trim()) {
       throw new BadRequestException('Please select a filter value.');
     }
 
@@ -469,6 +503,26 @@ export class SamplingService {
       const kycValues = getMatchingKycValues(selectedStatus);
       filterClause = ' AND UPPER(TRIM(d.kyc)) = ANY($8::text[])';
       params.push(kycValues.map((v) => v.toUpperCase()));
+    } else if (filterType === 8) {
+      const selectedScheme = String(primaryValue).trim();
+      if (/^\d+$/.test(selectedScheme)) {
+        filterClause = ' AND d.scheme_id = $8';
+        params.push(Number(selectedScheme));
+      } else {
+        filterClause = ' AND (UPPER(TRIM(sm.name)) = UPPER(TRIM($8)) OR sm.scheme_code = $8)';
+        params.push(selectedScheme);
+      }
+    } else if (filterType === 9) {
+      const selectedSchemeCode = String(primaryValue).trim();
+      filterClause = ' AND TRIM(sm.scheme_code) = TRIM($8)';
+      params.push(selectedSchemeCode);
+    }
+
+    if (schemeCode && String(schemeCode).trim()) {
+      const trimmedScheme = String(schemeCode).trim();
+      params.push(trimmedScheme);
+      const pIdx = params.length;
+      filterClause += ` AND (sm.scheme_code::text = $${pIdx}::text OR d.scheme_id::text = $${pIdx}::text OR UPPER(TRIM(sm.name)) = UPPER(TRIM($${pIdx}::text)))`;
     }
 
     const npaSelect = linkedTableId === 1 ? 'NULL::text AS npa_classification' : 'd.npa_classification';
