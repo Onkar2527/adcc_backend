@@ -152,8 +152,7 @@ export class QuestionDataService {
 
                             json_build_object(
 
-                                'column_name', ac.name,
-                                'column_type_id', ac.column_type_id,
+                                'column_name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id,
                                 'column_options', ac.column_options
 
                             )

@@ -545,8 +545,7 @@ export class ComplianceService {
                 jsonb_agg(
                     jsonb_build_object(
                         'id', ac.id,
-                        'name', ac.name,
-                        'column_type_id', ac.column_type_id,
+                        'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id,
                         'options', COALESCE(
                             CASE 
                                 WHEN ac.column_options IS NULL OR BTRIM(ac.column_options) = '' OR BTRIM(ac.column_options) = '[]' THEN '[]'::jsonb

@@ -2272,6 +2272,7 @@ export class InternalAuditService {
           )
       ORDER BY
           mm.id,
+          COALESCE(cm.order_position, cm.id),
           cm.id
     `;
 
@@ -3663,8 +3664,7 @@ export class InternalAuditService {
                   jsonb_agg(
                       jsonb_build_object(
                           'id', ac.id,
-                          'name', ac.name,
-                          'column_type_id', ac.column_type_id,
+                          'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id,
                           'options', COALESCE(CASE WHEN ac.column_options IS NULL OR BTRIM(ac.column_options) = '' OR BTRIM(ac.column_options) = '[]' THEN '[]'::jsonb ELSE ac.column_options::jsonb END, '[]'::jsonb)
                       )
                       ORDER BY ac.id
@@ -3690,6 +3690,7 @@ export class InternalAuditService {
               )
           ORDER BY
               qsm.id,
+              COALESCE(qhm.order_position, qhm.id),
               qhm.id,
               qm.id;
         `,
@@ -3789,8 +3790,7 @@ export class InternalAuditService {
                   jsonb_agg(
                       jsonb_build_object(
                           'id', ac.id,
-                          'name', ac.name,
-                          'column_type_id', ac.column_type_id,
+                          'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id,
                           'options', COALESCE(CASE WHEN ac.column_options IS NULL OR BTRIM(ac.column_options) = '' OR BTRIM(ac.column_options) = '[]' THEN '[]'::jsonb ELSE ac.column_options::jsonb END, '[]'::jsonb)
                       )
                       ORDER BY ac.id
@@ -3812,6 +3812,7 @@ export class InternalAuditService {
               AND qsm.id = ANY(string_to_array(NULLIF($1, ''), ',')::int[])
           ORDER BY
               qsm.id,
+              COALESCE(qhm.order_position, qhm.id),
               qhm.id,
               qm.id;
           `,
@@ -4103,8 +4104,7 @@ export class InternalAuditService {
             jsonb_agg(
                 jsonb_build_object(
                     'id', ac.id,
-                    'name', ac.name,
-                    'column_type_id', ac.column_type_id,
+                    'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id,
                     'options', COALESCE(CASE WHEN ac.column_options IS NULL OR BTRIM(ac.column_options) = '' OR BTRIM(ac.column_options) = '[]' THEN '[]'::jsonb ELSE ac.column_options::jsonb END, '[]'::jsonb)
                 )
                 ORDER BY ac.id
@@ -4125,9 +4125,10 @@ export class InternalAuditService {
         AND qsm.is_active = 1
         AND qsm.deleted_at IS NULL
     ORDER BY
-        qsm.id,
-        qhm.id,
-        qm.id;
+              qsm.id,
+              COALESCE(qhm.order_position, qhm.id),
+              qhm.id,
+              qm.id;
     `,
       [
         subsetSetId,

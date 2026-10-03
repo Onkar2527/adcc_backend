@@ -402,8 +402,7 @@ export class ReviewerService {
                 jsonb_agg(
                     jsonb_build_object(
                         'id', ac.id,
-                        'name', ac.name,
-                        'column_type_id', ac.column_type_id
+                        'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id
                     )
                     ORDER BY ac.id
                 ) AS columns_json
@@ -1777,8 +1776,7 @@ export class ReviewerService {
                 jsonb_agg(
                     jsonb_build_object(
                         'id', ac.id,
-                        'name', ac.name,
-                        'column_type_id', ac.column_type_id
+                        'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id
                     )
                     ORDER BY ac.id
                 ) AS columns_json

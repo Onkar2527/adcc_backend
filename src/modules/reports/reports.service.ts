@@ -4147,8 +4147,7 @@ export class ReportsService {
           jsonb_agg(
             jsonb_build_object(
               'id', ac.id,
-              'name', ac.name,
-              'column_type_id', ac.column_type_id
+              'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id
             )
             ORDER BY ac.id
           ) AS columns_json
@@ -4410,8 +4409,7 @@ export class ReportsService {
           jsonb_agg(
             jsonb_build_object(
               'id', ac.id,
-              'name', ac.name,
-              'column_type_id', ac.column_type_id
+              'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id
             )
             ORDER BY ac.id
           ) AS columns_json
@@ -4874,8 +4872,7 @@ export class ReportsService {
           jsonb_agg(
             jsonb_build_object(
               'id', ac.id,
-              'name', ac.name,
-              'column_type_id', ac.column_type_id
+              'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id
             )
             ORDER BY ac.id
           ) AS columns_json
@@ -5206,8 +5203,7 @@ export class ReportsService {
           jsonb_agg(
             jsonb_build_object(
               'id', ac.id,
-              'name', ac.name,
-              'column_type_id', ac.column_type_id
+              'name', ac.name, 'mr_name', ac.mr_name, 'column_type_id', ac.column_type_id
             )
             ORDER BY ac.id
           ) AS columns_json
@@ -12540,7 +12536,7 @@ export class ReportsService {
       LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
           LEFT JOIN (
               SELECT columns_source.annexure_id,
-                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
+                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'mr_name', columns_source.mr_name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
               FROM annexure_columns columns_source
               WHERE columns_source.deleted_at IS NULL
               GROUP BY columns_source.annexure_id
@@ -12599,7 +12595,7 @@ export class ReportsService {
       LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
           LEFT JOIN (
               SELECT columns_source.annexure_id,
-                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
+                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'mr_name', columns_source.mr_name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
               FROM annexure_columns columns_source
               WHERE columns_source.deleted_at IS NULL
               GROUP BY columns_source.annexure_id
@@ -12805,7 +12801,7 @@ export class ReportsService {
       LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
           LEFT JOIN (
               SELECT columns_source.annexure_id,
-                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
+                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'mr_name', columns_source.mr_name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
               FROM annexure_columns columns_source
               WHERE columns_source.deleted_at IS NULL
               GROUP BY columns_source.annexure_id
@@ -12863,7 +12859,7 @@ export class ReportsService {
       LEFT JOIN risk_category_master rc ON rc.id = qm.risk_category_id
           LEFT JOIN (
               SELECT columns_source.annexure_id,
-                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
+                  jsonb_agg(jsonb_build_object('id', columns_source.id, 'name', columns_source.name, 'mr_name', columns_source.mr_name, 'column_type_id', columns_source.column_type_id) ORDER BY columns_source.id) AS columns_json
               FROM annexure_columns columns_source
               WHERE columns_source.deleted_at IS NULL
               GROUP BY columns_source.annexure_id

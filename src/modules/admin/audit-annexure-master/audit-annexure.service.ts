@@ -403,8 +403,7 @@ export class AuditAnnexureMasterService {
       SELECT
         ac.id,
         ac.annexure_id,
-        ac.name,
-        ac.column_type_id,
+        ac.name, ac.mr_name, ac.column_type_id,
 
         CASE
           WHEN ac.column_type_id = 1 THEN 'TextBox'
