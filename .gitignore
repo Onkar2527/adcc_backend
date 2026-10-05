@@ -392,7 +392,7 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-=======
+
 # Local
 .env
 dist
@@ -402,3 +402,13 @@ dist
 
 scripts/
 /uploads
+/generated/prisma
+prisma/
+prisma7.config.ts
+
+# AI Agents & IDE Skills
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
+
